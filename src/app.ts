@@ -11,20 +11,30 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    try {
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                message: 'hello world',
-            }),
-        };
-    } catch (err) {
-        console.log(err);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({
-                message: 'some error happened',
-            }),
-        };
-    }
+	try {
+		return {
+			statusCode: 200,
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				message: 'Hello from Lambda!',
+				database: 'Connected successfully',
+				timestamp: new Date().toISOString(),
+			}),
+		};
+	} catch (err) {
+		console.error('Error in Lambda handler:', err);
+		return {
+			statusCode: 500,
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				message: 'Internal server error',
+				error: err instanceof Error ? err.message : 'Unknown error',
+				timestamp: new Date().toISOString(),
+			}),
+		};
+	}
 };
