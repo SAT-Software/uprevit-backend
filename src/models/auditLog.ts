@@ -1,3 +1,5 @@
+import { ObjectId } from 'mongodb';
+
 export enum AuditLogAction {
 	CREATE = 'create',
 	UPDATE = 'update',
@@ -5,7 +7,7 @@ export enum AuditLogAction {
 }
 
 export type AuditLog = {
-	_id?: string;
+	_id?: ObjectId;
 	entity: string;
 	entityId: string;
 	action: AuditLogAction;
