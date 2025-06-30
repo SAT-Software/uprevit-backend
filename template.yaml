@@ -5,15 +5,32 @@ Description: >
 
   Sample SAM Template for uprevit-backend
 
+# ──────────────────────────────────────────────────────────────────────────
+# TOP-LEVEL METADATA  – YAML anchor for the build recipe
+# ──────────────────────────────────────────────────────────────────────────
+Metadata:
+  EsbuildDefaults: &EsbuildDefaults         # ← reusable mapping
+    BuildMethod: esbuild
+    BuildProperties:
+      Minify: true
+      Target: es2020
+      Sourcemap: true
+      EntryPoints: [app.ts, controllers/users/createUser.ts, controllers/users/getUser.ts]
+
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
     Timeout: 3
 
     Tracing: Active
+    Environment:
+      Variables:
+        MONGODB_URI: !Ref MONGODB_URI
+        DB_NAME: !Ref DB_NAME
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
+    
   Api:
     TracingEnabled: true
 Resources:
@@ -31,14 +48,39 @@ Resources:
           Properties:
             Path: /hello
             Method: get
-    Metadata: # Manage esbuild properties
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2020
-        Sourcemap: true
-        EntryPoints:
-        - app.ts
+    Metadata: *EsbuildDefaults
+
+  CreateUserFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/users/createUser.lambdaHandler
+      Runtime: nodejs20.x
+      Architectures:
+      - x86_64
+      Events:
+        CreateUser:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /users
+            Method: post
+    Metadata: *EsbuildDefaults
+    
+  GetUserFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/users/getUser.lambdaHandler
+      Runtime: nodejs20.x
+      Architectures:
+      - x86_64
+      Events:
+        GetUser:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /users/{id}
+            Method: get
+    Metadata: *EsbuildDefaults
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
