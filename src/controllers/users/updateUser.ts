@@ -3,6 +3,7 @@ import { getDb } from '../../utils/db';
 import { User } from '../../models/user';
 import { AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
+import { ObjectId } from 'mongodb';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -44,33 +45,55 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const db = await getDb();
-		
-		const user = await db.collection<User>('users').insertOne({
-			name: input.name,
-			profileAvatar: input.profileAvatar,
-			designation: input.designation,
+
+		const userRecord: User | null = await db.collection<User>('users').findOne({
 			email: input.email,
-			phone: input.phone,
-			confirmed: input.confirmed,
-			userType: input.userType,
+		});
+		
+		if (!userRecord) {
+			return {
+				statusCode: 404,
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					message: 'User not found',
+				}),
+			};
+		}
+		
+		const user = await db.collection<User>('users').updateOne({
+			_id: new ObjectId((userRecord._id as ObjectId)),
+		}, {
+			$set: {
+				name: input.name,
+				profileAvatar: input.profileAvatar,
+				designation: input.designation,
+				email: input.email,
+				phone: input.phone,
+				confirmed: input.confirmed,
+				userType: input.userType,
+			}
 		});
 
-		await updateAuditLog({
+		const auditRecord : AuditLog = {
 			entity: 'user',
-			entityId: user.insertedId.toString(),
-			action: AuditLogAction.CREATE,
-			actionBy: user.insertedId.toString(),
+			entityId: (userRecord._id as ObjectId).toString(),
+			action: AuditLogAction.UPDATE,
+			actionBy: (userRecord._id as ObjectId).toString(),
 			actionAt: new Date(),
 			active: true,
-		});
+		};
+
+		await updateAuditLog(auditRecord);
 
 		return {
-			statusCode: 201,
+			statusCode: 200,
 			headers: {
 				'Content-Type': 'application/json',
 			},
 			body: JSON.stringify({
-				message: 'User created successfully',
+				message: 'User updated successfully',
 				user: user,
 			}),
 		};
