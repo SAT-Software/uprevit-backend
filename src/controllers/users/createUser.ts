@@ -2,6 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { User } from '../../models/user';
 import { AuditLog, AuditLogAction } from '../../models/auditLog';
+import { updateAuditLog } from '../../utils/auditLog';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -54,7 +55,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			userType: input.userType,
 		});
 
-		const auditLog = await db.collection<AuditLog>('audit_log').insertOne({
+		const auditLog = await updateAuditLog({
 			entity: 'user',
 			entityId: user.insertedId.toString(),
 			action: AuditLogAction.CREATE,
