@@ -14,7 +14,7 @@ import { ObjectId } from 'mongodb';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		// Parse the request body from the event
+		// Parse the path param from the event
 		if (!event.pathParameters?.id) {
 			return {
 				statusCode: 400,

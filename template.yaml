@@ -55,6 +55,9 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [app.ts]
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # USERS
+  # ──────────────────────────────────────────────────────────────────────────
   CreateUserFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -122,6 +125,27 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/users/deleteUser.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # WORKSPACES
+  # ──────────────────────────────────────────────────────────────────────────
+  CreateWorkspaceFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workspaces/createWorkspace.lambdaHandler
+      Events:
+        CreateWorkspace:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /workspace
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workspaces/createWorkspace.ts]
+
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
