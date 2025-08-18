@@ -146,6 +146,76 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/workspaces/createWorkspace.ts]
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # DEPARTMENTS
+  # ──────────────────────────────────────────────────────────────────────────
+  CreateDepartmentFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: src/
+      Handler: controllers/departments/createDepartment.lambdaHandler
+      Events:
+        CreateDepartment:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /departments
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/departments/createDepartment.ts]
+        
+  GetDepartmentFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/departments/getDepartment.lambdaHandler
+      Events:
+        GetDepartment:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /departments/{id}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/departments/getDepartment.ts]
+
+  UpdateDepartmentFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/departments/updateDepartment.lambdaHandler
+      Events:
+        UpdateDepartment:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /departments
+            Method: put
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/departments/updateDepartment.ts]
+
+  DeleteDepartmentFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/departments/deleteDepartment.lambdaHandler
+      Events:
+        DeleteDepartment:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /departments/{id}
+            Method: delete
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/departments/deleteDepartment.ts]
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
