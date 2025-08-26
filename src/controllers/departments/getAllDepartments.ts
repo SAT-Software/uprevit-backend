@@ -18,7 +18,27 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const limit = parseInt(event.queryStringParameters?.limit || '10');
 		const page = parseInt(event.queryStringParameters?.page || '1');
 		const sort = event.queryStringParameters?.sort || 'department_name';
-		const archived = event.queryStringParameters?.archived || 'no';
+		// Parse isArchive parameter to boolean
+		const isArchiveParam = event.queryStringParameters?.isArchive;
+		let isArchive = false; // default value
+		
+		if (isArchiveParam !== undefined) {
+			if (isArchiveParam === 'true') {
+				isArchive = true;
+			} else if (isArchiveParam === 'false') {
+				isArchive = false;
+			} else {
+				return {
+					statusCode: 400,
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({
+						message: 'isArchive parameter must be true or false',
+					}),
+				};
+			}
+		}
 
 		if (limit < 1 || limit > 100) {
 			return {
@@ -57,26 +77,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			};
 		}
 
-		// Validate archived parameter
-		if (archived !== 'yes' && archived !== 'no') {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Archived parameter must be "yes" or "no"',
-				}),
-			};
-		}
-
 		const skip = (page - 1) * limit;
 
 		const sortObj: { [key: string]: 1 | -1 } = {};
 		sortObj[sort] = 1;
 
-		// Build filter based on archived parameter
-		const filter = archived === 'yes' ? { isArchived: true } : { isArchived: { $ne: true } };
+		// filter based on isArchive parameter
+		const filter = isArchive ? { isArchived: true } : { isArchived: { $ne: true } };
 
 		const totalCount = await db.collection<Department>('departments').countDocuments(filter);
 
