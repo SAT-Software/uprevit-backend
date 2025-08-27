@@ -21,7 +21,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const db = await getDb();
 		
-		const department: Department | null = await db.collection<Department>('departments').findOne({ _id: new ObjectId(event.pathParameters.id) });
+		const department: Department | null = await db.collection<Department>('departments').findOne({ 
+			_id: new ObjectId(event.pathParameters.id),
+			isArchived: { $ne: true }
+		});
 
 		if (!department) {
 			return ResponseWrapper.badRequest('Department not found');

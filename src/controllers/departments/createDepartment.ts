@@ -68,6 +68,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			admin_id: adminObjectId,
 			workspace_id: workspaceObjectId,
 			users: userObjectIds,
+			isArchived: false,
 		});
 
 		await updateAuditLog({

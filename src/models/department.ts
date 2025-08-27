@@ -9,4 +9,5 @@ export type Department = {
 	manager?: string;
 	admin_id: ObjectId;
 	users: ObjectId[];
+	isArchived: boolean;
 }; 

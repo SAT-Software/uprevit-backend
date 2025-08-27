@@ -16,95 +16,107 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-	try {
-		if (!event.body) {
-			return ResponseWrapper.badRequest('Request body is required');
-		}
+    try {
+        if (!event.body) {
+            return ResponseWrapper.badRequest('Request body is required');
+        }
 
-		type DepartmentUpdateInput = {
-			_id: string;
-			department_name: string;
-			department_description: string;
-			image?: string;
-			manager?: string;
-			admin_id: string;
-			workspace_id: string;
-			users?: string[];
-		};
+        type DepartmentUpdateInput = {
+            _id: string;
+            department_name: string;
+            department_description: string;
+            image?: string;
+            manager?: string;
+            admin_id: string;
+            workspace_id: string;
+            users?: string[];
+        };
 
-		const input: DepartmentUpdateInput = JSON.parse(event.body);
+        const input: DepartmentUpdateInput = JSON.parse(event.body);
 
-		if (!input.department_name || !input.department_description || !input.admin_id || !input.workspace_id || !input._id) {
-			return ResponseWrapper.badRequest('Missing required fields: _id, department_name, department_description, admin_id, and workspace_id are required');
-		}
+        if (
+            !input.department_name ||
+            !input.department_description ||
+            !input.admin_id ||
+            !input.workspace_id ||
+            !input._id
+        ) {
+            return ResponseWrapper.badRequest(
+                'Missing required fields: _id, department_name, department_description, admin_id, and workspace_id are required',
+            );
+        }
 
-		// Validate ObjectId formats
-		if (!ObjectId.isValid(input._id)) {
-			return ResponseWrapper.badRequest('Invalid _id format. Must be a valid MongoDB ObjectId.');
-		}
+        // Validate ObjectId formats
+        if (!ObjectId.isValid(input._id)) {
+            return ResponseWrapper.badRequest('Invalid _id format. Must be a valid MongoDB ObjectId.');
+        }
 
-		if (!ObjectId.isValid(input.admin_id)) {
-			return ResponseWrapper.badRequest('Invalid admin_id format. Must be a valid MongoDB ObjectId.');
-		}
+        if (!ObjectId.isValid(input.admin_id)) {
+            return ResponseWrapper.badRequest('Invalid admin_id format. Must be a valid MongoDB ObjectId.');
+        }
 
-		if (!ObjectId.isValid(input.workspace_id)) {
-			return ResponseWrapper.badRequest('Invalid workspace_id format. Must be a valid MongoDB ObjectId.');
-		}
+        if (!ObjectId.isValid(input.workspace_id)) {
+            return ResponseWrapper.badRequest('Invalid workspace_id format. Must be a valid MongoDB ObjectId.');
+        }
 
-		// Validate user IDs if provided
-		if (input.users && input.users.length > 0) {
-			const invalidUserIds = input.users.filter(userId => !ObjectId.isValid(userId));
-			if (invalidUserIds.length > 0) {
-				return ResponseWrapper.badRequest(`Invalid user IDs format: ${invalidUserIds.join(', ')}. Must be valid MongoDB ObjectIds.`);
-			}
-		}
+        // Validate user IDs if provided
+        if (input.users && input.users.length > 0) {
+            const invalidUserIds = input.users.filter((userId) => !ObjectId.isValid(userId));
+            if (invalidUserIds.length > 0) {
+                return ResponseWrapper.badRequest(
+                    `Invalid user IDs format: ${invalidUserIds.join(', ')}. Must be valid MongoDB ObjectIds.`,
+                );
+            }
+        }
 
-		const db = await getDb();
+        const db = await getDb();
 
-		const departmentRecord: Department | null = await db.collection<Department>('departments').findOne({
-			_id: new ObjectId(input._id),
-		});
-		
-		if (!departmentRecord) {
-			return ResponseWrapper.badRequest('Department not found');
-		}
-		
-		const adminObjectId = new ObjectId(input.admin_id);
-		const workspaceObjectId = new ObjectId(input.workspace_id);
-		const userObjectIds = input.users ? input.users.map(userId => new ObjectId(userId)) : [];
+        const departmentRecord: Department | null = await db.collection<Department>('departments').findOne({
+            _id: new ObjectId(input._id),
+        });
 
-		const department = await db.collection<Department>('departments').updateOne({
-			_id: new ObjectId((departmentRecord._id as ObjectId)),
-		}, {
-			$set: {
-				department_name: input.department_name,
-				department_description: input.department_description,
-				image: input.image,
-				manager: input.manager,
-				admin_id: adminObjectId,
-				workspace_id: workspaceObjectId,
-				users: userObjectIds,
-			}
-		});
+        if (!departmentRecord) {
+            return ResponseWrapper.badRequest('Department not found');
+        }
 
-		const auditRecord : AuditLog = {
-			entity: 'department',
-			entityId: (departmentRecord._id as ObjectId).toString(),
-			action: AuditLogAction.UPDATE,
-			actionBy: input.admin_id,
-			actionAt: new Date(),
-			active: true,
-		};
+        const adminObjectId = new ObjectId(input.admin_id);
+        const workspaceObjectId = new ObjectId(input.workspace_id);
+        const userObjectIds = input.users ? input.users.map((userId) => new ObjectId(userId)) : [];
 
-		await updateAuditLog(auditRecord);
+        const department = await db.collection<Department>('departments').updateOne(
+            {
+                _id: new ObjectId(departmentRecord._id as ObjectId),
+            },
+            {
+                $set: {
+                    department_name: input.department_name,
+                    department_description: input.department_description,
+                    image: input.image,
+                    manager: input.manager,
+                    admin_id: adminObjectId,
+                    workspace_id: workspaceObjectId,
+                    users: userObjectIds,
+                },
+            },
+        );
 
-		return ResponseWrapper.success({
-			message: 'Department updated successfully',
-			department: department,
-		});
-		
-	} catch (err) {
-		console.error('Error in Lambda handler:', err);
-		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
-	}
-}; 
+        const auditRecord: AuditLog = {
+            entity: 'department',
+            entityId: (departmentRecord._id as ObjectId).toString(),
+            action: AuditLogAction.UPDATE,
+            actionBy: input.admin_id,
+            actionAt: new Date(),
+            active: true,
+        };
+
+        await updateAuditLog(auditRecord);
+
+        return ResponseWrapper.success({
+            message: 'Department updated successfully',
+            department: department,
+        });
+    } catch (err) {
+        console.error('Error in Lambda handler:', err);
+        return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+    }
+};

@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   uprevit-backend
@@ -22,7 +22,7 @@ Metadata:
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 3
+    Timeout: 30
     Runtime: nodejs20.x
     Architectures:
       - x86_64
@@ -34,7 +34,7 @@ Globals:
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
-    
+
   Api:
     TracingEnabled: true
 Resources:
@@ -74,7 +74,7 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/users/createUser.ts]
-    
+
   GetUserFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -150,7 +150,7 @@ Resources:
   # DEPARTMENTS
   # ──────────────────────────────────────────────────────────────────────────
   CreateDepartmentFunction:
-    Type: AWS::Serverless::Function 
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
       Handler: controllers/departments/createDepartment.lambdaHandler
@@ -165,7 +165,7 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/departments/createDepartment.ts]
-        
+
   GetDepartmentFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -217,6 +217,115 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/departments/deleteDepartment.ts]
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # DEPARTMENTS
+  # ──────────────────────────────────────────────────────────────────────────
+  GetAllDepartmentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/departments/getAllDepartments.lambdaHandler
+      Timeout: 30
+      Events:
+        GetAllDepartments:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /departments
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/departments/getAllDepartments.ts]
+
+  ArchiveDepartmentFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/departments/archiveDepartment.lambdaHandler
+      Events:
+        ArchiveDepartment:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /departments/{id}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/departments/archiveDepartment.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # PROJECTS
+  # ──────────────────────────────────────────────────────────────────────────
+  GetAllProjectsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/projects/getAllProjects.lambdaHandler
+      Events:
+        GetAllProjects:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /projects
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/projects/getAllProjects.ts]
+
+  CreateProjectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/projects/createProject.lambdaHandler
+      Events:
+        CreateProject:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /projects
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+  ArchiveDepartmentFunction:
+
+  UpdateProjectFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/projects/updateProject.lambdaHandler
+      Events:
+        UpdateProject:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /projects
+            Method: put
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/projects/updateProject.ts]
+
+  ArchiveProjectFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/projects/archiveProject.lambdaHandler
+      Events:
+        ArchiveProject:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /projects/{id}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/projects/archiveProject.ts]
+
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
     Properties:
@@ -229,7 +338,7 @@ Resources:
     Properties:
       ResourceGroupName:
         Ref: ApplicationResourceGroup
-      AutoConfigurationEnabled: 'true'
+      AutoConfigurationEnabled: "true"
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
