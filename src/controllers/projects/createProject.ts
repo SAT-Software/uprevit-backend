@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
-import { Department } from '../../models/department';
+import { Project } from '../../models/project';
 import { AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
@@ -28,43 +28,31 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			};
 		}
 
-		type DepartmentInput = {
-			department_name: string;
-			department_description: string;
-			image?: string;
-			manager?: string;
-			admin_id: string;
+		type ProjectInput = {
 			workspace_id: string;
-			users?: string[];
+			department_id: string;
+			project_name: string;
+			project_number: string;
+			project_description: string;
+			project_manager?: string;
+			admin_id: string;
 		};
 
-		const input: DepartmentInput = JSON.parse(event.body);
+		const input: ProjectInput = JSON.parse(event.body);
 
-		if (!input.department_name || !input.department_description || !input.admin_id || !input.workspace_id) {
+		if (!input.workspace_id || !input.department_id || !input.project_name || !input.project_number || !input.project_description || !input.admin_id) {
 			return {
 				statusCode: 400,
 				headers: {
 					'Content-Type': 'application/json',
 				},
 				body: JSON.stringify({
-					message: 'Missing required fields: department_name, department_description, admin_id, and workspace_id are required',
+					message: 'Missing required fields: workspace_id, department_id, project_name, project_number, project_description, and admin_id are required',
 				}),
 			};
 		}
 
 		// Validate ObjectId formats
-		if (!ObjectId.isValid(input.admin_id)) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Invalid admin_id format. Must be a valid MongoDB ObjectId.',
-				}),
-			};
-		}
-
 		if (!ObjectId.isValid(input.workspace_id)) {
 			return {
 				statusCode: 400,
@@ -77,44 +65,70 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			};
 		}
 
-		// Validate user IDs if provided
-		if (input.users && input.users.length > 0) {
-			const invalidUserIds = input.users.filter(userId => !ObjectId.isValid(userId));
-			if (invalidUserIds.length > 0) {
-				return {
-					statusCode: 400,
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({
-						message: `Invalid user IDs format: ${invalidUserIds.join(', ')}. Must be valid MongoDB ObjectIds.`,
-					}),
-				};
-			}
+		if (!ObjectId.isValid(input.department_id)) {
+			return {
+				statusCode: 400,
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					message: 'Invalid department_id format. Must be a valid MongoDB ObjectId.',
+				}),
+			};
+		}
+
+		if (!ObjectId.isValid(input.admin_id)) {
+			return {
+				statusCode: 400,
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					message: 'Invalid admin_id format. Must be a valid MongoDB ObjectId.',
+				}),
+			};
 		}
 
 		const db = await getDb();
 		
-		const adminObjectId = new ObjectId(input.admin_id);
 		const workspaceObjectId = new ObjectId(input.workspace_id);
-		const userObjectIds = input.users ? input.users.map(userId => new ObjectId(userId)) : [];
+		const departmentObjectId = new ObjectId(input.department_id);
+		const adminObjectId = new ObjectId(input.admin_id);
 
-		const department = await db.collection<Department>('departments').insertOne({
-			department_name: input.department_name,
-			department_description: input.department_description,
-			image: input.image,
-			manager: input.manager,
-			admin_id: adminObjectId,
+		// Check if project_number already exists
+		const existingProject = await db.collection<Project>('projects').findOne({
+			project_number: input.project_number,
+			isArchived: { $ne: true }
+		});
+
+		if (existingProject) {
+			return {
+				statusCode: 409,
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					message: 'Project number already exists',
+				}),
+			};
+		}
+
+		const project = await db.collection<Project>('projects').insertOne({
 			workspace_id: workspaceObjectId,
-			users: userObjectIds,
+			department_id: departmentObjectId,
+			project_name: input.project_name,
+			project_number: input.project_number,
+			project_description: input.project_description,
+			project_manager: input.project_manager,
+			admin_id: adminObjectId,
 			isArchived: false,
 		});
 
 		await updateAuditLog({
-			entity: 'department',
-			entityId: department.insertedId.toString(),
+			entity: 'project',
+			entityId: project.insertedId.toString(),
 			action: AuditLogAction.CREATE,
-			actionBy: input.workspace_id,
+			actionBy: input.admin_id,
 			actionAt: new Date(),
 			active: true,
 		});
@@ -125,8 +139,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				'Content-Type': 'application/json',
 			},
 			body: JSON.stringify({
-				message: 'Department created successfully',
-				department: department,
+				message: 'Project created successfully',
+				project: project,
 			}),
 		};
 	} catch (err) {
@@ -143,4 +157,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}),
 		};
 	}
-}; 
+};

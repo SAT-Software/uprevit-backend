@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
-import { Department } from '../../models/department';
+import { Project } from '../../models/project';
 import { AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
@@ -28,27 +28,27 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			};
 		}
 
-		type DepartmentUpdateInput = {
+		type ProjectUpdateInput = {
 			_id: string;
-			department_name: string;
-			department_description: string;
-			image?: string;
-			manager?: string;
-			admin_id: string;
 			workspace_id: string;
-			users?: string[];
+			department_id: string;
+			project_name: string;
+			project_number: string;
+			project_description: string;
+			project_manager?: string;
+			admin_id: string;
 		};
 
-		const input: DepartmentUpdateInput = JSON.parse(event.body);
+		const input: ProjectUpdateInput = JSON.parse(event.body);
 
-		if (!input.department_name || !input.department_description || !input.admin_id || !input.workspace_id || !input._id) {
+		if (!input._id || !input.workspace_id || !input.department_id || !input.project_name || !input.project_number || !input.project_description || !input.admin_id) {
 			return {
 				statusCode: 400,
 				headers: {
 					'Content-Type': 'application/json',
 				},
 				body: JSON.stringify({
-					message: 'Missing required fields: _id, department_name, department_description, admin_id, and workspace_id are required',
+					message: 'Missing required fields: _id, workspace_id, department_id, project_name, project_number, project_description, and admin_id are required',
 				}),
 			};
 		}
@@ -66,18 +66,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			};
 		}
 
-		if (!ObjectId.isValid(input.admin_id)) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Invalid admin_id format. Must be a valid MongoDB ObjectId.',
-				}),
-			};
-		}
-
 		if (!ObjectId.isValid(input.workspace_id)) {
 			return {
 				statusCode: 400,
@@ -90,62 +78,90 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			};
 		}
 
-		// Validate user IDs if provided
-		if (input.users && input.users.length > 0) {
-			const invalidUserIds = input.users.filter(userId => !ObjectId.isValid(userId));
-			if (invalidUserIds.length > 0) {
-				return {
-					statusCode: 400,
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({
-						message: `Invalid user IDs format: ${invalidUserIds.join(', ')}. Must be valid MongoDB ObjectIds.`,
-					}),
-				};
-			}
+		if (!ObjectId.isValid(input.department_id)) {
+			return {
+				statusCode: 400,
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					message: 'Invalid department_id format. Must be a valid MongoDB ObjectId.',
+				}),
+			};
+		}
+
+		if (!ObjectId.isValid(input.admin_id)) {
+			return {
+				statusCode: 400,
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					message: 'Invalid admin_id format. Must be a valid MongoDB ObjectId.',
+				}),
+			};
 		}
 
 		const db = await getDb();
 
-		const departmentRecord: Department | null = await db.collection<Department>('departments').findOne({
+		// Check if project exists and is not archived
+		const projectRecord: Project | null = await db.collection<Project>('projects').findOne({
 			_id: new ObjectId(input._id),
 			isArchived: { $ne: true }
 		});
 		
-		if (!departmentRecord) {
+		if (!projectRecord) {
 			return {
 				statusCode: 404,
 				headers: {
 					'Content-Type': 'application/json',
 				},
 				body: JSON.stringify({
-					message: 'Department not found or archived',
+					message: 'Project not found or archived',
+				}),
+			};
+		}
+
+		// Check if project_number already exists (excluding current project)
+		const existingProject = await db.collection<Project>('projects').findOne({
+			project_number: input.project_number,
+			_id: { $ne: new ObjectId(input._id) },
+			isArchived: { $ne: true }
+		});
+
+		if (existingProject) {
+			return {
+				statusCode: 409,
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					message: 'Project number already exists',
 				}),
 			};
 		}
 		
-		const adminObjectId = new ObjectId(input.admin_id);
 		const workspaceObjectId = new ObjectId(input.workspace_id);
-		const userObjectIds = input.users ? input.users.map(userId => new ObjectId(userId)) : [];
+		const departmentObjectId = new ObjectId(input.department_id);
+		const adminObjectId = new ObjectId(input.admin_id);
 
-		const department = await db.collection<Department>('departments').updateOne({
-			_id: new ObjectId((departmentRecord._id as ObjectId)),
+		const project = await db.collection<Project>('projects').updateOne({
+			_id: new ObjectId(input._id),
 		}, {
 			$set: {
-				department_name: input.department_name,
-				department_description: input.department_description,
-				image: input.image,
-				manager: input.manager,
-				admin_id: adminObjectId,
 				workspace_id: workspaceObjectId,
-				users: userObjectIds,
+				department_id: departmentObjectId,
+				project_name: input.project_name,
+				project_number: input.project_number,
+				project_description: input.project_description,
+				project_manager: input.project_manager,
+				admin_id: adminObjectId,
 			}
 		});
 
-		const auditRecord : AuditLog = {
-			entity: 'department',
-			entityId: (departmentRecord._id as ObjectId).toString(),
+		const auditRecord: AuditLog = {
+			entity: 'project',
+			entityId: input._id,
 			action: AuditLogAction.UPDATE,
 			actionBy: input.admin_id,
 			actionAt: new Date(),
@@ -160,8 +176,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				'Content-Type': 'application/json',
 			},
 			body: JSON.stringify({
-				message: 'Department updated successfully',
-				department: department,
+				message: 'Project updated successfully',
+				project: project,
 			}),
 		};
 	} catch (err) {
@@ -178,4 +194,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}),
 		};
 	}
-}; 
+};
