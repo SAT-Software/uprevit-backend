@@ -12,207 +12,212 @@ import { Project } from '../../models/project';
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-	try {
-		const db = await getDb();
+    try {
+        const db = await getDb();
 
-		// Extract query parameters for pagination
-		const limit = parseInt(event.queryStringParameters?.limit || '10');
-		const page = parseInt(event.queryStringParameters?.page || '1');
-		const sort = event.queryStringParameters?.sort || 'actionAt';
-		const isArchiveParam = event.queryStringParameters?.isArchive || 'false';
-		
-		// Validate isArchive parameter
-		if (isArchiveParam !== 'true' && isArchiveParam !== 'false') {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'isArchive parameter must be true or false"',
-				}),
-			};
-		}
-		
-		// Convert to boolean
-		const isArchive = isArchiveParam === 'true';
+        // Extract query parameters for pagination
+        const limit = parseInt(event.queryStringParameters?.limit || '10');
+        const page = parseInt(event.queryStringParameters?.page || '1');
+        const sort = event.queryStringParameters?.sort || 'actionAt';
+        const isArchiveParam = event.queryStringParameters?.isArchive || 'false';
 
-		// Validate pagination parameters
-		if (limit < 1 || limit > 100) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Limit must be between 1 and 100',
-				}),
-			};
-		}
+        // Validate isArchive parameter
+        if (isArchiveParam !== 'true' && isArchiveParam !== 'false') {
+            return {
+                statusCode: 400,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'isArchive parameter must be true or false',
+                }),
+            };
+        }
 
-		if (page < 1) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Page must be greater than 0',
-				}),
-			};
-		}
+        // Convert to boolean
+        const isArchive = isArchiveParam === 'true';
 
-		// Validate sort field
-		const allowedSortFields = ['project_name', 'project_number', 'project_description', 'project_manager', '_id', 'actionAt'];
-		if (!allowedSortFields.includes(sort)) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: `Invalid sort field. Allowed fields: ${allowedSortFields.join(', ')}`,
-				}),
-			};
-		}
+        // Validate pagination parameters
+        if (limit < 1 || limit > 100) {
+            return {
+                statusCode: 400,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Limit must be between 1 and 100',
+                }),
+            };
+        }
 
-		const skip = (page - 1) * limit;
+        if (page < 1) {
+            return {
+                statusCode: 400,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Page must be greater than 0',
+                }),
+            };
+        }
 
-		// filter based on isArchive parameter
-		const filter = isArchive ? { isArchived: true } : { isArchived: { $ne: true } };
+        // Validate sort field
+        const allowedSortFields = [
+            'project_name',
+            'project_number',
+            'project_description',
+            'project_manager',
+            '_id',
+            'actionAt',
+        ];
+        if (!allowedSortFields.includes(sort)) {
+            return {
+                statusCode: 400,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: `Invalid sort field. Allowed fields: ${allowedSortFields.join(', ')}`,
+                }),
+            };
+        }
 
-		// If sorting by actionAt, use aggregation to join with audit_logs
-		if (sort === 'actionAt') {
-			// aggregation pipeline
-			const pipeline = [
-				{ $match: filter },
-				{
-					$lookup: {
-						from: 'audit_logs',
-						let: { projectId: { $toString: '$_id' } },
-						pipeline: [
-							{
-								$match: {
-									$expr: {
-										$and: [
-											{ $eq: ['$entityId', '$$projectId'] },
-											{ $eq: ['$entity', 'project'] },
-											{ $eq: ['$active', true] }
-										]
-									}
-								}
-							},
-							{ $sort: { actionAt: -1 } },
-							{ $limit: 1 }
-						],
-						as: 'latestAuditLog'
-					}
-				},
-				{
-					$addFields: {
-						actionAt: {
-							$ifNull: [
-								{ $arrayElemAt: ['$latestAuditLog.actionAt', 0] },
-								new Date(0) // Default to epoch if no audit log found
-							]
-						}
-					}
-				},
-				{ $sort: { actionAt: -1 } },
-				{ $skip: skip },
-				{ $limit: limit },
-				{
-					$project: {
-						latestAuditLog: 0 // Remove the audit log data from final result
-					}
-				}
-			];
+        const skip = (page - 1) * limit;
 
-			// Get total count for pagination
-			const countPipeline = [
-				{ $match: filter },
-				{ $count: 'total' }
-			];
+        // filter based on isArchive parameter
+        const filter = isArchive ? { isArchived: true } : { isArchived: { $ne: true } };
 
-			const [projects, countResult] = await Promise.all([
-				db.collection<Project>('projects').aggregate(pipeline).toArray(),
-				db.collection<Project>('projects').aggregate(countPipeline).toArray()
-			]);
+        // If sorting by actionAt, use aggregation to join with audit_logs
+        if (sort === 'actionAt') {
+            // aggregation pipeline
+            const pipeline = [
+                { $match: filter },
+                {
+                    $lookup: {
+                        from: 'audit_logs',
+                        let: { projectId: { $toString: '$_id' } },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $and: [
+                                            { $eq: ['$entityId', '$$projectId'] },
+                                            { $eq: ['$entity', 'project'] },
+                                            { $eq: ['$active', true] },
+                                        ],
+                                    },
+                                },
+                            },
+                            { $sort: { actionAt: -1 } },
+                            { $limit: 1 },
+                        ],
+                        as: 'latestAuditLog',
+                    },
+                },
+                {
+                    $addFields: {
+                        actionAt: {
+                            $ifNull: [
+                                { $arrayElemAt: ['$latestAuditLog.actionAt', 0] },
+                                new Date(0), // Default to epoch if no audit log found
+                            ],
+                        },
+                    },
+                },
+                { $sort: { actionAt: -1 } },
+                { $skip: skip },
+                { $limit: limit },
+                {
+                    $project: {
+                        latestAuditLog: 0, // Remove the audit log data from final result
+                    },
+                },
+            ];
 
-			const totalCount = countResult.length > 0 ? countResult[0].total : 0;
-			const totalPages = Math.ceil(totalCount / limit);
+            // Get total count for pagination
+            const countPipeline = [{ $match: filter }, { $count: 'total' }];
 
-			return {
-				statusCode: 200,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Projects fetched successfully',
-					result: {
-						projects,
-						pagination: {
-							currentPage: page,
-							totalPages,
-							totalCount,
-							limit,
-							hasNextPage: page < totalPages,
-							hasPrevPage: page > 1,
-						},
-					},
-				}),
-			};
-		} else {
-			// For other sort fields, use regular find with sort
-			const sortObj: { [key: string]: 1 | -1 } = {};
-			sortObj[sort] = 1;
+            const [projects, countResult] = await Promise.all([
+                db.collection<Project>('projects').aggregate(pipeline).toArray(),
+                db.collection<Project>('projects').aggregate(countPipeline).toArray(),
+            ]);
 
-			// Get total count based on archived filter
-			const totalCount = await db.collection<Project>('projects').countDocuments(filter);
+            const totalCount = countResult.length > 0 ? countResult[0].total : 0;
+            const totalPages = Math.ceil(totalCount / limit);
 
-			// Get paginated projects based on archived filter
-			const projects = await db.collection<Project>('projects')
-				.find(filter)
-				.sort(sortObj)
-				.skip(skip)
-				.limit(limit)
-				.toArray();
+            return {
+                statusCode: 200,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Projects fetched successfully',
+                    result: {
+                        projects,
+                        pagination: {
+                            currentPage: page,
+                            totalPages,
+                            totalCount,
+                            limit,
+                            hasNextPage: page < totalPages,
+                            hasPrevPage: page > 1,
+                        },
+                    },
+                }),
+            };
+        } else {
+            // For other sort fields, use regular find with sort
+            const sortObj: { [key: string]: 1 | -1 } = {};
+            sortObj[sort] = 1;
 
-			const totalPages = Math.ceil(totalCount / limit);
+            // Get total count based on archived filter
+            const totalCount = await db.collection<Project>('projects').countDocuments(filter);
 
-			return {
-				statusCode: 200,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Projects fetched successfully',
-					result: {
-						projects,
-						pagination: {
-							currentPage: page,
-							totalPages,
-							totalCount,
-							limit,
-							hasNextPage: page < totalPages,
-							hasPrevPage: page > 1,
-						},
-					},
-				}),
-			};
-		}
-	} catch (err) {
-		console.error('Error in Lambda handler:', err);
-		return {
-			statusCode: 500,
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				message: 'Internal server error',
-				error: err instanceof Error ? err.message : 'Unknown error',
-				timestamp: new Date().toISOString(),
-			}),
-		};
-	}
+            // Get paginated projects based on archived filter
+            const projects = await db
+                .collection<Project>('projects')
+                .find(filter)
+                .sort(sortObj)
+                .skip(skip)
+                .limit(limit)
+                .toArray();
+
+            const totalPages = Math.ceil(totalCount / limit);
+
+            return {
+                statusCode: 200,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Projects fetched successfully',
+                    result: {
+                        projects,
+                        pagination: {
+                            currentPage: page,
+                            totalPages,
+                            totalCount,
+                            limit,
+                            hasNextPage: page < totalPages,
+                            hasPrevPage: page > 1,
+                        },
+                    },
+                }),
+            };
+        }
+    } catch (err) {
+        console.error('Error in Lambda handler:', err);
+        return {
+            statusCode: 500,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: 'Internal server error',
+                error: err instanceof Error ? err.message : 'Unknown error',
+                timestamp: new Date().toISOString(),
+            }),
+        };
+    }
 };

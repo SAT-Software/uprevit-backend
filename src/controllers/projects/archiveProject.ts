@@ -15,93 +15,96 @@ import { ObjectId } from 'mongodb';
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-	try {
-		if (!event.pathParameters?.id) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Missing required fields: id is required',
-				}),
-			};
-		}
+    try {
+        if (!event.pathParameters?.id) {
+            return {
+                statusCode: 400,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Missing required fields: id is required',
+                }),
+            };
+        }
 
-		if (!ObjectId.isValid(event.pathParameters.id)) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Invalid id format. Must be a valid MongoDB ObjectId.',
-				}),
-			};
-		}
+        if (!ObjectId.isValid(event.pathParameters.id)) {
+            return {
+                statusCode: 400,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Invalid id format. Must be a valid MongoDB ObjectId.',
+                }),
+            };
+        }
 
-		const db = await getDb();
-		
-		// Check if project exists and is not already archived
-		const projectRecord: Project | null = await db.collection<Project>('projects').findOne({
-			_id: new ObjectId(event.pathParameters.id),
-			isArchived: { $ne: true }
-		});
+        const db = await getDb();
 
-		if (!projectRecord) {
-			return {
-				statusCode: 404,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Project not found or already archived',
-				}),
-			};
-		}
+        // Check if project exists and is not already archived
+        const projectRecord: Project | null = await db.collection<Project>('projects').findOne({
+            _id: new ObjectId(event.pathParameters.id),
+            isArchived: { $ne: true },
+        });
 
-		// Archive the project instead of deleting it
-		const project = await db.collection<Project>('projects').updateOne({
-			_id: new ObjectId(event.pathParameters.id)
-		}, {
-			$set: {
-				isArchived: true
-			}
-		});
+        if (!projectRecord) {
+            return {
+                statusCode: 404,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Project not found or already archived',
+                }),
+            };
+        }
 
-		const auditRecord: AuditLog = {
-			entity: 'project',
-			entityId: event.pathParameters.id,
-			action: AuditLogAction.Archive,
-			actionBy: (projectRecord.admin_id as ObjectId).toString(),
-			actionAt: new Date(),
-			active: true,
-		};
+        // Archive the project instead of deleting it
+        const project = await db.collection<Project>('projects').updateOne(
+            {
+                _id: new ObjectId(event.pathParameters.id),
+            },
+            {
+                $set: {
+                    isArchived: true,
+                },
+            },
+        );
 
-		await updateAuditLog(auditRecord);
+        const auditRecord: AuditLog = {
+            entity: 'project',
+            entityId: event.pathParameters.id,
+            action: AuditLogAction.ARCHIVE,
+            actionBy: projectRecord.admin_id ? projectRecord.admin_id.toString() : 'system',
+            actionAt: new Date(),
+            active: true,
+        };
 
-		return {
-			statusCode: 200,
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				message: 'Project archived successfully',
-				project: project,
-			}),
-		};
-	} catch (err) {
-		console.error('Error in Lambda handler:', err);
-		return {
-			statusCode: 500,
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				message: 'Internal server error',
-				error: err instanceof Error ? err.message : 'Unknown error',
-				timestamp: new Date().toISOString(),
-			}),
-		};
-	}
+        await updateAuditLog(auditRecord);
+
+        return {
+            statusCode: 200,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: 'Project archived successfully',
+                project: project,
+            }),
+        };
+    } catch (err) {
+        console.error('Error in Lambda handler:', err);
+        return {
+            statusCode: 500,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: 'Internal server error',
+                error: err instanceof Error ? err.message : 'Unknown error',
+                timestamp: new Date().toISOString(),
+            }),
+        };
+    }
 };

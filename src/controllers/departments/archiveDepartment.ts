@@ -15,93 +15,96 @@ import { ObjectId } from 'mongodb';
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-	try {
-		if (!event.pathParameters?.id) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Missing required fields: id is required',
-				}),
-			};
-		}
+    try {
+        if (!event.pathParameters?.id) {
+            return {
+                statusCode: 400,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Missing required fields: id is required',
+                }),
+            };
+        }
 
-		if (!ObjectId.isValid(event.pathParameters.id)) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Invalid id format. Must be a valid MongoDB ObjectId.',
-				}),
-			};
-		}
+        if (!ObjectId.isValid(event.pathParameters.id)) {
+            return {
+                statusCode: 400,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Invalid id format. Must be a valid MongoDB ObjectId.',
+                }),
+            };
+        }
 
-		const db = await getDb();
-		
-		// Check if department exists and is not already archived
-		const departmentRecord: Department | null = await db.collection<Department>('departments').findOne({
-			_id: new ObjectId(event.pathParameters.id),
-			isArchived: { $ne: true }
-		});
+        const db = await getDb();
 
-		if (!departmentRecord) {
-			return {
-				statusCode: 404,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Department not found or already archived',
-				}),
-			};
-		}
+        // Check if department exists and is not already archived
+        const departmentRecord: Department | null = await db.collection<Department>('departments').findOne({
+            _id: new ObjectId(event.pathParameters.id),
+            isArchived: { $ne: true },
+        });
 
-		// Archive the department instead of deleting it
-		const department = await db.collection<Department>('departments').updateOne({
-			_id: new ObjectId(event.pathParameters.id)
-		}, {
-			$set: {
-				isArchived: true
-			}
-		});
+        if (!departmentRecord) {
+            return {
+                statusCode: 404,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Department not found or already archived',
+                }),
+            };
+        }
 
-		const auditRecord : AuditLog = {
-			entity: 'department',
-			entityId: (event.pathParameters?.id).toString(),
-			action: AuditLogAction.Archive,
-			actionBy: (departmentRecord.admin_id as ObjectId).toString(),
-			actionAt: new Date(),
-			active: true,
-		};
+        // Archive the department instead of deleting it
+        const department = await db.collection<Department>('departments').updateOne(
+            {
+                _id: new ObjectId(event.pathParameters.id),
+            },
+            {
+                $set: {
+                    isArchived: true,
+                },
+            },
+        );
 
-		await updateAuditLog(auditRecord);
+        const auditRecord: AuditLog = {
+            entity: 'department',
+            entityId: (event.pathParameters?.id).toString(),
+            action: AuditLogAction.ARCHIVE,
+            actionBy: departmentRecord?.admin_id ? departmentRecord.admin_id.toString() : 'system',
+            actionAt: new Date(),
+            active: true,
+        };
 
-		return {
-			statusCode: 200,
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				message: 'Department archived successfully',
-				department: department,
-			}),
-		};
-	} catch (err) {
-		console.error('Error in Lambda handler:', err);
-		return {
-			statusCode: 500,
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				message: 'Internal server error',
-				error: err instanceof Error ? err.message : 'Unknown error',
-				timestamp: new Date().toISOString(),
-			}),
-		};
-	}
-}; 
+        await updateAuditLog(auditRecord);
+
+        return {
+            statusCode: 200,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: 'Department archived successfully',
+                department: department,
+            }),
+        };
+    } catch (err) {
+        console.error('Error in Lambda handler:', err);
+        return {
+            statusCode: 500,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: 'Internal server error',
+                error: err instanceof Error ? err.message : 'Unknown error',
+                timestamp: new Date().toISOString(),
+            }),
+        };
+    }
+};
