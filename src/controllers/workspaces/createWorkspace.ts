@@ -3,6 +3,7 @@ import { getDb } from '../../utils/db';
 import { Workspace } from '../../models/workspace';
 import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
+import { ResponseWrapper } from '../../utils/responseWrapper';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -17,30 +18,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 	try {
 		// Parse the request body from the event
 		if (!event.body) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Request body is required',
-				}),
-			};
+			return ResponseWrapper.badRequest('Request body is required');
 		}
 
 		const input: Workspace = JSON.parse(event.body);
 
 		// Validate required fields
 		if (!input.workspaceName || !input.companyName || !input.companyId) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Missing required fields: workspace_name, company_name, and company_id are required',
-				}),
-			};
+			return ResponseWrapper.badRequest('Missing required fields: workspace_name, company_name, and company_id are required');
 		}
 
 		const db = await getDb();
@@ -69,28 +54,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			active: true,
 		});
 
-		return {
-			statusCode: 201,
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				message: 'Workspace created successfully',
-				workspace: workspace,
-			}),
-		};
+		return ResponseWrapper.created({
+			message: 'Workspace created successfully',
+			workspace: workspace,
+		});
+		
 	} catch (err) {
 		console.error('Error in Lambda handler:', err);
-		return {
-			statusCode: 500,
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				message: 'Internal server error',
-				error: err instanceof Error ? err.message : 'Unknown error',
-				timestamp: new Date().toISOString(),
-			}),
-		};
+		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
 	}
 };
