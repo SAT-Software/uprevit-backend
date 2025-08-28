@@ -64,7 +64,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             };
         }
 
-        const allowedSortFields = ['department_name', 'department_description', 'manager', '_id'];
+        const allowedSortFields = ['department_name', 'department_description', 'manager', '_id', 'actionAt'];
         if (!allowedSortFields.includes(sort)) {
             return {
                 statusCode: 400,
@@ -79,44 +79,126 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
         const skip = (page - 1) * limit;
 
-        const sortObj: { [key: string]: 1 | -1 } = {};
-        sortObj[sort] = 1;
-
         // filter based on isArchive parameter
         const filter = isArchive ? { isArchived: true } : { isArchived: { $ne: true } };
 
-        const totalCount = await db.collection<Department>('departments').countDocuments(filter);
-
-        const departments = await db
-            .collection<Department>('departments')
-            .find(filter)
-            .sort(sortObj)
-            .skip(skip)
-            .limit(limit)
-            .toArray();
-
-        const totalPages = Math.ceil(totalCount / limit);
-
-        return {
-            statusCode: 200,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                message: 'Departments fetched successfully',
-                result: {
-                    departments,
-                    pagination: {
-                        currentPage: page,
-                        totalPages,
-                        totalCount,
-                        limit,
-                        hasNextPage: page < totalPages,
-                        hasPrevPage: page > 1,
+        // If sorting by actionAt, use aggregation to join with audit_logs
+        if (sort === 'actionAt') {
+            // aggregation pipeline
+            const pipeline = [
+                { $match: filter },
+                {
+                    $lookup: {
+                        from: 'audit_logs',
+                        let: { departmentId: { $toString: '$_id' } },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        $and: [
+                                            { $eq: ['$entityId', '$$departmentId'] },
+                                            { $eq: ['$entity', 'department'] },
+                                            { $eq: ['$active', true] },
+                                        ],
+                                    },
+                                },
+                            },
+                            { $sort: { actionAt: -1 } },
+                            { $limit: 1 },
+                        ],
+                        as: 'latestAuditLog',
                     },
                 },
-            }),
-        };
+                {
+                    $addFields: {
+                        actionAt: {
+                            $ifNull: [
+                                { $arrayElemAt: ['$latestAuditLog.actionAt', 0] },
+                                new Date(0), 
+                            ],
+                        },
+                    },
+                },
+                { $sort: { actionAt: -1 } },
+                { $skip: skip },
+                { $limit: limit },
+                {
+                    $project: {
+                        latestAuditLog: 0,
+                    },
+                },
+            ];
+
+          
+            const countPipeline = [{ $match: filter }, { $count: 'total' }];
+
+            const [departments, countResult] = await Promise.all([
+                db.collection<Department>('departments').aggregate(pipeline).toArray(),
+                db.collection<Department>('departments').aggregate(countPipeline).toArray(),
+            ]);
+
+            const totalCount = countResult.length > 0 ? countResult[0].total : 0;
+            const totalPages = Math.ceil(totalCount / limit);
+
+            return {
+                statusCode: 200,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Departments fetched successfully',
+                    result: {
+                        departments,
+                        pagination: {
+                            currentPage: page,
+                            totalPages,
+                            totalCount,
+                            limit,
+                            hasNextPage: page < totalPages,
+                            hasPrevPage: page > 1,
+                        },
+                    },
+                }),
+            };
+        } else {
+          
+            const sortObj: { [key: string]: 1 | -1 } = {};
+            sortObj[sort] = 1;
+
+        
+            const totalCount = await db.collection<Department>('departments').countDocuments(filter);
+
+            const departments = await db
+                .collection<Department>('departments')
+                .find(filter)
+                .sort(sortObj)
+                .skip(skip)
+                .limit(limit)
+                .toArray();
+
+            const totalPages = Math.ceil(totalCount / limit);
+
+            return {
+                statusCode: 200,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: 'Departments fetched successfully',
+                    result: {
+                        departments,
+                        pagination: {
+                            currentPage: page,
+                            totalPages,
+                            totalCount,
+                            limit,
+                            hasNextPage: page < totalPages,
+                            hasPrevPage: page > 1,
+                        },
+                    },
+                }),
+            };
+        }
     } catch (err) {
         console.error('Error in Lambda handler:', err);
         return {
