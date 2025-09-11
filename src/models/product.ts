@@ -8,7 +8,6 @@ export type Product = {
 	product_name: string;
 	product_description: string;
 	master_version: string; 
-	isActive: boolean; 
 	target_date?: Date;
 	actual_completion_date?: Date;
 	status: string; 
@@ -40,6 +39,7 @@ export type Product = {
 			_id: ObjectId;
 			component_name: string;
 			component_type?: string;
+			component_image?: string;
 			dimensions?: string;
 			material?: string;
 			color?: string;

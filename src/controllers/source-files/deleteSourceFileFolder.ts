@@ -18,17 +18,17 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
-        // Extract _id from query parameters
-        const folderId = event.queryStringParameters?._id;
+        // Extract folderId from path parameters
+        const folderId = event.pathParameters?.folderId;
 
-        // Validate required _id parameter
+        // Validate required folderId parameter
         if (!folderId) {
-            return ResponseWrapper.badRequest('Missing required query parameter: _id');
+            return ResponseWrapper.badRequest('Missing required path parameter: folderId');
         }
 
-        // Validate ObjectId format for folder _id
+        // Validate ObjectId format for folderId
         if (!ObjectId.isValid(folderId)) {
-            return ResponseWrapper.badRequest('Invalid _id format. Must be a valid MongoDB ObjectId.');
+            return ResponseWrapper.badRequest('Invalid folderId format. Must be a valid MongoDB ObjectId.');
         }
 
         const db = await getDb();
@@ -42,58 +42,43 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             return ResponseWrapper.notFound('Source files folder not found');
         }
 
-        // Start a transaction for atomic operations
-        const session = db.client.startSession();
+        // Delete the source files folder
+        const deleteResult = await db.collection<SourceFiles>('sourceFiles').deleteOne({
+            _id: new ObjectId(folderId)
+        });
 
-        try {
-            await session.withTransaction(async () => {
-                // Delete the source files folder
-                const deleteResult = await db.collection<SourceFiles>('sourceFiles').deleteOne(
-                    { _id: new ObjectId(folderId) },
-                    { session }
-                );
-
-                if (deleteResult.deletedCount === 0) {
-                    throw new Error('Failed to delete source files folder');
-                }
-
-                // Remove folder reference from user bookmarks (if any)
-                await db.collection<UserBookmarks>('userBookmarks').updateMany(
-                    { 
-                        bookmarked_sourceFile_folders: new ObjectId(folderId) 
-                    },
-                    { 
-                        $pull: { 
-                            bookmarked_sourceFile_folders: new ObjectId(folderId) 
-                        } 
-                    },
-                    { session }
-                );
-
-                // Create audit log entry
-                const auditRecord: AuditLog = {
-                    entity: 'sourceFiles',
-                    entityId: folderId,
-                    action: AuditLogAction.DELETE,
-                    actionBy: 'system', // This should ideally come from user session/token
-                    actionAt: new Date(),
-                    active: true,
-                };
-
-                await updateAuditLog(auditRecord);
-            });
-
-            return ResponseWrapper.success({
-                message: 'Source files folder deleted successfully',
-                deleted_id: folderId
-            });
-
-        } catch (transactionError) {
-            console.error('Transaction error:', transactionError);
+        if (deleteResult.deletedCount === 0) {
             return ResponseWrapper.internalServerError('Failed to delete source files folder');
-        } finally {
-            await session.endSession();
         }
+
+        // Remove folder reference from user bookmarks (if any)
+        await db.collection<UserBookmarks>('userBookmarks').updateMany(
+            { 
+                bookmarked_sourceFile_folders: new ObjectId(folderId) 
+            },
+            { 
+                $pull: { 
+                    bookmarked_sourceFile_folders: new ObjectId(folderId) 
+                } 
+            }
+        );
+
+        // Create audit log entry
+        const auditRecord: AuditLog = {
+            entity: 'sourceFiles',
+            entityId: folderId,
+            action: AuditLogAction.DELETE,
+            actionBy: 'system', 
+            actionAt: new Date(),
+            active: true,
+        };
+
+        await updateAuditLog(auditRecord);
+
+        return ResponseWrapper.success({
+            message: 'Source files folder deleted successfully',
+            deleted_id: folderId
+        });
 
     } catch (err) {
         console.error('Error in Lambda handler:', err);

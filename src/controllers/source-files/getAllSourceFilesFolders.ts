@@ -15,17 +15,17 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
-        // Extract workspace_id from query parameters
-        const workspaceId = event.queryStringParameters?.workspace_id;
+        // Extract workspaceId from query parameters
+        const workspaceId = event.queryStringParameters?.workspaceId;
 
-        // Validate required workspace_id parameter
+        // Validate required workspaceId parameter
         if (!workspaceId) {
-            return ResponseWrapper.badRequest('Missing required query parameter: workspace_id');
+            return ResponseWrapper.badRequest('Missing required query parameter: workspaceId');
         }
 
         // Validate ObjectId format
         if (!ObjectId.isValid(workspaceId)) {
-            return ResponseWrapper.badRequest('Invalid workspace_id format. Must be a valid MongoDB ObjectId.');
+            return ResponseWrapper.badRequest('Invalid workspaceId format. Must be a valid MongoDB ObjectId.');
         }
 
         const db = await getDb();

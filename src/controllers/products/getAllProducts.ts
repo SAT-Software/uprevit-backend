@@ -75,9 +75,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
         const skip = (page - 1) * limit;
 
-        // Build filter - only active products with specified statuses
+        // Build filter - products with specified statuses
         const filter: any = {
-            isActive: true,
             status: { $in: statusFilter }
         };
 

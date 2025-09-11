@@ -44,7 +44,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         // Check if product exists and is not already archived
         const productRecord: Product | null = await db.collection<Product>('products').findOne({
             _id: new ObjectId(input.id),
-            isActive: true,
             status: { $ne: 'archive' }
         });
 
@@ -52,7 +51,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             return ResponseWrapper.notFound('Product not found or already archived');
         }
 
-        // Archive the product by setting status to 'archive' and isActive to false
+        // Archive the product by setting status to 'archive'
         const updateResult = await db.collection<Product>('products').findOneAndUpdate(
             {
                 _id: new ObjectId(input.id),
@@ -60,7 +59,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             {
                 $set: {
                     status: 'archive',
-                    isActive: false,
                 },
             },
             {
@@ -77,7 +75,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             entity: 'product',
             entityId: input.id,
             action: AuditLogAction.ARCHIVE,
-            actionBy: 'system', // You may want to get this from the event context or headers
+            actionBy: 'system', 
             actionAt: new Date(),
             active: true,
         };

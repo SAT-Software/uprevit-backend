@@ -162,8 +162,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
         // Check if product_plan_number is unique
         const existingProduct = await db.collection<Product>('products').findOne({
-            product_plan_number: input.product_plan_number,
-            isActive: true
+            product_plan_number: input.product_plan_number
         });
 
         if (existingProduct) {
@@ -220,7 +219,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             product_name: input.product_name,
             product_description: input.product_description,
             master_version: input.master_version || '1.0',
-            isActive: true,
             target_date: input.target_date ? new Date(input.target_date) : undefined,
             actual_completion_date: input.actual_completion_date ? new Date(input.actual_completion_date) : undefined,
             status: input.status || 'draft',

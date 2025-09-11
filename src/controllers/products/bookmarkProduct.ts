@@ -47,14 +47,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
         const db = await getDb();
 
-        // Check if product exists and is active
+        // Check if product exists
         const product: Product | null = await db.collection<Product>('products').findOne({
-            _id: new ObjectId(input.id),
-            isActive: true
+            _id: new ObjectId(input.id)
         });
 
         if (!product) {
-            return ResponseWrapper.notFound('Product not found or is not active');
+            return ResponseWrapper.notFound('Product not found');
         }
 
         // Find the user bookmarks document that contains the specified folder

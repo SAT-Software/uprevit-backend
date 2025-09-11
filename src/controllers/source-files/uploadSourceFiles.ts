@@ -17,17 +17,17 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
-        // Extract _id from query parameters
-        const folderId = event.queryStringParameters?._id;
+        // Extract folderId from path parameters
+        const folderId = event.pathParameters?.folderId;
 
-        // Validate required _id parameter
+        // Validate required folderId parameter
         if (!folderId) {
-            return ResponseWrapper.badRequest('Missing required query parameter: _id');
+            return ResponseWrapper.badRequest('Missing required path parameter: folderId');
         }
 
-        // Validate ObjectId format for folder _id
+        // Validate ObjectId format for folderId
         if (!ObjectId.isValid(folderId)) {
-            return ResponseWrapper.badRequest('Invalid _id format. Must be a valid MongoDB ObjectId.');
+            return ResponseWrapper.badRequest('Invalid folderId format. Must be a valid MongoDB ObjectId.');
         }
 
         if (!event.body) {
