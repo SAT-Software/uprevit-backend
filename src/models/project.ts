@@ -5,9 +5,8 @@ export type Project = {
 	workspace_id: ObjectId;
 	department_id: ObjectId;
 	project_name: string;
-	project_number: string;
 	project_description: string;
-	project_manager?: string;
+	manager?: string;
 	admin_id: ObjectId;
 	isArchived: boolean;
 };

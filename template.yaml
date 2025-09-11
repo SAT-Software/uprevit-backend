@@ -146,6 +146,40 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/workspaces/createWorkspace.ts]
 
+  GetWorkspaceFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workspaces/getWorkspace.lambdaHandler
+      Events:
+        GetWorkspace:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /workspace/{id}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workspaces/getWorkspace.ts]
+
+  UpdateWorkspaceFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workspaces/updateWorkspace.lambdaHandler
+      Events:
+        UpdateWorkspace:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /workspace
+            Method: put
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workspaces/updateWorkspace.ts]
+
   # ──────────────────────────────────────────────────────────────────────────
   # DEPARTMENTS
   # ──────────────────────────────────────────────────────────────────────────
@@ -200,26 +234,7 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/departments/updateDepartment.ts]
 
-  DeleteDepartmentFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Properties:
-      CodeUri: src/
-      Handler: controllers/departments/deleteDepartment.lambdaHandler
-      Events:
-        DeleteDepartment:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-          Properties:
-            Path: /departments/{id}
-            Method: delete
-    Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/departments/deleteDepartment.ts]
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # DEPARTMENTS
-  # ──────────────────────────────────────────────────────────────────────────
   GetAllDepartmentsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -290,7 +305,24 @@ Resources:
       <<: *EsbuildBase
       BuildProperties:
         <<: *EsbuildProps
-  ArchiveDepartmentFunction:
+        EntryPoints: [controllers/projects/createProject.ts]
+
+  GetProjectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/projects/getProject.lambdaHandler
+      Events:
+        GetProject:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /projects/{id}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/projects/getProject.ts]
 
   UpdateProjectFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -325,6 +357,329 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/projects/archiveProject.ts]
+
+  GetAllProductsNewFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getAllProducts.lambdaHandler
+      Events:
+        GetAllProductsNew:
+          Type: Api
+          Properties:
+            Path: /api/products/getAllProducts
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getAllProducts.ts]
+
+  UpdateProductFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/updateProduct.lambdaHandler
+      Events:
+        UpdateProduct:
+          Type: Api
+          Properties:
+            Path: /api/products/updateProduct
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/updateProduct.ts]
+
+  CreateProductFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/createProduct.lambdaHandler
+      Events:
+        CreateProduct:
+          Type: Api
+          Properties:
+            Path: /api/products/createProduct
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/createProduct.ts]
+
+  ArchiveProductFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/archiveProduct.lambdaHandler
+      Events:
+        ArchiveProduct:
+          Type: Api
+          Properties:
+            Path: /api/products/archiveProduct
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/archiveProduct.ts]
+
+  BookmarkProductFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/bookmarkProduct.lambdaHandler
+      Events:
+        BookmarkProduct:
+          Type: Api
+          Properties:
+            Path: /api/products/bookmarkProduct
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/bookmarkProduct.ts]
+
+  CreateSourceFilesFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/source-files/createSourceFilesFolder.lambdaHandler
+      Events:
+        CreateSourceFilesFolder:
+          Type: Api
+          Properties:
+            Path: /api/source-files/createSourceFilesFolder
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/source-files/createSourceFilesFolder.ts]
+
+  GetAllSourceFilesFoldersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/source-files/getAllSourceFilesFolders.lambdaHandler
+      Events:
+        GetAllSourceFilesFolders:
+          Type: Api
+          Properties:
+            Path: /api/source-files/getAllSourceFilesFolders
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/source-files/getAllSourceFilesFolders.ts]
+
+  UploadSourceFilesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/source-files/uploadSourceFiles.lambdaHandler
+      Events:
+        UploadSourceFiles:
+          Type: Api
+          Properties:
+            Path: /api/source-files/uploadSourceFiles
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/source-files/uploadSourceFiles.ts]
+
+  DeleteSourceFilesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/source-files/deleteSourceFiles.lambdaHandler
+      Events:
+        DeleteSourceFiles:
+          Type: Api
+          Properties:
+            Path: /api/source-files/deleteSourceFiles
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/source-files/deleteSourceFiles.ts]
+
+  DeleteSourceFileFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/source-files/deleteSourceFileFolder.lambdaHandler
+      Events:
+        DeleteSourceFileFolder:
+          Type: Api
+          Properties:
+            Path: /api/source-files/deleteSourceFileFolder
+            Method: delete
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/source-files/deleteSourceFileFolder.ts]
+
+  GetSourceFilesFolderByUserIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/getSourceFilesFolderByUserId.lambdaHandler
+      Events:
+        GetSourceFilesFolderByUserId:
+          Type: Api
+          Properties:
+            Path: /api/bookmarks/getSourceFilesFolderByUserId
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/getSourceFilesFolderByUserId.ts]
+
+  ToggleBookmarkSourceFilesFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/toggleBookmarkSourceFilesFolder.lambdaHandler
+      Events:
+        ToggleBookmarkSourceFilesFolder:
+          Type: Api
+          Properties:
+            Path: /api/bookmarks/toggleBoomarkSourceFilesFolder/{folderId}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/toggleBookmarkSourceFilesFolder.ts]
+
+  GetBookmarkedProductFoldersByUserIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/getBookmarkedProductFoldersByUserId.lambdaHandler
+      Events:
+        GetBookmarkedProductFoldersByUserId:
+          Type: Api
+          Properties:
+            Path: /api/bookmarks/getBookmakredProductFoldersByUseId
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/getBookmarkedProductFoldersByUserId.ts]
+
+  CreateProductBookmarkFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/createProductBookmarkFolder.lambdaHandler
+      Events:
+        CreateProductBookmarkFolder:
+          Type: Api
+          Properties:
+            Path: /api/bookmarks/createProductBookmarkFolder
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/createProductBookmarkFolder.ts]
+
+  UpdateProductBookmarkFolderNameFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/updateProductBookmarkFolderName.lambdaHandler
+      Events:
+        UpdateProductBookmarkFolderName:
+          Type: Api
+          Properties:
+            Path: /api/bookmarks/updateProductBookmarkFolderName/{folderId}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/updateProductBookmarkFolderName.ts]
+
+  DeleteProductBookmarkFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/deleteProductBookmarkFolder.lambdaHandler
+      Events:
+        DeleteProductBookmarkFolder:
+          Type: Api
+          Properties:
+            Path: /api/bookmarks/deleteProductBookmarkFolder/{folderId}
+            Method: delete
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/deleteProductBookmarkFolder.ts]
+
+  AddProductToBookmarkProductFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/addProductToBookmarkProductFolder.lambdaHandler
+      Events:
+        AddProductToBookmarkProductFolder:
+          Type: Api
+          Properties:
+            Path: /api/bookmarks/addProductToBookmarkProductFolder/{folderId}/{productId}
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/addProductToBookmarkProductFolder.ts]
+
+  RemoveProductFromBookmarkProductFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/removeProductFromBookmarkProductFolder.lambdaHandler
+      Events:
+        RemoveProductFromBookmarkProductFolder:
+          Type: Api
+          Properties:
+            Path: /api/bookmarks/removeProductToBookmarkProductFolder/{folderId}/{productId}
+            Method: delete
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/removeProductFromBookmarkProductFolder.ts]
+
+  GetProductsInAProductBookmarkFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/getProductsInAProductBookmarkFolder.lambdaHandler
+      Events:
+        GetProductsInAProductBookmarkFolder:
+          Type: Api
+          Properties:
+            Path: /api/bookmarks/getProductsInAProductBookmarkFolder/{folderId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/getProductsInAProductBookmarkFolder.ts]
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
