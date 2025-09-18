@@ -22,19 +22,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		type DepartmentInput = {
-			department_name: string;
-			department_description: string;
+			name: string;
+			description: string;
 			image?: string;
 			manager?: string;
 			admin_id: string;
 			workspace_id: string;
-			users?: string[];
+			user_ids?: string[];
 		};
 
 		const input: DepartmentInput = JSON.parse(event.body);
 
-		if (!input.department_name || !input.department_description || !input.admin_id || !input.workspace_id) {
-			return ResponseWrapper.badRequest('Missing required fields: department_name, department_description, admin_id, and workspace_id are required');
+		if (!input.name || !input.description || !input.admin_id || !input.workspace_id) {
+			return ResponseWrapper.badRequest('Missing required fields: name, description, admin_id, and workspace_id are required');
 		}
 
 		// Validate ObjectId formats
@@ -47,22 +47,45 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		// Validate user IDs if provided
-		if (input.users && input.users.length > 0) {
-			const invalidUserIds = input.users.filter(userId => !ObjectId.isValid(userId));
+		if (input.user_ids && input.user_ids.length > 0) {
+			const invalidUserIds = input.user_ids.filter(userId => !ObjectId.isValid(userId));
 			if (invalidUserIds.length > 0) {
 				return ResponseWrapper.badRequest(`Invalid user IDs format: ${invalidUserIds.join(', ')}. Must be valid MongoDB ObjectIds.`);
 			}
 		}
 
 		const db = await getDb();
-		
+
 		const adminObjectId = new ObjectId(input.admin_id);
 		const workspaceObjectId = new ObjectId(input.workspace_id);
-		const userObjectIds = input.users ? input.users.map(userId => new ObjectId(userId)) : [];
+		const userObjectIds = input.user_ids ? input.user_ids.map(userId => new ObjectId(userId)) : [];
+
+		// Fetch user details if user_ids are provided
+		let userObjects: any[] = [];
+		if (input.user_ids && input.user_ids.length > 0) {
+			const users = await db.collection('users')
+				.find({
+					_id: { $in: userObjectIds }
+				})
+				.project({
+					_id: 1,
+					name: 1,
+					profileAvatar: 1,
+					designation: 1
+				})
+				.toArray();
+
+			userObjects = users.map(user => ({
+				_id: user._id.toString(),
+				name: user.name,
+				profileAvatar: user.profileAvatar,
+				designation: user.designation
+			}));
+		}
 
 		const department = await db.collection<Department>('departments').insertOne({
-			department_name: input.department_name,
-			department_description: input.department_description,
+			department_name: input.name,
+			department_description: input.description,
 			image: input.image,
 			manager: input.manager,
 			admin_id: adminObjectId,
@@ -82,7 +105,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		return ResponseWrapper.created({
 			message: 'Department created successfully',
-			department: department,
+			department: {
+				_id: department.insertedId.toString(),
+				name: input.name,
+				description: input.description,
+				image: input.image,
+				manager: input.manager,
+				admin_id: input.admin_id,
+				workspace_id: input.workspace_id,
+				users: userObjects,
+				isArchived: false
+			}
 		});
 
 	} catch (err) {

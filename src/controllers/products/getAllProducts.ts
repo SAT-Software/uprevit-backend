@@ -1,6 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { Product } from '../../models/product';
+import { ObjectId } from 'mongodb';
+import { ResponseWrapper } from '../../utils/responseWrapper';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -21,33 +23,34 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         const sort = event.queryStringParameters?.sort || 'action_at';
         const statusParam = event.queryStringParameters?.status;
         const filter_param = event.queryStringParameters?.filter;
+        const workspaceId = event.queryStringParameters?.workspace_id;
+        const projectId = event.queryStringParameters?.project_id;
+
+        // Validate required workspace_id parameter
+        if (!workspaceId) {
+            return ResponseWrapper.badRequest('workspace_id query parameter is required');
+        }
+
+        // Validate workspace_id format
+        if (!ObjectId.isValid(workspaceId)) {
+            return ResponseWrapper.badRequest('Invalid workspace_id format. Must be a valid MongoDB ObjectId.');
+        }
+
+        // Validate project_id format if provided
+        if (projectId && !ObjectId.isValid(projectId)) {
+            return ResponseWrapper.badRequest('Invalid project_id format. Must be a valid MongoDB ObjectId.');
+        }
 
         // Default status filter: ['draft', 'submitted']
         const statusFilter = statusParam ? [statusParam] : ['draft', 'submitted'];
 
         // Validate pagination parameters
         if (limit < 1 || limit > 100) {
-            return {
-                statusCode: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: 'Limit must be between 1 and 100',
-                }),
-            };
+            return ResponseWrapper.badRequest('Limit must be between 1 and 100');
         }
 
         if (page < 1) {
-            return {
-                statusCode: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: 'Page must be greater than 0',
-                }),
-            };
+            return ResponseWrapper.badRequest('Page must be greater than 0');
         }
 
         // Validate sort field
@@ -62,24 +65,48 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             'action_at',
         ];
         if (!allowedSortFields.includes(sort)) {
-            return {
-                statusCode: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: `Invalid sort field. Allowed fields: ${allowedSortFields.join(', ')}`,
-                }),
-            };
+            return ResponseWrapper.badRequest(`Invalid sort field. Allowed fields: ${allowedSortFields.join(', ')}`);
         }
 
         const skip = (page - 1) * limit;
 
-        // Build filter - only active products with specified statuses
+        // Build filter - products with specified statuses
         const filter: any = {
-            isActive: true,
             status: { $in: statusFilter }
         };
+
+        // First, get project IDs that belong to the workspace
+        const workspaceProjectIds = await db.collection('projects')
+            .find({
+                workspace_id: new ObjectId(workspaceId),
+                isArchived: { $ne: true }
+            })
+            .project({ _id: 1 })
+            .map(p => p._id)
+            .toArray();
+
+        // Get department IDs that belong to the workspace
+        const workspaceDepartmentIds = await db.collection('departments')
+            .find({
+                workspace_id: new ObjectId(workspaceId),
+                isArchived: { $ne: true }
+            })
+            .project({ _id: 1 })
+            .map(d => d._id)
+            .toArray();
+
+        // Filter products by workspace through projects and departments
+        filter.$or = [
+            { project_id: { $in: workspaceProjectIds } },
+            { department_id: { $in: workspaceDepartmentIds } }
+        ];
+
+        // Add project filter if provided
+        if (projectId) {
+            filter.project_id = new ObjectId(projectId);
+            // Remove the $or filter since we're specifically filtering by project
+            delete filter.$or;
+        }
 
         // MongoDB projection to select specific fields
         const projection = {
@@ -166,26 +193,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             const totalCount = countResult.length > 0 ? countResult[0].total : 0;
             const totalPages = Math.ceil(totalCount / limit);
 
-            return {
-                statusCode: 200,
-                headers: {
-                    'Content-Type': 'application/json',
+            return ResponseWrapper.success({
+                products,
+                pagination: {
+                    currentPage: page,
+                    totalPages,
+                    totalCount,
+                    limit,
+                    hasNextPage: page < totalPages,
+                    hasPrevPage: page > 1,
                 },
-                body: JSON.stringify({
-                    message: 'Products fetched successfully',
-                    result: {
-                        products,
-                        pagination: {
-                            currentPage: page,
-                            totalPages,
-                            totalCount,
-                            limit,
-                            hasNextPage: page < totalPages,
-                            hasPrevPage: page > 1,
-                        },
-                    },
-                }),
-            };
+            });
         } else {
             // For other sort fields, use regular find with sort
             const sortObj: { [key: string]: 1 | -1 } = {};
@@ -227,39 +245,20 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
             const totalPages = Math.ceil(totalCount / limit);
 
-            return {
-                statusCode: 200,
-                headers: {
-                    'Content-Type': 'application/json',
+            return ResponseWrapper.success({
+                products: productsWithAuditInfo,
+                pagination: {
+                    currentPage: page,
+                    totalPages,
+                    totalCount,
+                    limit,
+                    hasNextPage: page < totalPages,
+                    hasPrevPage: page > 1,
                 },
-                body: JSON.stringify({
-                    message: 'Products fetched successfully',
-                    result: {
-                        products: productsWithAuditInfo,
-                        pagination: {
-                            currentPage: page,
-                            totalPages,
-                            totalCount,
-                            limit,
-                            hasNextPage: page < totalPages,
-                            hasPrevPage: page > 1,
-                        },
-                    },
-                }),
-            };
+            });
         }
     } catch (err) {
         console.error('Error in Lambda handler:', err);
-        return {
-            statusCode: 500,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                message: 'Internal server error',
-                error: err instanceof Error ? err.message : 'Unknown error',
-                timestamp: new Date().toISOString(),
-            }),
-        };
+        return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
     }
 };

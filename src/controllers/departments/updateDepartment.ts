@@ -22,35 +22,29 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         }
 
         type DepartmentUpdateInput = {
-            _id: string;
-            department_name: string;
-            department_description: string;
+            name?: string;
+            description?: string;
             image?: string;
             manager?: string;
             admin_id: string;
             workspace_id: string;
-            users?: string[];
+            user_ids?: string[];
         };
 
         const input: DepartmentUpdateInput = JSON.parse(event.body);
 
-        if (
-            !input.department_name ||
-            !input.department_description ||
-            !input.admin_id ||
-            !input.workspace_id ||
-            !input._id
-        ) {
-            return ResponseWrapper.badRequest(
-                'Missing required fields: _id, department_name, department_description, admin_id, and workspace_id are required',
-            );
+        // Get department ID from path parameters
+        const departmentId = event.pathParameters?.id;
+        if (!departmentId) {
+            return ResponseWrapper.badRequest('Department ID is required in path parameters');
         }
 
-        // Validate ObjectId formats
-        if (!ObjectId.isValid(input._id)) {
-            return ResponseWrapper.badRequest('Invalid _id format. Must be a valid MongoDB ObjectId.');
+        // Validate department ID format
+        if (!ObjectId.isValid(departmentId)) {
+            return ResponseWrapper.badRequest('Invalid department ID format. Must be a valid MongoDB ObjectId.');
         }
 
+        // Validate ObjectId formats for optional fields
         if (!ObjectId.isValid(input.admin_id)) {
             return ResponseWrapper.badRequest('Invalid admin_id format. Must be a valid MongoDB ObjectId.');
         }
@@ -60,8 +54,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         }
 
         // Validate user IDs if provided
-        if (input.users && input.users.length > 0) {
-            const invalidUserIds = input.users.filter((userId) => !ObjectId.isValid(userId));
+        if (input.user_ids && input.user_ids.length > 0) {
+            const invalidUserIds = input.user_ids.filter((userId) => !ObjectId.isValid(userId));
             if (invalidUserIds.length > 0) {
                 return ResponseWrapper.badRequest(
                     `Invalid user IDs format: ${invalidUserIds.join(', ')}. Must be valid MongoDB ObjectIds.`,
@@ -72,48 +66,88 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         const db = await getDb();
 
         const departmentRecord: Department | null = await db.collection<Department>('departments').findOne({
-            _id: new ObjectId(input._id),
+            _id: new ObjectId(departmentId),
         });
 
         if (!departmentRecord) {
             return ResponseWrapper.badRequest('Department not found');
         }
 
-        const adminObjectId = new ObjectId(input.admin_id);
-        const workspaceObjectId = new ObjectId(input.workspace_id);
-        const userObjectIds = input.users ? input.users.map((userId) => new ObjectId(userId)) : [];
+        // Build update object with only provided fields
+        const updateFields: any = {};
+        if (input.name !== undefined) updateFields.department_name = input.name;
+        if (input.description !== undefined) updateFields.department_description = input.description;
+        if (input.image !== undefined) updateFields.image = input.image;
+        if (input.manager !== undefined) updateFields.manager = input.manager;
+        if (input.admin_id !== undefined) updateFields.admin_id = new ObjectId(input.admin_id);
+        if (input.workspace_id !== undefined) updateFields.workspace_id = new ObjectId(input.workspace_id);
+
+        // Handle user_ids - fetch user details if provided
+        let userObjects: any[] = [];
+        if (input.user_ids !== undefined) {
+            const userObjectIds = input.user_ids.map((userId) => new ObjectId(userId));
+            updateFields.users = userObjectIds;
+
+            if (input.user_ids.length > 0) {
+                const users = await db.collection('users')
+                    .find({
+                        _id: { $in: userObjectIds }
+                    })
+                    .project({
+                        _id: 1,
+                        name: 1,
+                        profileAvatar: 1,
+                        designation: 1
+                    })
+                    .toArray();
+
+                userObjects = users.map(user => ({
+                    _id: user._id.toString(),
+                    name: user.name,
+                    profileAvatar: user.profileAvatar,
+                    designation: user.designation
+                }));
+            }
+        }
 
         const department = await db.collection<Department>('departments').updateOne(
             {
-                _id: new ObjectId(departmentRecord._id as ObjectId),
+                _id: new ObjectId(departmentId),
             },
             {
-                $set: {
-                    department_name: input.department_name,
-                    department_description: input.department_description,
-                    image: input.image,
-                    manager: input.manager,
-                    admin_id: adminObjectId,
-                    workspace_id: workspaceObjectId,
-                    users: userObjectIds,
-                },
+                $set: updateFields,
             },
         );
 
         const auditRecord: AuditLog = {
             entity: 'department',
-            entityId: (departmentRecord._id as ObjectId).toString(),
+            entityId: departmentId,
             action: AuditLogAction.UPDATE,
-            actionBy: input.admin_id,
+            actionBy: input.admin_id || departmentRecord.admin_id.toString(),
             actionAt: new Date(),
             active: true,
         };
 
         await updateAuditLog(auditRecord);
 
+        // Get updated department record for response
+        const updatedDepartment = await db.collection<Department>('departments').findOne({
+            _id: new ObjectId(departmentId),
+        });
+
         return ResponseWrapper.success({
             message: 'Department updated successfully',
-            department: department,
+            department: {
+                _id: departmentId,
+                name: updatedDepartment?.department_name,
+                description: updatedDepartment?.department_description,
+                image: updatedDepartment?.image,
+                manager: updatedDepartment?.manager,
+                admin_id: updatedDepartment?.admin_id.toString(),
+                workspace_id: updatedDepartment?.workspace_id.toString(),
+                users: input.user_ids !== undefined ? userObjects : undefined,
+                isArchived: updatedDepartment?.isArchived
+            }
         });
     } catch (err) {
         console.error('Error in Lambda handler:', err);

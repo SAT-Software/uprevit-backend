@@ -180,6 +180,40 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/workspaces/updateWorkspace.ts]
 
+  GetDashboardFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/getDashboard.lambdaHandler
+      Events:
+        GetDashboard:
+          Type: Api
+          Properties:
+            Path: /dashboard
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/getDashboard.ts]
+
+  GetDashboardUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/getDashboardUsers.lambdaHandler
+      Events:
+        GetDashboardUsers:
+          Type: Api
+          Properties:
+            Path: /dashboard/users
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/getDashboardUsers.ts]
+
   # ──────────────────────────────────────────────────────────────────────────
   # DEPARTMENTS
   # ──────────────────────────────────────────────────────────────────────────
@@ -226,8 +260,8 @@ Resources:
         UpdateDepartment:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /departments
-            Method: put
+            Path: /departments/{id}
+            Method: patch
     Metadata:
       <<: *EsbuildBase
       BuildProperties:
@@ -333,8 +367,8 @@ Resources:
         UpdateProject:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
-            Path: /projects
-            Method: put
+            Path: /projects/{id}
+            Method: patch
     Metadata:
       <<: *EsbuildBase
       BuildProperties:
@@ -367,7 +401,7 @@ Resources:
         GetAllProductsNew:
           Type: Api
           Properties:
-            Path: /api/products/getAllProducts
+            Path: /products
             Method: get
     Metadata:
       <<: *EsbuildBase
@@ -384,7 +418,7 @@ Resources:
         UpdateProduct:
           Type: Api
           Properties:
-            Path: /api/products/updateProduct
+            Path: /products
             Method: patch
     Metadata:
       <<: *EsbuildBase
@@ -401,7 +435,7 @@ Resources:
         CreateProduct:
           Type: Api
           Properties:
-            Path: /api/products/createProduct
+            Path: /products
             Method: post
     Metadata:
       <<: *EsbuildBase
@@ -418,7 +452,7 @@ Resources:
         ArchiveProduct:
           Type: Api
           Properties:
-            Path: /api/products/archiveProduct
+            Path: /products
             Method: patch
     Metadata:
       <<: *EsbuildBase
@@ -435,7 +469,7 @@ Resources:
         BookmarkProduct:
           Type: Api
           Properties:
-            Path: /api/products/bookmarkProduct
+            Path: /bookmakrs
             Method: post
     Metadata:
       <<: *EsbuildBase
@@ -452,7 +486,7 @@ Resources:
         CreateSourceFilesFolder:
           Type: Api
           Properties:
-            Path: /api/source-files/createSourceFilesFolder
+            Path: /sourceFiles/folders
             Method: post
     Metadata:
       <<: *EsbuildBase
@@ -469,13 +503,30 @@ Resources:
         GetAllSourceFilesFolders:
           Type: Api
           Properties:
-            Path: /api/source-files/getAllSourceFilesFolders
-            Method: post
+            Path: /sourceFiles/folders/
+            Method: get
     Metadata:
       <<: *EsbuildBase
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/source-files/getAllSourceFilesFolders.ts]
+
+  GetSourceFilesFolderByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/source-files/getSourceFilesFolderById.lambdaHandler
+      Events:
+        GetSourceFilesFolderById:
+          Type: Api
+          Properties:
+            Path: /sourceFiles/folders/{id}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/source-files/getSourceFilesFolderById.ts]
 
   UploadSourceFilesFunction:
     Type: AWS::Serverless::Function
@@ -486,7 +537,7 @@ Resources:
         UploadSourceFiles:
           Type: Api
           Properties:
-            Path: /api/source-files/uploadSourceFiles
+            Path: /sourceFiles/folders/{folderId}
             Method: patch
     Metadata:
       <<: *EsbuildBase
@@ -503,7 +554,7 @@ Resources:
         DeleteSourceFiles:
           Type: Api
           Properties:
-            Path: /api/source-files/deleteSourceFiles
+            Path: /sourceFiles/files/{sourceFileId}
             Method: patch
     Metadata:
       <<: *EsbuildBase
@@ -520,7 +571,7 @@ Resources:
         DeleteSourceFileFolder:
           Type: Api
           Properties:
-            Path: /api/source-files/deleteSourceFileFolder
+            Path: /sourceFiles/folders/{folderId}
             Method: delete
     Metadata:
       <<: *EsbuildBase
@@ -537,7 +588,7 @@ Resources:
         GetSourceFilesFolderByUserId:
           Type: Api
           Properties:
-            Path: /api/bookmarks/getSourceFilesFolderByUserId
+            Path: /bookmarks/sourceFiles
             Method: get
     Metadata:
       <<: *EsbuildBase
@@ -554,7 +605,7 @@ Resources:
         ToggleBookmarkSourceFilesFolder:
           Type: Api
           Properties:
-            Path: /api/bookmarks/toggleBoomarkSourceFilesFolder/{folderId}
+            Path: /bookmarks/sourceFiles/{folderId}
             Method: patch
     Metadata:
       <<: *EsbuildBase
@@ -571,7 +622,7 @@ Resources:
         GetBookmarkedProductFoldersByUserId:
           Type: Api
           Properties:
-            Path: /api/bookmarks/getBookmakredProductFoldersByUseId
+            Path: /api/bookmarks/products
             Method: get
     Metadata:
       <<: *EsbuildBase
@@ -588,7 +639,7 @@ Resources:
         CreateProductBookmarkFolder:
           Type: Api
           Properties:
-            Path: /api/bookmarks/createProductBookmarkFolder
+            Path: /bookmarks/products
             Method: post
     Metadata:
       <<: *EsbuildBase
@@ -605,7 +656,7 @@ Resources:
         UpdateProductBookmarkFolderName:
           Type: Api
           Properties:
-            Path: /api/bookmarks/updateProductBookmarkFolderName/{folderId}
+            Path: /bookmarks/products/{folderId}
             Method: patch
     Metadata:
       <<: *EsbuildBase
@@ -622,7 +673,7 @@ Resources:
         DeleteProductBookmarkFolder:
           Type: Api
           Properties:
-            Path: /api/bookmarks/deleteProductBookmarkFolder/{folderId}
+            Path: /bookmarks/products/{folderId}
             Method: delete
     Metadata:
       <<: *EsbuildBase
@@ -639,7 +690,7 @@ Resources:
         AddProductToBookmarkProductFolder:
           Type: Api
           Properties:
-            Path: /api/bookmarks/addProductToBookmarkProductFolder/{folderId}/{productId}
+            Path: /bookmarks/products/{folderId}/{productId}
             Method: post
     Metadata:
       <<: *EsbuildBase
@@ -656,7 +707,7 @@ Resources:
         RemoveProductFromBookmarkProductFolder:
           Type: Api
           Properties:
-            Path: /api/bookmarks/removeProductToBookmarkProductFolder/{folderId}/{productId}
+            Path: /bookmarks/products/{folderId}/{productId}
             Method: delete
     Metadata:
       <<: *EsbuildBase
@@ -673,13 +724,47 @@ Resources:
         GetProductsInAProductBookmarkFolder:
           Type: Api
           Properties:
-            Path: /api/bookmarks/getProductsInAProductBookmarkFolder/{folderId}
+            Path: /bookmarks/products/{folderId}
             Method: get
     Metadata:
       <<: *EsbuildBase
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/bookmarks/getProductsInAProductBookmarkFolder.ts]
+
+  GetProductTabDataFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getProductTabData.lambdaHandler
+      Events:
+        GetProductTabData:
+          Type: Api
+          Properties:
+            Path: /products/productData
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getProductTabData.ts]
+
+  UpdateProductDataFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/updateProductData.lambdaHandler
+      Events:
+        UpdateProductData:
+          Type: Api
+          Properties:
+            Path: /products/productData
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/updateProductData.ts]
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group

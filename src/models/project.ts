@@ -8,5 +8,6 @@ export type Project = {
 	project_description: string;
 	manager?: string;
 	admin_id: ObjectId;
+	users: ObjectId[];
 	isArchived: boolean;
 };

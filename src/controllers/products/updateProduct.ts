@@ -23,15 +23,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
         type ProductUpdateInput = {
             id: string;
-            name: string;
+            product_name: string;
             product_description: string;
         };
 
         const input: ProductUpdateInput = JSON.parse(event.body);
 
-        if (!input.id || !input.name || !input.product_description) {
+        if (!input.id || !input.product_name || !input.product_description) {
             return ResponseWrapper.badRequest(
-                'Missing required fields: id, name, and product_description are required',
+                'Missing required fields: id, product_name, and product_description are required',
             );
         }
 
@@ -56,7 +56,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             },
             {
                 $set: {
-                    product_name: input.name,
+                    product_name: input.product_name,
                     product_description: input.product_description,
                 },
             },
