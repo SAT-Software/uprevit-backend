@@ -25,7 +25,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         }
 
         // Validate tab parameter
-        const validTabs = ['product-information', 'compliance-information', 'label-components', 'symbols-graphics'];
+        const validTabs = ['product-information', 'compliance-information', 'label-components', 'symbols-graphics', 'product-data'];
         if (!validTabs.includes(tab)) {
             return ResponseWrapper.badRequest(`Invalid tab parameter. Must be one of: ${validTabs.join(', ')}`);
         }
@@ -85,7 +85,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                             component_image: item.component_image || '',
                             component_name: item.component_name,
                             component_number: item.component_type || '',
-                            specification_details: [item.dimensions, item.material, item.color].filter(Boolean).join(' ')
+                            specification_details: item.dimensions || ''
                         })),
                         tab_completed: product.label_components.tab_completed
                     }
@@ -95,14 +95,29 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             case 'symbols-graphics':
                 responseData = {
                     tab: 'symbols-graphics',
-                    data: product.symbols_graphics.map(item => ({
-                        image: item.image,
-                        text: item.text,
-                        description: item.description,
-                        text_present: item.text_present,
-                        label_presence: item.label_presence,
-                        entity: item.entity
-                    }))
+                    data: {
+                        data: product.symbols_graphics.data.map(item => ({
+                            id: item._id,
+                            image: item.image,
+                            text: item.text,
+                            description: item.description,
+                            text_present: item.text_present,
+                            label_presence: item.label_presence,
+                            entity: item.entity
+                        })),
+                        tab_completed: product.symbols_graphics.tab_completed
+                    }
+                };
+                break;
+
+            case 'product-data':
+                responseData = {
+                    tab: 'product-data',
+                    data: {
+                        id: product._id,
+                        workbook_data: product.product_data?.workbook_data || {},
+                        tab_completed: product.product_data?.tab_completed || false
+                    }
                 };
                 break;
         }

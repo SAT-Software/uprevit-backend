@@ -477,6 +477,23 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/source-files/getAllSourceFilesFolders.ts]
 
+  GetSourceFilesFolderByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/source-files/getSourceFilesFolderById.lambdaHandler
+      Events:
+        GetSourceFilesFolderById:
+          Type: Api
+          Properties:
+            Path: /sourceFiles/folders/{id}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/source-files/getSourceFilesFolderById.ts]
+
   UploadSourceFilesFunction:
     Type: AWS::Serverless::Function
     Properties:

@@ -32,7 +32,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         }
 
         // Validate tab parameter
-        const validTabs = ['product-information', 'compliance-information', 'label-components', 'symbols-graphics'];
+        const validTabs = ['product-information', 'compliance-information', 'label-components', 'symbols-graphics', 'product-data'];
         if (!validTabs.includes(input.tab)) {
             return ResponseWrapper.badRequest(`Invalid tab parameter. Must be one of: ${validTabs.join(', ')}`);
         }
@@ -71,19 +71,28 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                 if (input.tab !== 'product-information') {
                     return ResponseWrapper.badRequest('Action add_custom_field must be used with tab product-information');
                 }
-                
-                if (!input.data.label || !input.data.value) {
-                    return ResponseWrapper.badRequest('Missing required fields: label and value are required');
+
+                if (!Array.isArray(input.data) || input.data.length === 0) {
+                    return ResponseWrapper.badRequest('Data must be an array of custom fields');
                 }
-                
-                const newCustomField = {
-                    _id: new ObjectId(),
-                    field_name: input.data.label,
-                    field_value: input.data.value
-                };
-                
-                updateQuery = { $push: { 'product_information.custom_fields': newCustomField } };
-                updatedData = { _id: newCustomField._id, label: newCustomField.field_name, value: newCustomField.field_value };
+
+                const newCustomFields = input.data.map((item: any) => {
+                    if (!item.label || !item.value) {
+                        throw new Error('Each custom field must have label and value');
+                    }
+                    return {
+                        _id: new ObjectId(),
+                        field_name: item.label,
+                        field_value: item.value
+                    };
+                });
+
+                updateQuery = { $push: { 'product_information.custom_fields': { $each: newCustomFields } } };
+                updatedData = newCustomFields.map(field => ({
+                    _id: field._id,
+                    label: field.field_name,
+                    value: field.field_value
+                }));
                 break;
 
             case 'update_custom_field':
@@ -163,6 +172,57 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                 }));
                 break;
 
+            case 'update_compliance_standard':
+                if (input.tab !== 'compliance-information') {
+                    return ResponseWrapper.badRequest('Action update_compliance_standard must be used with tab compliance-information');
+                }
+
+                if (!input.data.standard_id || !input.data.standard || !input.data.standard_description) {
+                    return ResponseWrapper.badRequest('Missing required fields: standard_id, standard, and standard_description are required');
+                }
+
+                if (!ObjectId.isValid(input.data.standard_id)) {
+                    return ResponseWrapper.badRequest('Invalid standard_id format. Must be a valid MongoDB ObjectId.');
+                }
+
+                // Check if the compliance standard exists first
+                const existingComplianceProduct = await db.collection<Product>('products').findOne({
+                    _id: new ObjectId(input.id),
+                    'compliance_information.data._id': new ObjectId(input.data.standard_id)
+                });
+
+                if (!existingComplianceProduct) {
+                    return ResponseWrapper.notFound('Compliance standard not found');
+                }
+
+                const complianceUpdates: any = {
+                    'compliance_information.data.$[elem].compliance_type': input.data.standard,
+                    'compliance_information.data.$[elem].notes': input.data.standard_description
+                };
+
+                updateQuery = { $set: complianceUpdates };
+                const complianceArrayFilters = [{ 'elem._id': new ObjectId(input.data.standard_id) }];
+                updatedData = {
+                    standard_id: input.data.standard_id,
+                    standard: input.data.standard,
+                    standard_description: input.data.standard_description
+                };
+
+                const complianceUpdateResult = await db.collection<Product>('products').updateOne(
+                    { _id: new ObjectId(input.id) },
+                    updateQuery,
+                    { arrayFilters: complianceArrayFilters }
+                );
+
+                if (complianceUpdateResult.matchedCount === 0) {
+                    return ResponseWrapper.notFound('Product not found');
+                }
+
+                if (complianceUpdateResult.modifiedCount === 0) {
+                    return ResponseWrapper.badRequest('Compliance standard could not be updated. Standard ID may not exist.');
+                }
+                break;
+
             case 'delete_compliance_standard':
                 if (input.tab !== 'compliance-information') {
                     return ResponseWrapper.badRequest('Action delete_compliance_standard must be used with tab compliance-information');
@@ -207,9 +267,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                     component_name: input.data.component_name,
                     component_type: input.data.component_number || '',
                     component_image: input.data.component_image || '',
-                    dimensions: input.data.specification_details || '',
-                    material: '',
-                    color: ''
+                    dimensions: input.data.specification_details || ''
                 };
                 
                 updateQuery = { $push: { 'label_components.data': newLabelComponent } };
@@ -226,30 +284,48 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                 if (input.tab !== 'label-components') {
                     return ResponseWrapper.badRequest('Action update_label_component must be used with tab label-components');
                 }
-                
+
                 if (!input.data.component_id) {
                     return ResponseWrapper.badRequest('Missing required field: component_id is required');
                 }
-                
+
                 if (!ObjectId.isValid(input.data.component_id)) {
                     return ResponseWrapper.badRequest('Invalid component_id format. Must be a valid MongoDB ObjectId.');
                 }
-                
+
+                // Check if the component exists first
+                const existingProduct = await db.collection<Product>('products').findOne({
+                    _id: new ObjectId(input.id),
+                    'label_components.data._id': new ObjectId(input.data.component_id)
+                });
+
+                if (!existingProduct) {
+                    return ResponseWrapper.notFound('Label component not found');
+                }
+
                 const componentUpdates: any = {};
                 if (input.data.component_name !== undefined) componentUpdates['label_components.data.$[elem].component_name'] = input.data.component_name;
                 if (input.data.component_number !== undefined) componentUpdates['label_components.data.$[elem].component_type'] = input.data.component_number;
                 if (input.data.component_image !== undefined) componentUpdates['label_components.data.$[elem].component_image'] = input.data.component_image;
                 if (input.data.specification_details !== undefined) componentUpdates['label_components.data.$[elem].dimensions'] = input.data.specification_details;
-                
+
                 updateQuery = { $set: componentUpdates };
                 const componentArrayFilters = [{ 'elem._id': new ObjectId(input.data.component_id) }];
                 updatedData = input.data;
-                
-                await db.collection<Product>('products').updateOne(
+
+                const updateResult = await db.collection<Product>('products').updateOne(
                     { _id: new ObjectId(input.id) },
                     updateQuery,
                     { arrayFilters: componentArrayFilters }
                 );
+
+                if (updateResult.matchedCount === 0) {
+                    return ResponseWrapper.notFound('Product not found');
+                }
+
+                if (updateResult.modifiedCount === 0) {
+                    return ResponseWrapper.badRequest('Label component could not be updated. Component ID may not exist.');
+                }
                 break;
 
             case 'delete_label_component':
@@ -306,7 +382,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                     entity: input.data.entity as 'Symbols' | 'Schematics' | 'Barcodes' | 'Other Components'
                 };
                 
-                updateQuery = { $push: { symbols_graphics: newSymbolGraphic } };
+                updateQuery = { $push: { 'symbols_graphics.data': newSymbolGraphic } };
                 updatedData = newSymbolGraphic;
                 break;
 
@@ -324,17 +400,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                 }
                 
                 const symbolUpdates: any = {};
-                if (input.data.image !== undefined) symbolUpdates['symbols_graphics.$[elem].image'] = input.data.image;
-                if (input.data.text !== undefined) symbolUpdates['symbols_graphics.$[elem].text'] = input.data.text;
-                if (input.data.description !== undefined) symbolUpdates['symbols_graphics.$[elem].description'] = input.data.description;
-                if (input.data.text_present !== undefined) symbolUpdates['symbols_graphics.$[elem].text_present'] = input.data.text_present;
-                if (input.data.label_presence !== undefined) symbolUpdates['symbols_graphics.$[elem].label_presence'] = input.data.label_presence;
+                if (input.data.image !== undefined) symbolUpdates['symbols_graphics.data.$[elem].image'] = input.data.image;
+                if (input.data.text !== undefined) symbolUpdates['symbols_graphics.data.$[elem].text'] = input.data.text;
+                if (input.data.description !== undefined) symbolUpdates['symbols_graphics.data.$[elem].description'] = input.data.description;
+                if (input.data.text_present !== undefined) symbolUpdates['symbols_graphics.data.$[elem].text_present'] = input.data.text_present;
+                if (input.data.label_presence !== undefined) symbolUpdates['symbols_graphics.data.$[elem].label_presence'] = input.data.label_presence;
                 if (input.data.entity !== undefined) {
                     const validEntities = ['Symbols', 'Schematics', 'Barcodes', 'Other Components'];
                     if (!validEntities.includes(input.data.entity)) {
                         return ResponseWrapper.badRequest(`Invalid entity. Must be one of: ${validEntities.join(', ')}`);
                     }
-                    symbolUpdates['symbols_graphics.$[elem].entity'] = input.data.entity;
+                    symbolUpdates['symbols_graphics.data.$[elem].entity'] = input.data.entity;
                 }
                 
                 updateQuery = { $set: symbolUpdates };
@@ -361,8 +437,47 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                     return ResponseWrapper.badRequest('Invalid graphics_id format. Must be a valid MongoDB ObjectId.');
                 }
                 
-                updateQuery = { $pull: { symbols_graphics: { _id: new ObjectId(input.data.graphics_id) } } };
+                updateQuery = { $pull: { 'symbols_graphics.data': { _id: new ObjectId(input.data.graphics_id) } } };
                 updatedData = { graphics_id: input.data.graphics_id };
+                break;
+
+            case 'update_symbols_graphics_tab_completion':
+                if (input.tab !== 'symbols-graphics') {
+                    return ResponseWrapper.badRequest('Action update_symbols_graphics_tab_completion must be used with tab symbols-graphics');
+                }
+
+                if (typeof input.data.tab_completed !== 'boolean') {
+                    return ResponseWrapper.badRequest('tab_completed must be a boolean value');
+                }
+
+                updateQuery = { $set: { 'symbols_graphics.tab_completed': input.data.tab_completed } };
+                updatedData = { tab_completed: input.data.tab_completed };
+                break;
+
+            case 'update_product_data':
+                if (input.tab !== 'product-data') {
+                    return ResponseWrapper.badRequest('Action update_product_data must be used with tab product-data');
+                }
+
+                if (input.data.workbook_data === undefined) {
+                    return ResponseWrapper.badRequest('workbook_data is required');
+                }
+
+                updateQuery = { $set: { 'product_data.workbook_data': input.data.workbook_data } };
+                updatedData = { workbook_data: input.data.workbook_data };
+                break;
+
+            case 'update_product_data_tab_completion':
+                if (input.tab !== 'product-data') {
+                    return ResponseWrapper.badRequest('Action update_product_data_tab_completion must be used with tab product-data');
+                }
+
+                if (typeof input.data.tab_completed !== 'boolean') {
+                    return ResponseWrapper.badRequest('tab_completed must be a boolean value');
+                }
+
+                updateQuery = { $set: { 'product_data.tab_completed': input.data.tab_completed } };
+                updatedData = { tab_completed: input.data.tab_completed };
                 break;
 
             default:
@@ -370,7 +485,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         }
 
         // Perform the update if it hasn't been done in the switch case
-        if (!['update_custom_field', 'update_label_component', 'update_symbols_graphics_item'].includes(input.action)) {
+        if (!['update_custom_field', 'update_label_component', 'update_symbols_graphics_item', 'update_compliance_standard'].includes(input.action)) {
             await db.collection<Product>('products').updateOne(
                 { _id: new ObjectId(input.id) },
                 updateQuery

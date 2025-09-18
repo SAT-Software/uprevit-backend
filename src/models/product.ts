@@ -46,13 +46,20 @@ export type Product = {
 		}>;
 		tab_completed: boolean; 
 	};
-	symbols_graphics: Array<{
-		_id: ObjectId;
-		image: string;
-		text: string;
-		description?: string;
-		text_present?: boolean;
-		label_presence: string[];
-		entity: 'Symbols' | 'Schematics' | 'Barcodes' | 'Other Components';
-	}>;
+	symbols_graphics: {
+		data: Array<{
+			_id: ObjectId;
+			image: string;
+			text: string;
+			description?: string;
+			text_present?: boolean;
+			label_presence: string[];
+			entity: 'Symbols' | 'Schematics' | 'Barcodes' | 'Other Components';
+		}>;
+		tab_completed: boolean;
+	};
+	product_data?: {
+		workbook_data: any;
+		tab_completed: boolean;
+	};
 };

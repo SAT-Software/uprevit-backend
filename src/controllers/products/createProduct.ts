@@ -62,15 +62,22 @@ type ProductInput = {
         }>;
         tab_completed?: boolean;
     };
-    symbols_graphics?: Array<{
-        _id?: string;
-        image: string;
-        text: string;
-        description?: string;
-        text_present?: boolean;
-        label_presence: string[];
-        entity: 'Symbols' | 'Schematics' | 'Barcodes' | 'Other Components';
-    }>;
+    symbols_graphics?: {
+        data?: Array<{
+            _id?: string;
+            image: string;
+            text: string;
+            description?: string;
+            text_present?: boolean;
+            label_presence: string[];
+            entity: 'Symbols' | 'Schematics' | 'Barcodes' | 'Other Components';
+        }>;
+        tab_completed?: boolean;
+    };
+    product_data?: {
+        workbook_data?: any;
+        tab_completed?: boolean;
+    };
 };
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -110,9 +117,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         }
 
         // Validate entity enum in symbols_graphics
-        if (input.symbols_graphics) {
+        if (input.symbols_graphics?.data) {
             const validEntities = ['Symbols', 'Schematics', 'Barcodes', 'Other Components'];
-            for (const symbol of input.symbols_graphics) {
+            for (const symbol of input.symbols_graphics.data) {
                 if (!validEntities.includes(symbol.entity)) {
                     return ResponseWrapper.badRequest(`Invalid entity in symbols_graphics. Must be one of: ${validEntities.join(', ')}`);
                 }
@@ -175,7 +182,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         const projectObjectId = new ObjectId(input.project_id);
 
         // Process symbols_graphics with ObjectIds
-        const processedSymbolsGraphics = (input.symbols_graphics || []).map(symbol => ({
+        const processedSymbolsGraphics = (input.symbols_graphics?.data || []).map(symbol => ({
             _id: symbol._id ? new ObjectId(symbol._id) : new ObjectId(),
             image: symbol.image,
             text: symbol.text,
@@ -239,7 +246,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
                 data: processedLabelComponentsData,
                 tab_completed: input.label_components?.tab_completed || false
             },
-            symbols_graphics: processedSymbolsGraphics
+            symbols_graphics: {
+                data: processedSymbolsGraphics,
+                tab_completed: input.symbols_graphics?.tab_completed || false
+            },
+            product_data: {
+                workbook_data: input.product_data?.workbook_data || {},
+                tab_completed: input.product_data?.tab_completed || false
+            }
         };
 
         // Insert the product
