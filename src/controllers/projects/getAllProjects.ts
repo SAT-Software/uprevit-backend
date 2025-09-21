@@ -65,8 +65,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         // Validate sort field
         const allowedSortFields = [
             'project_name',
+            'project_number',
             'project_description',
-            'manager',
+            'project_manager',
             '_id',
             'actionAt',
         ];

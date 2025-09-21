@@ -33,21 +33,22 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			workspace_id: string;
 			department_id: string;
 			project_name: string;
+			project_number: string;
 			project_description: string;
-			manager?: string;
+			project_manager?: string;
 			admin_id: string;
 		};
 
 		const input: ProjectUpdateInput = JSON.parse(event.body);
 
-		if (!input._id || !input.workspace_id || !input.department_id || !input.project_name || !input.project_description || !input.admin_id) {
+		if (!input._id || !input.workspace_id || !input.department_id || !input.project_name || !input.project_number || !input.project_description || !input.admin_id) {
 			return {
 				statusCode: 400,
 				headers: {
 					'Content-Type': 'application/json',
 				},
 				body: JSON.stringify({
-					message: 'Missing required fields: _id, workspace_id, department_id, project_name, project_description, and admin_id are required',
+					message: 'Missing required fields: _id, workspace_id, department_id, project_name, project_number, project_description, and admin_id are required',
 				}),
 			};
 		}
@@ -121,6 +122,24 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			};
 		}
 
+		// Check if project_number already exists (excluding current project)
+		const existingProject = await db.collection<Project>('projects').findOne({
+			project_number: input.project_number,
+			_id: { $ne: new ObjectId(input._id) },
+			isArchived: { $ne: true }
+		});
+
+		if (existingProject) {
+			return {
+				statusCode: 409,
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					message: 'Project number already exists',
+				}),
+			};
+		}
 		
 		const workspaceObjectId = new ObjectId(input.workspace_id);
 		const departmentObjectId = new ObjectId(input.department_id);
@@ -133,8 +152,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				workspace_id: workspaceObjectId,
 				department_id: departmentObjectId,
 				project_name: input.project_name,
+				project_number: input.project_number,
 				project_description: input.project_description,
-				manager: input.manager,
+				project_manager: input.project_manager,
 				admin_id: adminObjectId,
 			}
 		});
