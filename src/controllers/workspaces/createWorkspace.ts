@@ -65,7 +65,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			actionBy: payload?.name?.toString()!,
 			actionAt: new Date(),
 			active: true,
-		}, );
+		});
 
 		return ResponseWrapper.created({
 			message: 'Workspace created successfully',
