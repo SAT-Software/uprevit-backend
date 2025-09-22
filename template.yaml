@@ -31,6 +31,9 @@ Globals:
       Variables:
         MONGODB_URI: !Ref MONGODB_URI
         DB_NAME: !Ref DB_NAME
+        USER_POOL_ID: !Ref USER_POOL_ID
+        CLIENT_ID: !Ref CLIENT_ID
+        JWT: !Ref JWT # TODO: remove this - only for testing
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
