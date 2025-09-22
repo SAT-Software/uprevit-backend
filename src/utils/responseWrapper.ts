@@ -51,6 +51,13 @@ export class ResponseWrapper {
 		}, StatusCodes.NOT_FOUND);
 	}
 
+	static conflict(message: string = 'Resource already exists', additionalData: ResponseData = {}): APIGatewayProxyResult {
+		return this.success({
+			message,
+			...additionalData,
+		}, StatusCodes.CONFLICT);
+	}
+
 	static internalServerError(error: Error | string, additionalData: ResponseData = {}): APIGatewayProxyResult {
 		const errorMessage = error instanceof Error ? error.message : error;
 		return this.success({

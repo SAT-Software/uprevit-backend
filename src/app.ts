@@ -1,4 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { verifyJWT } from './utils/authUtils';
+import { ResponseWrapper } from './utils/responseWrapper';
 
 /**
  *
@@ -12,6 +14,23 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
+		const authHeader = event.headers?.Authorization || event.headers?.authorization;
+		console.log('authHeader', authHeader);
+
+		if(!authHeader) {
+			return ResponseWrapper.unauthorized('Unauthorized');
+		}
+
+		const token = authHeader.split(' ')[1];
+
+		const { isValid, payload } = await verifyJWT(token);
+		
+		if(!isValid) {
+			return ResponseWrapper.unauthorized('Unauthorized');
+		}
+
+		console.log('payload', payload);
+
 		return {
 			statusCode: 200,
 			headers: {

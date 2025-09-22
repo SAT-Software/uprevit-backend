@@ -1,9 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
-import { Project } from '../../models/project';
-import { AuditLog, AuditLogAction } from '../../models/auditLog';
+import type { Project } from '../../models/project';
+import { type AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
+import { ResponseWrapper } from '../../utils/responseWrapper';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -17,15 +18,7 @@ import { ObjectId } from 'mongodb';
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		if (!event.body) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Request body is required',
-				}),
-			};
+			return ResponseWrapper.badRequest('Request body is required');
 		}
 
 		type ProjectUpdateInput = {
@@ -42,64 +35,24 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const input: ProjectUpdateInput = JSON.parse(event.body);
 
 		if (!input._id || !input.workspace_id || !input.department_id || !input.project_name || !input.project_number || !input.project_description || !input.admin_id) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Missing required fields: _id, workspace_id, department_id, project_name, project_number, project_description, and admin_id are required',
-				}),
-			};
+			return ResponseWrapper.badRequest('Missing required fields: _id, workspace_id, department_id, project_name, project_number, project_description, and admin_id are required');
 		}
 
 		// Validate ObjectId formats
 		if (!ObjectId.isValid(input._id)) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Invalid _id format. Must be a valid MongoDB ObjectId.',
-				}),
-			};
+			return ResponseWrapper.badRequest('Invalid _id format. Must be a valid MongoDB ObjectId.');
 		}
 
 		if (!ObjectId.isValid(input.workspace_id)) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Invalid workspace_id format. Must be a valid MongoDB ObjectId.',
-				}),
-			};
+			return ResponseWrapper.badRequest('Invalid workspace_id format. Must be a valid MongoDB ObjectId.');
 		}
 
 		if (!ObjectId.isValid(input.department_id)) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Invalid department_id format. Must be a valid MongoDB ObjectId.',
-				}),
-			};
+			return ResponseWrapper.badRequest('Invalid department_id format. Must be a valid MongoDB ObjectId.');
 		}
 
 		if (!ObjectId.isValid(input.admin_id)) {
-			return {
-				statusCode: 400,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Invalid admin_id format. Must be a valid MongoDB ObjectId.',
-				}),
-			};
+			return ResponseWrapper.badRequest('Invalid admin_id format. Must be a valid MongoDB ObjectId.');
 		}
 
 		const db = await getDb();
@@ -111,15 +64,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 		
 		if (!projectRecord) {
-			return {
-				statusCode: 404,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Project not found or archived',
-				}),
-			};
+			return ResponseWrapper.notFound('Project not found or archived');
 		}
 
 		// Check if project_number already exists (excluding current project)
@@ -170,28 +115,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		await updateAuditLog(auditRecord);
 
-		return {
-			statusCode: 200,
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				message: 'Project updated successfully',
-				project: project,
-			}),
-		};
+		return ResponseWrapper.success({
+			message: 'Project updated successfully',
+			project: project,
+		});
 	} catch (err) {
 		console.error('Error in Lambda handler:', err);
-		return {
-			statusCode: 500,
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				message: 'Internal server error',
-				error: err instanceof Error ? err.message : 'Unknown error',
-				timestamp: new Date().toISOString(),
-			}),
-		};
-	}
+		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));	
+		}
 };

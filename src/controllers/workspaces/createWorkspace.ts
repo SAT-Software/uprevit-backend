@@ -1,21 +1,34 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
-import { Workspace } from '../../models/workspace';
+import type { Workspace } from '../../models/workspace';
 import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { validateRole } from '../../utils/authUtils';
+
 
 /**
- * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
- * @param {Object} event - API Gateway Lambda Proxy Input Format
- *
- * Return doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html
- * @returns {Object} object - API Gateway Lambda Proxy Output Format
- *
+ * API endpoint to create a workspace - only admin can create a workspace
+ * @param event - API Gateway Lambda Proxy Input Format
+ * @returns 
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
+		const authHeader = event.headers?.Authorization || event.headers?.authorization;
+
+		if(!authHeader) {
+			return ResponseWrapper.unauthorized('Unauthorized');
+		}
+
+		const token = authHeader.split(' ')[1];
+
+		const { isValid, payload } = await validateRole(token, 'admin');
+
+		if(!isValid) {
+			return ResponseWrapper.unauthorized('Unauthorized');
+		}
+
 		// Parse the request body from the event
 		if (!event.body) {
 			return ResponseWrapper.badRequest('Request body is required');
@@ -49,10 +62,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			entity: 'workspace',
 			entityId: workspace.insertedId.toString(),
 			action: AuditLogAction.CREATE,
-			actionBy: workspace.insertedId.toString(),
+			actionBy: payload?.name?.toString()!,
 			actionAt: new Date(),
 			active: true,
-		});
+		}, );
 
 		return ResponseWrapper.created({
 			message: 'Workspace created successfully',
