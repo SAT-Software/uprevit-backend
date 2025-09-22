@@ -1,10 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
-import { Department } from '../../models/department';
-import { AuditLog, AuditLogAction } from '../../models/auditLog';
+import type { Department } from '../../models/department';
+import { type AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { validateRole } from '../../utils/authUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -21,18 +22,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             return ResponseWrapper.badRequest('Request body is required');
         }
 
-        type DepartmentUpdateInput = {
-            _id: string;
-            department_name: string;
-            department_description: string;
-            image?: string;
-            manager?: string;
-            admin_id: string;
-            workspace_id: string;
-            users?: string[];
-        };
+				const authHeader = event.headers?.Authorization || event.headers?.authorization;
+				if(!authHeader) {
+					return ResponseWrapper.unauthorized('Unauthorized');
+				}
 
-        const input: DepartmentUpdateInput = JSON.parse(event.body);
+				const token = authHeader.split(' ')[1];
+
+				const { isValid, payload } = await validateRole(token, 'admin');
+				if(!isValid) {
+					return ResponseWrapper.unauthorized('Unauthorized');
+				}
+
+        const input: Department = JSON.parse(event.body);
 
         if (
             !input.department_name ||
@@ -104,7 +106,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             entity: 'department',
             entityId: (departmentRecord._id as ObjectId).toString(),
             action: AuditLogAction.UPDATE,
-            actionBy: input.admin_id,
+            actionBy: payload?.name?.toString()!,
             actionAt: new Date(),
             active: true,
         };
