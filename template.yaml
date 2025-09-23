@@ -14,6 +14,12 @@ Parameters:
     Type: String
     Description: "MongoDB database name"
     Default: "uprevit"
+  USER_POOL_ID:
+    Type: String
+    Description: "The Cognito User Pool ID for token validation"
+  CLIENT_ID:
+    Type: String
+    Description: "The Cognito App Client ID for token validation"
 
 # ──────────────────────────────────────────────────────────────────────────
 # TOP-LEVEL METADATA  – YAML anchor for the build recipe
@@ -372,6 +378,23 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/createProduct.ts]
+
+  GetAllProductsFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getAllProducts.lambdaHandler
+      Events:
+        GetAllProducts:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /products
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getAllProducts.ts]
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group

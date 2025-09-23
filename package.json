@@ -1,5 +1,8 @@
 {
   "devDependencies": {
     "esbuild": "^0.25.5"
+  },
+  "dependencies": {
+    "aws-jwt-verify": "^4.0.1"
   }
 }

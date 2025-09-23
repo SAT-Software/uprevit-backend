@@ -5,7 +5,7 @@ import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { validateRole } from '../../utils/authUtils';
+import { verifyJWT } from '../../utils/authUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -28,18 +28,37 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         }
 
         const token = authHeader.split(' ')[1];
-        const { isValid, payload } = await validateRole(token, 'admin');
+
+        // Check if the user is valid - both users and admins can create products
+        const { isValid, payload } = await verifyJWT(token);
         if (!isValid) {
             return ResponseWrapper.unauthorized('Unauthorized');
         }
 
-        const input: Product = JSON.parse(event.body);
+        let input: Product;
+        try {
+            input = JSON.parse(event.body);
+        } catch (error) {
+            return ResponseWrapper.badRequest('Invalid JSON in request body');
+        }
 
-        // Validate required fields
-        if (!input.project_id || !input.product_plan_number || !input.product_name || !input.product_description) {
+        // Validate required fields including status and master_version
+        if (
+            !input.project_id ||
+            !input.product_plan_number ||
+            !input.product_name ||
+            !input.product_description ||
+            !input.status ||
+            !input.master_version
+        ) {
             return ResponseWrapper.badRequest(
-                'Missing required fields: project_id, product_plan_number, product_name, and product_description are required',
+                'Missing required fields: project_id, product_plan_number, product_name, product_description, status, and master_version are required',
             );
+        }
+
+        // Validate status field values
+        if (!['draft', 'submitted', 'archived'].includes(input.status)) {
+            return ResponseWrapper.badRequest('Invalid status. Must be one of: draft, submitted, archived');
         }
 
         // Validate ObjectId formats
@@ -60,7 +79,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         // Check if product_plan_number already exists
         const existingProduct = await db.collection<Product>('products').findOne({
             product_plan_number: input.product_plan_number,
-            isActive: { $ne: false },
         });
 
         if (existingProduct) {
@@ -74,29 +92,49 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             product_plan_number: input.product_plan_number,
             product_name: input.product_name,
             product_description: input.product_description,
-            master_version: input.master_version || '1.0',
-            isActive: input.isActive !== undefined ? input.isActive : true,
+            master_version: input.master_version,
             target_date: input.target_date || null,
             actual_completion_date: input.actual_completion_date || null,
-            status: input.status || 'draft',
+            status: input.status,
             complete_count: input.complete_count || 0,
             product_information: {
-                market_geography: input.product_information?.market_geography || '',
-                country_of_origin: input.product_information?.country_of_origin || '',
-                oem_contract_manufacturer: input.product_information?.oem_contract_manufacturer || '',
-                commercial_clinical: input.product_information?.commercial_clinical || '',
-                custom_fields: input.product_information?.custom_fields || [],
-                tab_completed: input.product_information?.tab_completed || false,
+                data: {
+                    _id: new ObjectId(),
+                    market_geography: '',
+                    country_of_origin: '',
+                    oem_contract_manufacturer: '',
+                    commercial_clinical: '',
+                    custom_fields: [],
+                },
+                tab_completed: false,
             },
             compliance_information: {
-                data: input.compliance_information?.data || [],
-                tab_completed: input.compliance_information?.tab_completed || false,
+                data: [],
+                tab_completed: false,
             },
             label_components: {
-                data: input.label_components?.data || [],
-                tab_completed: input.label_components?.tab_completed || false,
+                data: [],
+                tab_completed: false,
             },
-            symbols_graphics: input.symbols_graphics || [],
+            symbols_graphics: { data: [], tab_completed: false },
+            product_data: {
+                data: {
+                    _id: new ObjectId().toString(),
+                    workbook_data: {},
+                },
+                tab_completed: false,
+            },
+            operational_parameters: {
+                data: {
+                    _id: new ObjectId().toString(),
+                    workbook_data: {},
+                },
+                tab_completed: false,
+            },
+            label_tags: {
+                data: [],
+                tab_completed: false,
+            },
         };
 
         const product = await db.collection<Product>('products').insertOne(productData);
@@ -105,7 +143,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             entity: 'product',
             entityId: product.insertedId.toString(),
             action: AuditLogAction.CREATE,
-            actionBy: payload?.name?.toString()!,
+            actionBy: payload?.name?.toString() || 'Unknown',
             actionAt: new Date(),
             active: true,
         });
