@@ -1,6 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { Project } from '../../models/project';
+import { ResponseWrapper } from '../../utils/responseWrapper';
+import { verifyJWT } from '../../utils/authUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -13,6 +15,18 @@ import { Project } from '../../models/project';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
+
+				const authHeader = event.headers?.Authorization || event.headers?.authorization;
+				if(!authHeader) {
+					return ResponseWrapper.unauthorized('Unauthorized');
+				}
+
+				const token = authHeader.split(' ')[1];
+				const { isValid, payload } = await verifyJWT(token);
+				if(!isValid) {
+					return ResponseWrapper.unauthorized('Unauthorized');
+				}
+
         const db = await getDb();
 
         // Extract query parameters for pagination
@@ -23,15 +37,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
         // Validate isArchive parameter
         if (isArchiveParam !== 'true' && isArchiveParam !== 'false') {
-            return {
-                statusCode: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: 'isArchive parameter must be true or false',
-                }),
-            };
+					return ResponseWrapper.badRequest('isArchive parameter must be true or false');
         }
 
         // Convert to boolean
@@ -39,27 +45,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
         // Validate pagination parameters
         if (limit < 1 || limit > 100) {
-            return {
-                statusCode: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: 'Limit must be between 1 and 100',
-                }),
-            };
+					return ResponseWrapper.badRequest('Limit must be between 1 and 100');
         }
 
         if (page < 1) {
-            return {
-                statusCode: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: 'Page must be greater than 0',
-                }),
-            };
+					return ResponseWrapper.badRequest('Page must be greater than 0');
         }
 
         // Validate sort field
@@ -72,15 +62,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             'actionAt',
         ];
         if (!allowedSortFields.includes(sort)) {
-            return {
-                statusCode: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: `Invalid sort field. Allowed fields: ${allowedSortFields.join(', ')}`,
-                }),
-            };
+					return ResponseWrapper.badRequest(`Invalid sort field. Allowed fields: ${allowedSortFields.join(', ')}`);
         }
 
         const skip = (page - 1) * limit;
@@ -146,26 +128,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             const totalCount = countResult.length > 0 ? countResult[0].total : 0;
             const totalPages = Math.ceil(totalCount / limit);
 
-            return {
-                statusCode: 200,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: 'Projects fetched successfully',
-                    result: {
-                        projects,
-                        pagination: {
-                            currentPage: page,
-                            totalPages,
-                            totalCount,
-                            limit,
-                            hasNextPage: page < totalPages,
-                            hasPrevPage: page > 1,
-                        },
-                    },
-                }),
-            };
+            return ResponseWrapper.success({message: 'Projects fetched successfully',
+								result: {
+									projects,
+									pagination: {
+										currentPage: page,
+										totalPages,
+										totalCount,
+										limit,
+										hasNextPage: page < totalPages,
+										hasPrevPage: page > 1,
+									},
+								},
+							});
         } else {
             // For other sort fields, use regular find with sort
             const sortObj: { [key: string]: 1 | -1 } = {};
@@ -185,39 +160,23 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
             const totalPages = Math.ceil(totalCount / limit);
 
-            return {
-                statusCode: 200,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: 'Projects fetched successfully',
-                    result: {
-                        projects,
-                        pagination: {
-                            currentPage: page,
-                            totalPages,
-                            totalCount,
-                            limit,
-                            hasNextPage: page < totalPages,
-                            hasPrevPage: page > 1,
-                        },
-                    },
-                }),
-            };
+
+            return ResponseWrapper.success({message: 'Projects fetched successfully',
+								result: {
+									projects,
+									pagination: {
+										currentPage: page,
+										totalPages,
+										totalCount,
+										limit,
+										hasNextPage: page < totalPages,
+										hasPrevPage: page > 1,
+									},
+								},
+							});
         }
     } catch (err) {
         console.error('Error in Lambda handler:', err);
-        return {
-            statusCode: 500,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                message: 'Internal server error',
-                error: err instanceof Error ? err.message : 'Unknown error',
-                timestamp: new Date().toISOString(),
-            }),
-        };
+				return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
     }
 };

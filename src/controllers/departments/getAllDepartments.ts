@@ -1,6 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { Department } from '../../models/department';
+import { ResponseWrapper } from '../../utils/responseWrapper';
+import { verifyJWT } from '../../utils/authUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -22,59 +24,30 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         const isArchiveParam = event.queryStringParameters?.isArchive;
         let isArchive = false; // default value
 
-        if (isArchiveParam !== undefined) {
-            if (isArchiveParam === 'true') {
-                isArchive = true;
-            } else if (isArchiveParam === 'false') {
-                isArchive = false;
-            } else {
-                return {
-                    statusCode: 400,
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        message: 'isArchive parameter must be true or false',
-                    }),
-                };
-            }
-        }
+				const authHeader = event.headers?.Authorization || event.headers?.authorization;
+				if(!authHeader) {
+					return ResponseWrapper.unauthorized('Unauthorized');
+				}
+
+				const token = authHeader.split(' ')[1];
+
+				const { isValid, payload } = await verifyJWT(token);
+				
+				if(!isValid) {
+					return ResponseWrapper.unauthorized('Unauthorized');
+				}
 
         if (limit < 1 || limit > 100) {
-            return {
-                statusCode: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: 'Limit must be between 1 and 100',
-                }),
-            };
+					return ResponseWrapper.badRequest('Limit must be between 1 and 100');
         }
 
         if (page < 1) {
-            return {
-                statusCode: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: 'Page must be greater than 0',
-                }),
-            };
+					return ResponseWrapper.badRequest('Page must be greater than 0');
         }
 
         const allowedSortFields = ['department_name', 'department_description', 'manager', '_id'];
         if (!allowedSortFields.includes(sort)) {
-            return {
-                statusCode: 400,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: `Invalid sort field. Allowed fields: ${allowedSortFields.join(', ')}`,
-                }),
-            };
+					return ResponseWrapper.badRequest(`Invalid sort field. Allowed fields: ${allowedSortFields.join(', ')}`);
         }
 
         const skip = (page - 1) * limit;
@@ -97,38 +70,22 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
         const totalPages = Math.ceil(totalCount / limit);
 
-        return {
-            statusCode: 200,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                message: 'Departments fetched successfully',
-                result: {
-                    departments,
-                    pagination: {
-                        currentPage: page,
-                        totalPages,
-                        totalCount,
-                        limit,
-                        hasNextPage: page < totalPages,
-                        hasPrevPage: page > 1,
-                    },
+        return ResponseWrapper.success({
+            message: 'Departments fetched successfully',
+            result: {
+                departments,
+                pagination: {
+                    currentPage: page,
+                    totalPages,
+                    totalCount,
+                    limit,
+                    hasNextPage: page < totalPages,
+                    hasPrevPage: page > 1,
                 },
-            }),
-        };
+            },
+        });
     } catch (err) {
         console.error('Error in Lambda handler:', err);
-        return {
-            statusCode: 500,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                message: 'Internal server error',
-                error: err instanceof Error ? err.message : 'Unknown error',
-                timestamp: new Date().toISOString(),
-            }),
-        };
+        return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
     }
 };

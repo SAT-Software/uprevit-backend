@@ -1,10 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
-import { Department } from '../../models/department';
-import { AuditLog, AuditLogAction } from '../../models/auditLog';
+import type { Department } from '../../models/department';
+import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { validateRole } from '../../utils/authUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -21,17 +22,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Request body is required');
 		}
 
-		type DepartmentInput = {
-			department_name: string;
-			department_description: string;
-			image?: string;
-			manager?: string;
-			admin_id: string;
-			workspace_id: string;
-			users?: string[];
-		};
+		const authHeader = event.headers?.Authorization || event.headers?.authorization;
+		if(!authHeader) {
+			return ResponseWrapper.unauthorized('Unauthorized');
+		}
 
-		const input: DepartmentInput = JSON.parse(event.body);
+		const token = authHeader.split(' ')[1];
+
+		const { isValid, payload } = await validateRole(token, 'admin');
+		if(!isValid) {
+			return ResponseWrapper.unauthorized('Unauthorized');
+		}
+
+		const input: Department = JSON.parse(event.body);
 
 		if (!input.department_name || !input.department_description || !input.admin_id || !input.workspace_id) {
 			return ResponseWrapper.badRequest('Missing required fields: department_name, department_description, admin_id, and workspace_id are required');
@@ -75,7 +78,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			entity: 'department',
 			entityId: department.insertedId.toString(),
 			action: AuditLogAction.CREATE,
-			actionBy: input.workspace_id,
+			actionBy: payload?.name?.toString()!,
 			actionAt: new Date(),
 			active: true,
 		});
