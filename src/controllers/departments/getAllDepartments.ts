@@ -24,30 +24,35 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         const isArchiveParam = event.queryStringParameters?.isArchive;
         let isArchive = false; // default value
 
-				const authHeader = event.headers?.Authorization || event.headers?.authorization;
-				if(!authHeader) {
-					return ResponseWrapper.unauthorized('Unauthorized');
-				}
+        // Only parse isArchive if the parameter is explicitly provided
+        if (isArchiveParam !== undefined) {
+            isArchive = isArchiveParam.toLowerCase() === 'true';
+        }
 
-				const token = authHeader.split(' ')[1];
+        const authHeader = event.headers?.Authorization || event.headers?.authorization;
+        if (!authHeader) {
+            return ResponseWrapper.unauthorized('Unauthorized');
+        }
 
-				const { isValid, payload } = await verifyJWT(token);
-				
-				if(!isValid) {
-					return ResponseWrapper.unauthorized('Unauthorized');
-				}
+        const token = authHeader.split(' ')[1];
+
+        const { isValid, payload } = await verifyJWT(token);
+
+        if (!isValid) {
+            return ResponseWrapper.unauthorized('Unauthorized');
+        }
 
         if (limit < 1 || limit > 100) {
-					return ResponseWrapper.badRequest('Limit must be between 1 and 100');
+            return ResponseWrapper.badRequest('Limit must be between 1 and 100');
         }
 
         if (page < 1) {
-					return ResponseWrapper.badRequest('Page must be greater than 0');
+            return ResponseWrapper.badRequest('Page must be greater than 0');
         }
 
         const allowedSortFields = ['department_name', 'department_description', 'manager', '_id'];
         if (!allowedSortFields.includes(sort)) {
-					return ResponseWrapper.badRequest(`Invalid sort field. Allowed fields: ${allowedSortFields.join(', ')}`);
+            return ResponseWrapper.badRequest(`Invalid sort field. Allowed fields: ${allowedSortFields.join(', ')}`);
         }
 
         const skip = (page - 1) * limit;

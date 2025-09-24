@@ -1,9 +1,25 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   uprevit-backend
 
   Sample SAM Template for uprevit-backend
+
+Parameters:
+  MONGODB_URI:
+    Type: String
+    Description: "MongoDB connection string URI"
+    Default: "mongodb://host.docker.internal:27017"
+  DB_NAME:
+    Type: String
+    Description: "MongoDB database name"
+    Default: "uprevit"
+  USER_POOL_ID:
+    Type: String
+    Description: "The Cognito User Pool ID for token validation"
+  CLIENT_ID:
+    Type: String
+    Description: "The Cognito App Client ID for token validation"
 
 # ──────────────────────────────────────────────────────────────────────────
 # TOP-LEVEL METADATA  – YAML anchor for the build recipe
@@ -36,7 +52,7 @@ Globals:
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
-    
+
   Api:
     TracingEnabled: true
 Resources:
@@ -76,7 +92,7 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/users/createUser.ts]
-    
+
   GetUserFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -147,7 +163,7 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/workspaces/createWorkspace.ts]
-  
+
   GetWorkspaceFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -163,7 +179,7 @@ Resources:
       <<: *EsbuildBase
       BuildProperties:
         <<: *EsbuildProps
-        EntryPoints: [controllers/workspaces/getWorkspace.ts]        
+        EntryPoints: [controllers/workspaces/getWorkspace.ts]
 
   UpdateWorkspaceFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -181,7 +197,6 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/workspaces/updateWorkspace.ts]
-
 
   # ──────────────────────────────────────────────────────────────────────────
   # DEPARTMENTS
@@ -202,7 +217,7 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/departments/createDepartment.ts]
-  
+
   GetDepartmentFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -236,7 +251,7 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/departments/getAllDepartments.ts]
-  
+
   UpdateDepartmentFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -253,7 +268,7 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/departments/updateDepartment.ts]
-  
+
   ArchiveDepartmentFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -291,7 +306,7 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/projects/createProject.ts]
-  
+
   UpdateProjectFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -343,6 +358,44 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/projects/archiveProject.ts]
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # PRODUCTS
+  # ──────────────────────────────────────────────────────────────────────────
+
+  CreateProductFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/createProduct.lambdaHandler
+      Events:
+        CreateProduct:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /products
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/createProduct.ts]
+
+  GetAllProductsFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getAllProducts.lambdaHandler
+      Events:
+        GetAllProducts:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /products
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getAllProducts.ts]
+
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
     Properties:
@@ -355,7 +408,7 @@ Resources:
     Properties:
       ResourceGroupName:
         Ref: ApplicationResourceGroup
-      AutoConfigurationEnabled: 'true'
+      AutoConfigurationEnabled: "true"
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
