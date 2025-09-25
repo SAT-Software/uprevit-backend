@@ -430,6 +430,23 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/updateProduct.ts]
 
+  GetProductDataFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getProductData.lambdaHandler
+      Events:
+        GetProductData:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /products/productData
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getProductData.ts]
+
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
     Properties:
