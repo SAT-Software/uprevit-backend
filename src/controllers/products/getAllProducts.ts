@@ -61,7 +61,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
         const skip = (page - 1) * limit;
 
-        // CHECK - what these filter things are doing and are they correct or not
         // Build filter object
         let filter: any = {};
 
@@ -90,8 +89,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             ];
         }
 
-        // CHECK - ALl the below code and pipeline is needed or what. Because it is not there in getAllDepartments.
-        // OH got it, so below one is for actionAt but it is in Audit log and we are joining it with our product data to sort things
         // If sorting by actionAt, use aggregation to join with audit_logs
         if (sort === 'actionAt') {
             // Aggregation pipeline

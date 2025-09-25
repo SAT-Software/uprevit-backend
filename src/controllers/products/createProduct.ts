@@ -119,14 +119,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             symbols_graphics: { data: [], tab_completed: false },
             product_data: {
                 data: {
-                    _id: new ObjectId().toString(),
+                    _id: new ObjectId(),
                     workbook_data: {},
                 },
                 tab_completed: false,
             },
             operational_parameters: {
                 data: {
-                    _id: new ObjectId().toString(),
+                    _id: new ObjectId(),
                     workbook_data: {},
                 },
                 tab_completed: false,
