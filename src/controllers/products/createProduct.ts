@@ -143,7 +143,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             entity: 'product',
             entityId: product.insertedId.toString(),
             action: AuditLogAction.CREATE,
-            actionBy: payload?.name?.toString() || 'Unknown',
+            actionBy: payload?.name?.toString()!,
             actionAt: new Date(),
             active: true,
         });
