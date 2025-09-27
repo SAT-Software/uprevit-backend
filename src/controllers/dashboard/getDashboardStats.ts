@@ -42,31 +42,31 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         const workspaceObjectId = new ObjectId(workspaceId);
 
         // Count departments for the workspace
-        const totalDepartments = await db.collection('departments').countDocuments({
+        const departments = db.collection('departments').countDocuments({
             workspace_id: workspaceObjectId,
             isArchived: false,
         });
 
-        // Count projects for the workspace
-        const totalProjects = await db.collection('projects').countDocuments({
-            workspace_id: workspaceObjectId,
-            isArchived: false,
-        });
-
-        // Count products for the workspace
-        // Products are linked to projects, so we need to get all project IDs first
-        const projectIds = await db
+        // Get projects for the workspace - get both count and IDs
+        const projectsQuery = db
             .collection('projects')
-            .find({ workspace_id: workspaceObjectId }, { projection: { _id: 1 } })
+            .find({ 
+                workspace_id: workspaceObjectId,
+                isArchived: false 
+            }, { projection: { _id: 1 } })
             .toArray();
+				
+				const [totalDepartments, projectsData] = await Promise.all([departments, projectsQuery]);
 
-        const projectObjectIds = projectIds.map((project) => project._id);
+				const totalProjects = projectsData.length;
+        const projectObjectIds = projectsData.map((project) => project._id);
 
         const totalProducts = await db.collection('products').countDocuments({
             project_id: { $in: projectObjectIds },
             status: { $ne: 'archived' },
         });
 
+				
         // TODO: Later on when we implement source files we will need to add the count for source files here
 
         return ResponseWrapper.success({
