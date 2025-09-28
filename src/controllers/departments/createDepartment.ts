@@ -38,7 +38,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		let input: Department;
 		
 		try {
-			input = JSON.parse(event.body);
+			input = JSON.parse(event.body!);
 		} catch (error) {
 			return ResponseWrapper.badRequest('Invalid JSON in request body');
 		}
