@@ -1,7 +1,7 @@
 
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from './responseWrapper';
-import type{ APIGatewayProxyResult } from 'aws-lambda';
+import type { APIGatewayProxyResult } from 'aws-lambda';
 
 /**
  * Validates multiple ObjectId fields
