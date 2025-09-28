@@ -4,6 +4,7 @@ import type { ExcelData, LabelTags, Product, SymbolsGraphics, ProductInformation
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { verifyJWT } from '../../utils/authUtils';
+import { validateAllObjectIds, validateEnum } from '../../utils/validationUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -41,25 +42,27 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             return ResponseWrapper.badRequest("Product data tab - 'tab' is required in query parameters");
         }
 
-        // Validate ObjectId format
-        if (!ObjectId.isValid(productId)) {
-            return ResponseWrapper.badRequest('Invalid product id format. Must be a valid MongoDB ObjectId.');
-        }
+				const validationResult = validateAllObjectIds({
+					'_id': productId,
+				});
 
-        // Validate tab parameter
-        const validTabs = [
-            'product-information',
-            'compliance-information',
-            'label-components',
-            'symbols-graphics',
-            'product-data',
-            'operational-parameters',
-            'label-tags',
-        ];
+				if (validationResult) {
+					return validationResult;
+				}
 
-        if (!validTabs.includes(tab)) {
-            return ResponseWrapper.badRequest(`Invalid tab. Must be one of: ${validTabs.join(', ')}`);
-        }
+				const enumValidation = validateEnum([
+					'product-information',
+					'compliance-information',
+					'label-components',
+					'symbols-graphics',
+					'product-data',
+					'operational-parameters',
+					'label-tags',
+				], tab);
+				
+				if(enumValidation) {
+					return enumValidation;
+				}
 
         const db = await getDb();
         const productObjectId = new ObjectId(productId);

@@ -6,6 +6,7 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { verifyJWT } from '../../utils/authUtils';
+import { validateEnum, validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -42,34 +43,33 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             return ResponseWrapper.badRequest('Invalid JSON in request body');
         }
 
-        // Validate required fields including status and master_version
-        if (
-            !input.project_id ||
-            !input.product_plan_number ||
-            !input.product_name ||
-            !input.product_description ||
-            !input.status ||
-            !input.master_version
-        ) {
-            return ResponseWrapper.badRequest(
-                'Missing required fields: project_id, product_plan_number, product_name, product_description, status, and master_version are required',
-            );
-        }
+				const missingFieldsResult = validateMissingFields({
+					'project_id': input.project_id.toString(),
+					'product_plan_number': input.product_plan_number,
+					'product_name': input.product_name,
+					'product_description': input.product_description,
+					'status': input.status,
+					'master_version': input.master_version,
+				});
 
-        // Validate status field values
-        if (!['draft', 'submitted', 'archived'].includes(input.status)) {
-            return ResponseWrapper.badRequest('Invalid status. Must be one of: draft, submitted, archived');
-        }
+				if(missingFieldsResult) {
+					return missingFieldsResult;
+				}
 
-        // Validate ObjectId formats
-        if (!ObjectId.isValid(input.project_id)) {
-            return ResponseWrapper.badRequest('Invalid project_id format. Must be a valid MongoDB ObjectId.');
-        }
+				const enumValidation = validateEnum(['draft', 'submitted', 'archived'], input.status);
+				
+				if(enumValidation) {
+					return enumValidation;
+				}
 
-        // Validate department_id if provided
-        if (input.department_id && !ObjectId.isValid(input.department_id)) {
-            return ResponseWrapper.badRequest('Invalid department_id format. Must be a valid MongoDB ObjectId.');
-        }
+				const objectIdValidation = validateObjectIds({
+					'project_id': input.project_id,
+					'department_id': input.department_id!,
+				});
+
+				if(objectIdValidation) {
+					return objectIdValidation;
+				}
 
         const db = await getDb();
 

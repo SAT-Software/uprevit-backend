@@ -6,6 +6,7 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateRole } from '../../utils/authUtils';
+import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -33,23 +34,35 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.unauthorized('Unauthorized');
 		}
 
-		const input: Project = JSON.parse(event.body);
+		let input: Project;
 
-		if (!input.workspace_id || !input.department_id || !input.project_name || !input.project_number || !input.project_description || !input.admin_id) {
-			return ResponseWrapper.badRequest('Missing required fields: workspace_id, department_id, project_name, project_number, project_description, and admin_id are required');
+		try {
+			input = JSON.parse(event.body!);
+		} catch (error) {
+			return ResponseWrapper.badRequest('Invalid JSON in request body');
 		}
 
-		// Validate ObjectId formats
-		if (!ObjectId.isValid(input.workspace_id)) {
-			return ResponseWrapper.badRequest('Invalid workspace_id format. Must be a valid MongoDB ObjectId.');
+		const missingFieldsResult = validateMissingFields({
+			'workspace_id': input.workspace_id.toString(),
+			'department_id': input.department_id.toString(),
+			'project_name': input.project_name,
+			'project_number': input.project_number,
+			'project_description': input.project_description,
+			'admin_id': input.admin_id.toString(),
+		});
+
+		if(missingFieldsResult) {
+			return missingFieldsResult;
 		}
 
-		if (!ObjectId.isValid(input.department_id)) {
-			return ResponseWrapper.badRequest('Invalid department_id format. Must be a valid MongoDB ObjectId.');
-		}
+		const objectIdValidation = validateAllObjectIds({
+			'workspace_id': input.workspace_id,
+			'department_id': input.department_id,
+			'admin_id': input.admin_id,
+		});
 
-		if (!ObjectId.isValid(input.admin_id)) {		
-			return ResponseWrapper.badRequest('Invalid admin_id format. Must be a valid MongoDB ObjectId.');
+		if(objectIdValidation) {
+			return objectIdValidation;
 		}
 
 		const db = await getDb();
