@@ -15,34 +15,34 @@ import { authenticateRequest } from '../../utils/authUtils';
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    try {
+	try {
 				const auth = await authenticateRequest(event);
 				
 				if(!auth.isValid) {
 					return auth.error;
 				}
 
-        if (!event.pathParameters?.id) {
-            return ResponseWrapper.badRequest('Missing required fields: id is required');
-        }
+	    if (!event.pathParameters?.id) {
+	        return ResponseWrapper.badRequest('Missing required fields: id is required');
+	    }
 
-        const db = await getDb();
+	    const db = await getDb();
 
-        const project: Project | null = await db.collection<Project>('projects').findOne({
-            _id: new ObjectId(event.pathParameters.id),
-            isArchived: { $ne: true },
-        });
+	    const project: Project | null = await db.collection<Project>('projects').findOne({
+	        _id: new ObjectId(event.pathParameters.id),
+	        isArchived: { $ne: true },
+	    });
 
-        if (!project) {
-            return ResponseWrapper.notFound('Project not found');
-        }
+	    if (!project) {
+	        return ResponseWrapper.notFound('Project not found');
+	    }
 
-        return ResponseWrapper.success({
-            message: 'Project retrieved successfully',
-            project: project,
-        });
-    } catch (err) {
-        console.error('Error in Lambda handler:', err);
-        return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
-    }
+	    return ResponseWrapper.success({
+	        message: 'Project retrieved successfully',
+	        project: project,
+	    });
+	} catch (err) {
+	    console.error('Error in Lambda handler:', err);
+	    return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+	}
 };

@@ -17,7 +17,7 @@ import { authenticateRequest } from '../../utils/authUtils';
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    try {
+	try {
 
 				const auth = await authenticateRequest(event);
 
@@ -25,132 +25,132 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					return auth.error;
 				}
 
-        if (!event.body) {
-            return ResponseWrapper.badRequest('Request body is required');
-        }
+	    if (!event.body) {
+	        return ResponseWrapper.badRequest('Request body is required');
+	    }
 
-        // Extract product ID from path parameters
-        const productId = event.pathParameters?.id;
+	    // Extract product ID from path parameters
+	    const productId = event.pathParameters?.id;
 
-        if (!productId) {
-            return ResponseWrapper.badRequest('Product ID is required in path parameters');
-        }
+	    if (!productId) {
+	        return ResponseWrapper.badRequest('Product ID is required in path parameters');
+	    }
 
-        // Validate ObjectId format
-        if (!ObjectId.isValid(productId)) {
-            return ResponseWrapper.badRequest('Invalid product ID format. Must be a valid MongoDB ObjectId.');
-        }
+	    // Validate ObjectId format
+	    if (!ObjectId.isValid(productId)) {
+	        return ResponseWrapper.badRequest('Invalid product ID format. Must be a valid MongoDB ObjectId.');
+	    }
 
-        let input: any;
-        try {
-            input = JSON.parse(event.body);
-        } catch (error) {
-            return ResponseWrapper.badRequest('Invalid JSON in request body');
-        }
+	    let input: any;
+	    try {
+	        input = JSON.parse(event.body);
+	    } catch (error) {
+	        return ResponseWrapper.badRequest('Invalid JSON in request body');
+	    }
 
-        // Validate required fields for action-based approach
-        if (!input.action) {
-            return ResponseWrapper.badRequest('action field is required');
-        }
+	    // Validate required fields for action-based approach
+	    if (!input.action) {
+	        return ResponseWrapper.badRequest('action field is required');
+	    }
 
-        const validActions = ['update-product', 'update-status'];
-        if (!validActions.includes(input.action)) {
-            return ResponseWrapper.badRequest(`Invalid action. Must be one of: ${validActions.join(', ')}`);
-        }
+	    const validActions = ['update-product', 'update-status'];
+	    if (!validActions.includes(input.action)) {
+	        return ResponseWrapper.badRequest(`Invalid action. Must be one of: ${validActions.join(', ')}`);
+	    }
 
-        if (!input.data) {
-            return ResponseWrapper.badRequest('data field is required');
-        }
+	    if (!input.data) {
+	        return ResponseWrapper.badRequest('data field is required');
+	    }
 
-        const db = await getDb();
-        const productObjectId = new ObjectId(productId);
+	    const db = await getDb();
+	    const productObjectId = new ObjectId(productId);
 
-        // Find existing product
-        const existingProduct = await db.collection<Product>('products').findOne({
-            _id: productObjectId,
-        });
+	    // Find existing product
+	    const existingProduct = await db.collection<Product>('products').findOne({
+	        _id: productObjectId,
+	    });
 
-        if (!existingProduct) {
-            return ResponseWrapper.notFound('Product not found');
-        }
+	    if (!existingProduct) {
+	        return ResponseWrapper.notFound('Product not found');
+	    }
 
-        // Prepare update data based on action
-        const updateData: Partial<Product> = {};
+	    // Prepare update data based on action
+	    const updateData: Partial<Product> = {};
 
-        switch (input.action) {
-            case 'update-product':
-                // Update product information fields - check if at least one field is provided
-                const productFields = ['product_name', 'product_description', 'target_date', 'actual_completion_date'];
-                const hasProductFields = productFields.some((field) => input.data[field] !== undefined);
+	    switch (input.action) {
+	        case 'update-product':
+	            // Update product information fields - check if at least one field is provided
+	            const productFields = ['product_name', 'product_description', 'target_date', 'actual_completion_date'];
+	            const hasProductFields = productFields.some((field) => input.data[field] !== undefined);
 
-                if (!hasProductFields) {
-                    return ResponseWrapper.badRequest(
-                        'At least one product field is required: product_name, product_description, target_date, or actual_completion_date',
-                    );
-                }
+	            if (!hasProductFields) {
+	                return ResponseWrapper.badRequest(
+	                    'At least one product field is required: product_name, product_description, target_date, or actual_completion_date',
+	                );
+	            }
 
-                // Apply all provided fields directly
-                for (const field of productFields) {
-                    if (input.data[field] !== undefined) {
-                        updateData[field as keyof Product] = input.data[field];
-                    }
-                }
-                break;
+	            // Apply all provided fields directly
+	            for (const field of productFields) {
+	                if (input.data[field] !== undefined) {
+	                    updateData[field as keyof Product] = input.data[field];
+	                }
+	            }
+	            break;
 
-            case 'update-status':
-                // Handle status updates with business rules
-                const newStatus = input.data.status;
+	        case 'update-status':
+	            // Handle status updates with business rules
+	            const newStatus = input.data.status;
 
-                // Validate status value
-                if (!['draft', 'submitted', 'archived'].includes(newStatus)) {
-                    return ResponseWrapper.badRequest('Invalid status. Must be one of: draft, submitted, archived');
-                }
+	            // Validate status value
+	            if (!['draft', 'submitted', 'archived'].includes(newStatus)) {
+	                return ResponseWrapper.badRequest('Invalid status. Must be one of: draft, submitted, archived');
+	            }
 
-                // Business rules for status transitions
-                if (newStatus === 'submitted' && existingProduct.complete_count !== 100) {
-                    return ResponseWrapper.badRequest(
-                        'Cannot change status to "submitted" unless complete_count is 100',
-                    );
-                }
+	            // Business rules for status transitions
+	            if (newStatus === 'submitted' && existingProduct.complete_count !== 100) {
+	                return ResponseWrapper.badRequest(
+	                    'Cannot change status to "submitted" unless complete_count is 100',
+	                );
+	            }
 
-                updateData.status = newStatus;
-                break;
+	            updateData.status = newStatus;
+	            break;
 
-            default:
-                return ResponseWrapper.badRequest(`Unknown action: ${input.action}`);
-        }
+	        default:
+	            return ResponseWrapper.badRequest(`Unknown action: ${input.action}`);
+	    }
 
-        // Update the product
-        const result = await db
-            .collection<Product>('products')
-            .updateOne({ _id: productObjectId }, { $set: updateData });
+	    // Update the product
+	    const result = await db
+	        .collection<Product>('products')
+	        .updateOne({ _id: productObjectId }, { $set: updateData });
 
-        if (result.matchedCount === 0) {
-            return ResponseWrapper.notFound('Product not found');
-        }
+	    if (result.matchedCount === 0) {
+	        return ResponseWrapper.notFound('Product not found');
+	    }
 
-        // Log the update action
-        await updateAuditLog({
-            entity: 'product',
-            entityId: productId,
-            action: AuditLogAction.UPDATE,
-            actionBy: auth.payload?.name?.toString()!,
-            actionAt: new Date(),
-            active: true,
-        });
+	    // Log the update action
+	    await updateAuditLog({
+	        entity: 'product',
+	        entityId: productId,
+	        action: AuditLogAction.UPDATE,
+	        actionBy: auth.payload?.name?.toString()!,
+	        actionAt: new Date(),
+	        active: true,
+	    });
 
-        // Fetch updated product for response
-        const updatedProduct = await db.collection<Product>('products').findOne({
-            _id: productObjectId,
-        });
+	    // Fetch updated product for response
+	    const updatedProduct = await db.collection<Product>('products').findOne({
+	        _id: productObjectId,
+	    });
 
-        return ResponseWrapper.success({
-            message: 'Product updated successfully',
-            action: input.action,
-            product: updatedProduct,
-        });
-    } catch (err) {
-        console.error('Error in Lambda handler:', err);
-        return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
-    }
+	    return ResponseWrapper.success({
+	        message: 'Product updated successfully',
+	        action: input.action,
+	        product: updatedProduct,
+	    });
+	} catch (err) {
+	    console.error('Error in Lambda handler:', err);
+	    return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+	}
 };

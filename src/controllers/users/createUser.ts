@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { User } from '../../models/user';
-import { AuditLog, AuditLogAction } from '../../models/auditLog';
+import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 

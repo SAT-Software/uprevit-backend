@@ -5,82 +5,82 @@ import type { APIGatewayProxyResult } from 'aws-lambda';
 
 /**
  * Validates multiple ObjectId fields
- * @param fields - Object with field names as keys and values to validate
- * @returns ResponseWrapper error if invalid, null if all valid
+ * @param {Record<string, ObjectId | string>} fields - Object with field names as keys and values to validate
+ * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if all valid
  */
 export function validateObjectIds(fields: Record<string, ObjectId | string>): APIGatewayProxyResult | null {
-  for (const [fieldName, value] of Object.entries(fields)) {
-    if (!ObjectId.isValid(value)) {
-      return ResponseWrapper.badRequest(`Invalid ${fieldName} format. Must be a valid MongoDB ObjectId.`);
-    }
-  }
-  return null;
+	for (const [fieldName, value] of Object.entries(fields)) {
+		if (!ObjectId.isValid(value)) {
+	  return ResponseWrapper.badRequest(`Invalid ${fieldName} format. Must be a valid MongoDB ObjectId.`);
+		}
+	}
+	return null;
 }
 
 /**
  * Validates multiple ObjectId arrays
- * @param arrays - Object with field names as keys and arrays to validate
- * @returns ResponseWrapper error if invalid, null if all valid
+ * @param {Record<string, ObjectId[] | string[]>} arrays - Object with field names as keys and arrays to validate
+ * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if all valid
  */
 export function validateObjectIdArrays(arrays: Record<string, ObjectId[] | string[]>): APIGatewayProxyResult | null {
-  for (const [fieldName, ids] of Object.entries(arrays)) {
-    if (ids && ids.length > 0) {
-      const invalidIds = ids.filter(id => !ObjectId.isValid(id));
-      if (invalidIds.length > 0) {
-        return ResponseWrapper.badRequest(
-          `Invalid ${fieldName} format: ${invalidIds.join(', ')}. Must be valid MongoDB ObjectIds.`
-        );
-      }
-    }
-  }
-  return null;
+	for (const [fieldName, ids] of Object.entries(arrays)) {
+		if (ids && ids.length > 0) {
+	  const invalidIds = ids.filter(id => !ObjectId.isValid(id));
+	  if (invalidIds.length > 0) {
+	    return ResponseWrapper.badRequest(
+	      `Invalid ${fieldName} format: ${invalidIds.join(', ')}. Must be valid MongoDB ObjectIds.`
+	    );
+	  }
+		}
+	}
+	return null;
 }
 
 /**
  * Validates both single ObjectIds and ObjectId arrays in one call
- * @param singleIds - Object with field names as keys and single ObjectId values
- * @param arrayIds - Object with field names as keys and ObjectId arrays
- * @returns ResponseWrapper error if invalid, null if all valid
+ * @param {Record<string, ObjectId | string>} singleIds - Object with field names as keys and single ObjectId values
+ * @param {Record<string, ObjectId[] | string[]>} arrayIds - Object with field names as keys and ObjectId arrays
+ * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if all valid
  */
 export function validateAllObjectIds(
-  singleIds: Record<string, ObjectId | string> = {},
-  arrayIds: Record<string, ObjectId[] | string[]> = {}
+	singleIds: Record<string, ObjectId | string> = {},
+	arrayIds: Record<string, ObjectId[] | string[]> = {}
 ): APIGatewayProxyResult | null {
-  // Validate single ObjectIds
-  const singleValidation = validateObjectIds(singleIds);
-  if (singleValidation) return singleValidation;
+	// Validate single ObjectIds
+	const singleValidation = validateObjectIds(singleIds);
+	if (singleValidation) return singleValidation;
   
-  // Validate ObjectId arrays
-  const arrayValidation = validateObjectIdArrays(arrayIds);
-  if (arrayValidation) return arrayValidation;
+	// Validate ObjectId arrays
+	const arrayValidation = validateObjectIdArrays(arrayIds);
+	if (arrayValidation) return arrayValidation;
   
-  return null;
+	return null;
 }
 
 /**
  * Validates missing fields
- * @param fields - Object with field names as keys and values to validate
- * @returns ResponseWrapper error if invalid, null if all valid
+ * @param {Record<string, string>} fields - Object with field names as keys and values to validate
+ * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if all valid
  */
 export function validateMissingFields(fields: Record<string, string>): APIGatewayProxyResult | null {
-  for (const [fieldName, value] of Object.entries(fields)) {
-    if (!value) {
-      return ResponseWrapper.badRequest(`Missing required field(s): ${fieldName}`);
-    }
-  }
-
-  return null;
+	for (const [fieldName, value] of Object.entries(fields)) {
+		if (!value) {
+	  return ResponseWrapper.badRequest(`Missing required field(s): ${fieldName}`);
+		}
+	}
+	
+	return null;
 }
 
 /**
  * Validates enum values
- * @param enumValues - Array of valid enum values
- * @param value - Value to validate
- * @returns ResponseWrapper error if invalid, null if all valid
+ * @param {string[]} enumValues - Array of valid enum values
+ * @param {string} value - Value to validate
+ * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if all valid
  */
 export function validateEnum(enumValues: string[], value: string): APIGatewayProxyResult | null {
-  if (!enumValues.includes(value)) {
-    return ResponseWrapper.badRequest(`Invalid value. Must be one of: ${enumValues.join(', ')}`);
-  }
-  return null;
+	if (!enumValues.includes(value)) {
+		return ResponseWrapper.badRequest(`Invalid value. Must be one of: ${enumValues.join(', ')}`);
+	}
+	return null;
 }

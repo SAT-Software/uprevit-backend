@@ -17,46 +17,46 @@ import { authenticateRequest } from '../../utils/authUtils';
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    try {
+	try {
 
 				const auth = await authenticateRequest(event);
 				if(!auth.isValid) {
 					return auth.error;
 				}
 
-        if (!event.pathParameters?.id) {
-            return ResponseWrapper.badRequest('Missing required fields: id is required');
-        }
+	    if (!event.pathParameters?.id) {
+	        return ResponseWrapper.badRequest('Missing required fields: id is required');
+	    }
 
-        if (!ObjectId.isValid(event.pathParameters.id)) {
-            return ResponseWrapper.badRequest('Invalid id format. Must be a valid MongoDB ObjectId.');
-        }
+	    if (!ObjectId.isValid(event.pathParameters.id)) {
+	        return ResponseWrapper.badRequest('Invalid id format. Must be a valid MongoDB ObjectId.');
+	    }
 
-        const db = await getDb();
+	    const db = await getDb();
 
-        // Check if project exists and is not already archived
-        const projectRecord: Project | null = await db.collection<Project>('projects').findOne({
-            _id: new ObjectId(event.pathParameters.id),
-            isArchived: { $ne: true },
-        });
+	    // Check if project exists and is not already archived
+	    const projectRecord: Project | null = await db.collection<Project>('projects').findOne({
+	        _id: new ObjectId(event.pathParameters.id),
+	        isArchived: { $ne: true },
+	    });
 
-        if (!projectRecord) {
+	    if (!projectRecord) {
 						return ResponseWrapper.notFound('Project not found or already archived');
-        }
+	    }
 
-        // Archive the project instead of deleting it
-        const project = await db.collection<Project>('projects').updateOne(
-            {
-                _id: new ObjectId(event.pathParameters.id),
-            },
-            {
-                $set: {
-                    isArchived: true,
-                },
-            },
-        );
+	    // Archive the project instead of deleting it
+	    const project = await db.collection<Project>('projects').updateOne(
+	        {
+	            _id: new ObjectId(event.pathParameters.id),
+	        },
+	        {
+	            $set: {
+	                isArchived: true,
+	            },
+	        },
+	    );
 
-        await updateAuditLog({
+	    await updateAuditLog({
 					entity: 'project',
 					entityId: event.pathParameters.id,
 					action: AuditLogAction.ARCHIVE,
@@ -69,8 +69,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					message: 'Project archived successfully',
 					project: project,
 				});
-    } catch (err) {
-        console.error('Error in Lambda handler:', err);
+	} catch (err) {
+	    console.error('Error in Lambda handler:', err);
 				return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
-    }
+	}
 };

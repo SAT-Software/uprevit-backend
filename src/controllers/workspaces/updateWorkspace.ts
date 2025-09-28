@@ -18,101 +18,101 @@ import { authenticateWithRole } from '../../utils/authUtils';
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    try {
-			if (!event.body) {
-					return ResponseWrapper.badRequest('Request body is required');
+	try {
+		if (!event.body) {
+			return ResponseWrapper.badRequest('Request body is required');
+		}
+
+		const auth = await authenticateWithRole(event, 'admin');
+		if(!auth.isValid) {
+			return auth.error;
+		}
+
+		let input: Workspace;
+		
+		try {
+			input = JSON.parse(event.body!);
+		} catch (error) {
+			return ResponseWrapper.badRequest('Invalid JSON in request body');
+		}
+
+		const missingFieldsResult = validateMissingFields({
+			'workspaceName': input.workspaceName,
+			'_id': input._id!.toString(),
+		});
+		
+		if (missingFieldsResult) {
+			return missingFieldsResult;
+		}
+
+		const objectIdsResult = validateAllObjectIds({
+			'_id': input._id!,
+		});
+
+		if (objectIdsResult) {
+			return objectIdsResult;
+		}
+
+		// Validate user IDs if provided
+		if (input.userIds && input.userIds.length > 0) {
+			const invalidUserIds = input.userIds.filter((userId) => !ObjectId.isValid(userId));
+			if (invalidUserIds.length > 0) {
+				return ResponseWrapper.badRequest(
+					`Invalid user IDs format: ${invalidUserIds.join(', ')}. Must be valid MongoDB ObjectIds.`,
+				);
 			}
+		}
 
-			const auth = await authenticateWithRole(event, 'admin');
-			if(!auth.isValid) {
-				return auth.error;
-			}
+		const db = await getDb();
 
-			let input: Workspace;
-			
-			try {
-				input = JSON.parse(event.body!);
-			} catch (error) {
-				return ResponseWrapper.badRequest('Invalid JSON in request body');
-			}
+		const workspaceRecord: Workspace | null = await db.collection<Workspace>('workspaces').findOne({
+			_id: new ObjectId(input._id),
+		});
 
-			const missingFieldsResult = validateMissingFields({
-				'workspaceName': input.workspaceName,
-				'_id': input._id!.toString(),
-			});
-			
-			if (missingFieldsResult) {
-				return missingFieldsResult;
-			}
+		if (!workspaceRecord) {
+			return ResponseWrapper.badRequest('Workspace not found');
+		}
 
-			const objectIdsResult = validateAllObjectIds({
-				'_id': input._id!,
-			});
+		const userObjectIds = input.userIds ? input.userIds.map((userId) => new ObjectId(userId)) : [];
 
-			if (objectIdsResult) {
-				return objectIdsResult;
-			}
+		const workspace = await db.collection<Workspace>('workspaces').updateOne(
+			{
+				_id: new ObjectId(workspaceRecord._id as ObjectId),
+			},
+			{
+				$set: {
+					workspaceName: input.workspaceName,
+					companyName: input.companyName,
+					companyId: input.companyId,
+					description: input.description,
+					logo: input.logo,
+					plan: input.plan,
+					planId: input.planId,
+					planStart: input.planStart,
+					planEnd: input.planEnd,
+					cost: input.cost,
+					userIds: userObjectIds,
+				},
+			},
+		);
 
-			// Validate user IDs if provided
-			if (input.userIds && input.userIds.length > 0) {
-					const invalidUserIds = input.userIds.filter((userId) => !ObjectId.isValid(userId));
-					if (invalidUserIds.length > 0) {
-							return ResponseWrapper.badRequest(
-									`Invalid user IDs format: ${invalidUserIds.join(', ')}. Must be valid MongoDB ObjectIds.`,
-							);
-					}
-			}
+		const auditRecord: AuditLog = {
+			entity: 'workspace',
+			entityId: (workspaceRecord._id as ObjectId).toString(),
+			action: AuditLogAction.UPDATE,
+			actionBy: auth.payload?.name?.toString()!,
+			actionAt: new Date(),
+			active: true,
+		};
 
-			const db = await getDb();
+		await updateAuditLog(auditRecord);
 
-			const workspaceRecord: Workspace | null = await db.collection<Workspace>('workspaces').findOne({
-					_id: new ObjectId(input._id),
-			});
-
-			if (!workspaceRecord) {
-					return ResponseWrapper.badRequest('Workspace not found');
-			}
-
-			const userObjectIds = input.userIds ? input.userIds.map((userId) => new ObjectId(userId)) : [];
-
-			const workspace = await db.collection<Workspace>('workspaces').updateOne(
-					{
-							_id: new ObjectId(workspaceRecord._id as ObjectId),
-					},
-					{
-							$set: {
-									workspaceName: input.workspaceName,
-									companyName: input.companyName,
-									companyId: input.companyId,
-									description: input.description,
-									logo: input.logo,
-									plan: input.plan,
-									planId: input.planId,
-									planStart: input.planStart,
-									planEnd: input.planEnd,
-									cost: input.cost,
-									userIds: userObjectIds,
-							},
-					},
-			);
-
-			const auditRecord: AuditLog = {
-					entity: 'workspace',
-					entityId: (workspaceRecord._id as ObjectId).toString(),
-					action: AuditLogAction.UPDATE,
-					actionBy: auth.payload?.name?.toString()!,
-					actionAt: new Date(),
-					active: true,
-			};
-
-			await updateAuditLog(auditRecord);
-
-			return ResponseWrapper.success({
-					message: 'Workspace updated successfully',
-					workspace: workspace,
-			});
-    } catch (err) {
-        console.error('Error in Lambda handler:', err);
-        return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
-    }
+		return ResponseWrapper.success({
+			message: 'Workspace updated successfully',
+			workspace: workspace,
+		});
+	} catch (err) {
+	    console.error('Error in Lambda handler:', err);
+	    return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+	}
 };

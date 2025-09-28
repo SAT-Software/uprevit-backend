@@ -1,10 +1,10 @@
 import { ObjectId } from "mongodb";
 
 export type Workspace = {
-    _id?: ObjectId;
-    workspaceName: string;
-    companyName: string;
-    companyId: string;
+	_id?: ObjectId;
+	workspaceName: string;
+	companyName: string;
+	companyId: string;
 		description: string;
 		logo: string;
 		plan: string;
