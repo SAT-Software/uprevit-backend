@@ -3,7 +3,7 @@ import { getDb } from '../../utils/db';
 import { Workspace } from '../../models/workspace';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { verifyJWT } from '../../utils/authUtils';
+import { authenticateRequest, verifyJWT } from '../../utils/authUtils';
 
 /**
  * API endpoint to get a workspace by id
@@ -17,17 +17,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Missing required fields: id is required');
 		}
 
-		const authHeader = event.headers?.Authorization || event.headers?.authorization;
+		const auth = await authenticateRequest(event);
 		
-		if(!authHeader) {
-			return ResponseWrapper.unauthorized('Unauthorized');
-		}
-
-		const token = authHeader.split(' ')[1];
-		const { isValid, payload } = await verifyJWT(token);
-		
-		if(!isValid) {
-			return ResponseWrapper.unauthorized('Unauthorized');
+		if(!auth.isValid) {
+			return auth.error;
 		}
 
 		const db = await getDb();

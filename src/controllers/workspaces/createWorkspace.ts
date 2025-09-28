@@ -4,7 +4,7 @@ import type { Workspace } from '../../models/workspace';
 import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { validateRole } from '../../utils/authUtils';
+import { authenticateWithRole } from '../../utils/authUtils';
 
 
 /**
@@ -17,16 +17,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 	try {
 		const authHeader = event.headers?.Authorization || event.headers?.authorization;
 
-		if(!authHeader) {
-			return ResponseWrapper.unauthorized('Unauthorized');
-		}
+		const auth = await authenticateWithRole(event, 'admin');
 
-		const token = authHeader.split(' ')[1];
-
-		const { isValid, payload } = await validateRole(token, 'admin');
-
-		if(!isValid) {
-			return ResponseWrapper.unauthorized('Unauthorized');
+		if(!auth.isValid) {
+			return auth.error;
 		}
 
 		// Parse the request body from the event
@@ -62,7 +56,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			entity: 'workspace',
 			entityId: workspace.insertedId.toString(),
 			action: AuditLogAction.CREATE,
-			actionBy: payload?.name?.toString()!,
+			actionBy: auth.payload?.name?.toString()!,
 			actionAt: new Date(),
 			active: true,
 		});
