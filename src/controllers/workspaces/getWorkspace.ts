@@ -3,7 +3,7 @@ import { getDb } from '../../utils/db';
 import { Workspace } from '../../models/workspace';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { authenticateRequest, verifyJWT } from '../../utils/authUtils';
+import { authenticateRequest } from '../../utils/authUtils';
 
 /**
  * API endpoint to get a workspace by id

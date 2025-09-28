@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { Project } from '../../models/project';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { verifyJWT } from '../../utils/authUtils';
+import { authenticateRequest } from '../../utils/authUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -15,16 +15,10 @@ import { verifyJWT } from '../../utils/authUtils';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
-
-				const authHeader = event.headers?.Authorization || event.headers?.authorization;
-				if(!authHeader) {
-					return ResponseWrapper.unauthorized('Unauthorized');
-				}
-
-				const token = authHeader.split(' ')[1];
-				const { isValid, payload } = await verifyJWT(token);
-				if(!isValid) {
-					return ResponseWrapper.unauthorized('Unauthorized');
+				const auth = await authenticateRequest(event);
+				
+				if(!auth.isValid) {
+					return auth.error;
 				}
 
         const db = await getDb();
