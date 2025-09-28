@@ -20,10 +20,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             return ResponseWrapper.badRequest('Missing required fields: id (workspaceId) is required');
         }
 
-        // Validate ObjectId format
-        if (!ObjectId.isValid(workspaceId)) {
-            return ResponseWrapper.badRequest('Invalid workspace id format. Must be a valid MongoDB ObjectId.');
-        }
 				const validationResult = validateAllObjectIds({
 					'_id': workspaceId,
 				});
