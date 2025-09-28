@@ -6,6 +6,7 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { verifyJWT } from '../../utils/authUtils';
+import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -36,13 +37,21 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 			const input: Workspace = JSON.parse(event.body);
 
-			if (!input.workspaceName || !input._id) {
-					return ResponseWrapper.badRequest('Missing required fields: _id, workspaceName are required');
+			const missingFieldsResult = validateMissingFields({
+				'workspaceName': input.workspaceName,
+				'_id': input._id!.toString(),
+			});
+			
+			if (missingFieldsResult) {
+				return missingFieldsResult;
 			}
 
-			// Validate ObjectId formats
-			if (!ObjectId.isValid(input._id)) {
-					return ResponseWrapper.badRequest('Invalid _id format. Must be a valid MongoDB ObjectId.');
+			const objectIdsResult = validateAllObjectIds({
+				'_id': input._id!,
+			});
+
+			if (objectIdsResult) {
+				return objectIdsResult;
 			}
 
 			// Validate user IDs if provided

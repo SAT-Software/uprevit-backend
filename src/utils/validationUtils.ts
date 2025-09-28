@@ -1,14 +1,14 @@
 
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from './responseWrapper';
-import { APIGatewayProxyResult } from 'aws-lambda';
+import type{ APIGatewayProxyResult } from 'aws-lambda';
 
 /**
  * Validates multiple ObjectId fields
  * @param fields - Object with field names as keys and values to validate
  * @returns ResponseWrapper error if invalid, null if all valid
  */
-export function validateObjectIds(fields: Record<string, string>): APIGatewayProxyResult | null {
+export function validateObjectIds(fields: Record<string, ObjectId | string>): APIGatewayProxyResult | null {
   for (const [fieldName, value] of Object.entries(fields)) {
     if (!ObjectId.isValid(value)) {
       return ResponseWrapper.badRequest(`Invalid ${fieldName} format. Must be a valid MongoDB ObjectId.`);
@@ -22,7 +22,7 @@ export function validateObjectIds(fields: Record<string, string>): APIGatewayPro
  * @param arrays - Object with field names as keys and arrays to validate
  * @returns ResponseWrapper error if invalid, null if all valid
  */
-export function validateObjectIdArrays(arrays: Record<string, string[] | undefined>): APIGatewayProxyResult | null {
+export function validateObjectIdArrays(arrays: Record<string, ObjectId[] | string[]>): APIGatewayProxyResult | null {
   for (const [fieldName, ids] of Object.entries(arrays)) {
     if (ids && ids.length > 0) {
       const invalidIds = ids.filter(id => !ObjectId.isValid(id));
@@ -43,8 +43,8 @@ export function validateObjectIdArrays(arrays: Record<string, string[] | undefin
  * @returns ResponseWrapper error if invalid, null if all valid
  */
 export function validateAllObjectIds(
-  singleIds: Record<string, string> = {},
-  arrayIds: Record<string, string[] | undefined> = {}
+  singleIds: Record<string, ObjectId | string> = {},
+  arrayIds: Record<string, ObjectId[] | string[]> = {}
 ): APIGatewayProxyResult | null {
   // Validate single ObjectIds
   const singleValidation = validateObjectIds(singleIds);
@@ -54,5 +54,15 @@ export function validateAllObjectIds(
   const arrayValidation = validateObjectIdArrays(arrayIds);
   if (arrayValidation) return arrayValidation;
   
+  return null;
+}
+
+export function validateMissingFields(fields: Record<string, string>): APIGatewayProxyResult | null {
+  for (const [fieldName, value] of Object.entries(fields)) {
+    if (!value) {
+      return ResponseWrapper.badRequest(`Missing required field(s): ${fieldName}`);
+    }
+  }
+
   return null;
 }

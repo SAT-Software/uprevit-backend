@@ -35,7 +35,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const workspace: Workspace | null = await db.collection<Workspace>('workspaces').findOne({ _id: new ObjectId(event.pathParameters.id) });
 
 		if (!workspace) {
-			return ResponseWrapper.badRequest('Workspace not found');
+			return ResponseWrapper.notFound('Workspace not found');
 		}
 
 		return ResponseWrapper.success({

@@ -5,6 +5,7 @@ import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateRole } from '../../utils/authUtils';
+import { validateMissingFields } from '../../utils/validationUtils';
 
 
 /**
@@ -36,9 +37,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const input: Workspace = JSON.parse(event.body);
 
-		// Validate required fields
-		if (!input.workspaceName || !input.companyName || !input.companyId) {
-			return ResponseWrapper.badRequest('Missing required fields: workspace_name, company_name, and company_id are required');
+		const validationResult = validateMissingFields({
+			'workspaceName': input.workspaceName,
+			'companyName': input.companyName,
+			'companyId': input.companyId,
+		});
+		
+		if (validationResult) {
+			return validationResult;
 		}
 
 		const db = await getDb();
