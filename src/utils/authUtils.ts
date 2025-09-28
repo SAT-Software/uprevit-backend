@@ -105,27 +105,16 @@ export async function authenticateRequest(event: APIGatewayProxyEvent): Promise<
  * @returns Authentication result with payload or error response
  */
 export async function authenticateWithRole(event: APIGatewayProxyEvent, requiredRole: string): Promise<AuthResult> {
-  const authHeader = event.headers?.Authorization || event.headers?.authorization;
-  
-  if (!authHeader) {
-    return {
-      isValid: false,
-      error: ResponseWrapper.unauthorized('Unauthorized')
-    };
+  const authResult = await authenticateRequest(event);
+
+  if (!authResult.isValid) {
+    return authResult;
   }
 
-  const token = authHeader.split(' ')[1];
-  
-  if (!token) {
-    return {
-      isValid: false,
-      error: ResponseWrapper.unauthorized('Invalid authorization header format')
-    };
-  }
-
-  const { isValid, payload } = await validateRole(token, requiredRole);
-  
-  if (!isValid || !payload) {
+  const payload = authResult.payload;
+  // Assuming roles are stored in payload['cognito:groups'] as an array
+  const userRoles = payload['cognito:groups'] as string[] | undefined;
+  if (!userRoles || !userRoles.includes(requiredRole)) {
     return {
       isValid: false,
       error: ResponseWrapper.forbidden('Insufficient permissions')
