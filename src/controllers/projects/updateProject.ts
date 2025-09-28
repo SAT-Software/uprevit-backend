@@ -5,6 +5,7 @@ import { type AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -21,38 +22,37 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Request body is required');
 		}
 
-		type ProjectUpdateInput = {
-			_id: string;
-			workspace_id: string;
-			department_id: string;
-			project_name: string;
-			project_number: string;
-			project_description: string;
-			project_manager?: string;
-			admin_id: string;
-		};
-
-		const input: ProjectUpdateInput = JSON.parse(event.body);
-
-		if (!input._id || !input.workspace_id || !input.department_id || !input.project_name || !input.project_number || !input.project_description || !input.admin_id) {
-			return ResponseWrapper.badRequest('Missing required fields: _id, workspace_id, department_id, project_name, project_number, project_description, and admin_id are required');
+		let input: Omit<Project, 'isArchived'>;
+		
+		try {
+			input = JSON.parse(event.body!);
+		} catch (error) {
+			return ResponseWrapper.badRequest('Invalid JSON in request body');
 		}
 
-		// Validate ObjectId formats
-		if (!ObjectId.isValid(input._id)) {
-			return ResponseWrapper.badRequest('Invalid _id format. Must be a valid MongoDB ObjectId.');
+		const missingFieldsResult = validateMissingFields({
+			'workspace_id': input.workspace_id.toString(),
+			'department_id': input.department_id.toString(),
+			'project_name': input.project_name,
+			'project_number': input.project_number,
+			'project_description': input.project_description,
+			'admin_id': input.admin_id.toString(),
+			'_id': input._id!.toString(),
+		});
+
+		if (missingFieldsResult) {
+			return missingFieldsResult;
 		}
 
-		if (!ObjectId.isValid(input.workspace_id)) {
-			return ResponseWrapper.badRequest('Invalid workspace_id format. Must be a valid MongoDB ObjectId.');
-		}
+		const objectIdValidation = validateAllObjectIds({
+			'_id': input._id!,
+			'workspace_id': input.workspace_id,
+			'department_id': input.department_id,
+			'admin_id': input.admin_id,
+		});
 
-		if (!ObjectId.isValid(input.department_id)) {
-			return ResponseWrapper.badRequest('Invalid department_id format. Must be a valid MongoDB ObjectId.');
-		}
-
-		if (!ObjectId.isValid(input.admin_id)) {
-			return ResponseWrapper.badRequest('Invalid admin_id format. Must be a valid MongoDB ObjectId.');
+		if (objectIdValidation) {
+			return objectIdValidation;
 		}
 
 		const db = await getDb();
@@ -75,15 +75,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 
 		if (existingProject) {
-			return {
-				statusCode: 409,
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify({
-					message: 'Project number already exists',
-				}),
-			};
+			return ResponseWrapper.conflict('Project number already exists');
 		}
 		
 		const workspaceObjectId = new ObjectId(input.workspace_id);
@@ -106,9 +98,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const auditRecord: AuditLog = {
 			entity: 'project',
-			entityId: input._id,
+			entityId: input._id!.toString(),
 			action: AuditLogAction.UPDATE,
-			actionBy: input.admin_id,
+			actionBy: input.admin_id.toString(),
 			actionAt: new Date(),
 			active: true,
 		};
@@ -122,5 +114,5 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 	} catch (err) {
 		console.error('Error in Lambda handler:', err);
 		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));	
-		}
+	}
 };
