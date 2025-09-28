@@ -10,8 +10,8 @@ import { authenticateWithRole } from '../../utils/authUtils';
 
 /**
  * API endpoint to create a workspace - only admin can create a workspace
- * @param event - API Gateway Lambda Proxy Input Format
- * @returns 
+ * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
+ * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format 
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
