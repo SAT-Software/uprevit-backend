@@ -6,6 +6,7 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
+import { authenticateRequest } from '../../utils/authUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -18,6 +19,12 @@ import { validateAllObjectIds, validateMissingFields } from '../../utils/validat
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
+		const auth = await authenticateRequest(event);
+		
+		if(!auth.isValid) {
+			return auth.error;
+		}
+
 		if (!event.body) {
 			return ResponseWrapper.badRequest('Request body is required');
 		}
@@ -100,7 +107,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			entity: 'project',
 			entityId: input._id!.toString(),
 			action: AuditLogAction.UPDATE,
-			actionBy: input.admin_id.toString(),
+			actionBy: auth.payload?.name?.toString()!,
 			actionAt: new Date(),
 			active: true,
 		};

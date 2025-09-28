@@ -5,8 +5,8 @@ import { AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { verifyJWT } from '../../utils/authUtils';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
+import { authenticateWithRole } from '../../utils/authUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -23,16 +23,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					return ResponseWrapper.badRequest('Request body is required');
 			}
 
-			const authHeader = event.headers?.Authorization || event.headers?.authorization;
-			if(!authHeader) {
-				return ResponseWrapper.unauthorized('Unauthorized');
-			}
-
-			const token = authHeader.split(' ')[1];
-			const { isValid, payload } = await verifyJWT(token);
-			
-			if(!isValid) {
-				return ResponseWrapper.unauthorized('Unauthorized');
+			const auth = await authenticateWithRole(event, 'admin');
+			if(!auth.isValid) {
+				return auth.error;
 			}
 
 			let input: Workspace;
@@ -107,7 +100,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					entity: 'workspace',
 					entityId: (workspaceRecord._id as ObjectId).toString(),
 					action: AuditLogAction.UPDATE,
-					actionBy: payload?.name?.toString()!,
+					actionBy: auth.payload?.name?.toString()!,
 					actionAt: new Date(),
 					active: true,
 			};
