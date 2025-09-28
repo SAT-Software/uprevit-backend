@@ -1,5 +1,7 @@
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
+import { ResponseWrapper } from './responseWrapper';
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 // Replace with your Amazon Cognito user pool ID
 const userPoolId = process.env.USER_POOL_ID!;
 
@@ -7,6 +9,14 @@ export type TokenValidationResponse = {
 	payload?: CognitoAccessTokenPayload;
 	isValid: boolean;
 }
+
+export type AuthResult = {
+  isValid: true;
+  payload: CognitoAccessTokenPayload;
+} | {
+  isValid: false;
+  error: APIGatewayProxyResult;
+};
 
 export async function verifyJWT(token: string): Promise<TokenValidationResponse> {
   try {
@@ -44,4 +54,75 @@ export async function validateRole(token: string, role: string): Promise<TokenVa
     console.error('Error validating role:', err);
     return {isValid: false};
   }
+}
+
+/**
+ * Extracts and validates JWT token from API Gateway event
+ * @param event - API Gateway event
+ * @returns Authentication result with payload or error response
+ */
+export async function authenticateRequest(event: APIGatewayProxyEvent): Promise<AuthResult> {
+  // Extract authorization header
+  const authHeader = event.headers?.Authorization || event.headers?.authorization;
+  
+  if (!authHeader) {
+    return {
+      isValid: false,
+      error: ResponseWrapper.unauthorized('Unauthorized')
+    };
+  }
+
+  // Extract token
+  const token = authHeader.split(' ')[1];
+  
+  if (!token) {
+    return {
+      isValid: false,
+      error: ResponseWrapper.unauthorized('Invalid authorization header format')
+    };
+  }
+
+  // Verify token
+  const { isValid, payload } = await verifyJWT(token);
+  
+  if (!isValid || !payload) {
+    return {
+      isValid: false,
+      error: ResponseWrapper.unauthorized('Unauthorized')
+    };
+  }
+
+  return {
+    isValid: true,
+    payload
+  };
+}
+
+/**
+ * Authenticates request with role validation
+ * @param event - API Gateway event
+ * @param requiredRole - Required role for access
+ * @returns Authentication result with payload or error response
+ */
+export async function authenticateWithRole(event: APIGatewayProxyEvent, requiredRole: string): Promise<AuthResult> {
+  const authResult = await authenticateRequest(event);
+
+  if (!authResult.isValid) {
+    return authResult;
+  }
+
+  const payload = authResult.payload;
+  // Assuming roles are stored in payload['cognito:groups'] as an array
+  const userRoles = payload['cognito:groups'] as string[] | undefined;
+  if (!userRoles || !userRoles.includes(requiredRole)) {
+    return {
+      isValid: false,
+      error: ResponseWrapper.forbidden('Insufficient permissions')
+    };
+  }
+
+  return {
+    isValid: true,
+    payload
+  };
 }

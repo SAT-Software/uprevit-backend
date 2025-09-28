@@ -5,7 +5,7 @@ import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { verifyJWT } from '../../utils/authUtils';
+import { authenticateRequest } from '../../utils/authUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -18,6 +18,13 @@ import { verifyJWT } from '../../utils/authUtils';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
+
+				const auth = await authenticateRequest(event);
+
+				if(!auth.isValid) {
+					return auth.error;
+				}
+
         if (!event.body) {
             return ResponseWrapper.badRequest('Request body is required');
         }
@@ -32,19 +39,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         // Validate ObjectId format
         if (!ObjectId.isValid(productId)) {
             return ResponseWrapper.badRequest('Invalid product ID format. Must be a valid MongoDB ObjectId.');
-        }
-
-        const authHeader = event.headers?.Authorization || event.headers?.authorization;
-        if (!authHeader) {
-            return ResponseWrapper.unauthorized('Unauthorized');
-        }
-
-        const token = authHeader.split(' ')[1];
-
-        // Check if the user is valid - both users and admins can update products
-        const { isValid, payload } = await verifyJWT(token);
-        if (!isValid) {
-            return ResponseWrapper.unauthorized('Unauthorized');
         }
 
         let input: any;
@@ -140,7 +134,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             entity: 'product',
             entityId: productId,
             action: AuditLogAction.UPDATE,
-            actionBy: payload?.name?.toString()!,
+            actionBy: auth.payload?.name?.toString()!,
             actionAt: new Date(),
             active: true,
         });

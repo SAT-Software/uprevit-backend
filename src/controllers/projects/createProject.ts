@@ -5,7 +5,7 @@ import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { validateRole } from '../../utils/authUtils';
+import { authenticateRequest } from '../../utils/authUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -18,19 +18,14 @@ import { validateRole } from '../../utils/authUtils';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
+		
+		const auth = await authenticateRequest(event);
+		if(!auth.isValid) {
+			return auth.error;
+		}
+
 		if (!event.body) {
 			return ResponseWrapper.badRequest('Request body is required');
-		}
-
-		const authHeader = event.headers?.Authorization || event.headers?.authorization;
-		if(!authHeader) {
-			return ResponseWrapper.unauthorized('Unauthorized');
-		}
-
-		const token = authHeader.split(' ')[1];
-		const { isValid, payload } = await validateRole(token, 'admin');
-		if(!isValid) {
-			return ResponseWrapper.unauthorized('Unauthorized');
 		}
 
 		const input: Project = JSON.parse(event.body);
@@ -83,7 +78,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			entity: 'project',
 			entityId: project.insertedId.toString(),
 			action: AuditLogAction.CREATE,
-			actionBy: payload?.name?.toString()!,
+			actionBy: auth.payload?.name?.toString()!,
 			actionAt: new Date(),
 			active: true,
 		});

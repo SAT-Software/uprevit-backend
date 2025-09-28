@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { Department } from '../../models/department';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { verifyJWT } from '../../utils/authUtils';
+import { authenticateRequest } from '../../utils/authUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -15,6 +15,12 @@ import { verifyJWT } from '../../utils/authUtils';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
+
+				const auth = await authenticateRequest(event);
+				if(!auth.isValid) {
+					return auth.error;
+				}
+
         const db = await getDb();
 
         const limit = parseInt(event.queryStringParameters?.limit || '10');
@@ -27,19 +33,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         // Only parse isArchive if the parameter is explicitly provided
         if (isArchiveParam !== undefined) {
             isArchive = isArchiveParam.toLowerCase() === 'true';
-        }
-
-        const authHeader = event.headers?.Authorization || event.headers?.authorization;
-        if (!authHeader) {
-            return ResponseWrapper.unauthorized('Unauthorized');
-        }
-
-        const token = authHeader.split(' ')[1];
-
-        const { isValid, payload } = await verifyJWT(token);
-
-        if (!isValid) {
-            return ResponseWrapper.unauthorized('Unauthorized');
         }
 
         if (limit < 1 || limit > 100) {
