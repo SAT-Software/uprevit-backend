@@ -6,6 +6,7 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateRole } from '../../utils/authUtils';
+import { validateAllObjectIds } from '../../utils/validationUtils';
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
  * @param {Object} event - API Gateway Lambda Proxy Input Format
@@ -33,9 +34,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             return ResponseWrapper.unauthorized('Unauthorized');
         }
 
-        if (!ObjectId.isValid(event.pathParameters.id)) {
-            return ResponseWrapper.badRequest('Invalid id format. Must be a valid MongoDB ObjectId.');
-        }
+
+				const validationResult = validateAllObjectIds({
+					'_id': event.pathParameters.id,
+				});
+				
+				if (validationResult) {
+					return validationResult;
+				}
 
         const db = await getDb();
 

@@ -35,7 +35,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				return ResponseWrapper.unauthorized('Unauthorized');
 			}
 
-			const input: Workspace = JSON.parse(event.body);
+			let input: Workspace;
+			
+			try {
+				input = JSON.parse(event.body!);
+			} catch (error) {
+				return ResponseWrapper.badRequest('Invalid JSON in request body');
+			}
 
 			const missingFieldsResult = validateMissingFields({
 				'workspaceName': input.workspaceName,

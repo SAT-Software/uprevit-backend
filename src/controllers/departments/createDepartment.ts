@@ -6,6 +6,7 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateRole } from '../../utils/authUtils';
+import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -34,28 +35,36 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.unauthorized('Unauthorized');
 		}
 
-		const input: Department = JSON.parse(event.body);
-
-		if (!input.department_name || !input.department_description || !input.admin_id || !input.workspace_id) {
-			return ResponseWrapper.badRequest('Missing required fields: department_name, department_description, admin_id, and workspace_id are required');
+		let input: Department;
+		
+		try {
+			input = JSON.parse(event.body);
+		} catch (error) {
+			return ResponseWrapper.badRequest('Invalid JSON in request body');
 		}
 
-		// Validate ObjectId formats
-		if (!ObjectId.isValid(input.admin_id)) {
-			return ResponseWrapper.badRequest('Invalid admin_id format. Must be a valid MongoDB ObjectId.');
-		}
+		const missingFieldsResult = validateMissingFields({
+			'department_name': input.department_name,
+			'department_description': input.department_description,
+			'admin_id': input.admin_id.toString(),
+			'workspace_id': input.workspace_id.toString(),
+		});
 
-		if (!ObjectId.isValid(input.workspace_id)) {
-			return ResponseWrapper.badRequest('Invalid workspace_id format. Must be a valid MongoDB ObjectId.');
+		if (missingFieldsResult) {
+			return missingFieldsResult;
 		}
+		
+		const objectIdValidation = validateAllObjectIds({
+			'admin_id': input.admin_id,
+			'workspace_id': input.workspace_id,
+		}, {
+			'users': input.users,
+		});
 
-		// Validate user IDs if provided
-		if (input.users && input.users.length > 0) {
-			const invalidUserIds = input.users.filter(userId => !ObjectId.isValid(userId));
-			if (invalidUserIds.length > 0) {
-				return ResponseWrapper.badRequest(`Invalid user IDs format: ${invalidUserIds.join(', ')}. Must be valid MongoDB ObjectIds.`);
-			}
+		if (objectIdValidation) {
+			return objectIdValidation;
 		}
+		
 
 		const db = await getDb();
 		
