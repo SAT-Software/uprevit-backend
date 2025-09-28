@@ -59,14 +59,14 @@ export type Product = {
     };
     product_data: {
         data: {
-            _id: string;
+            _id: ObjectId;
             workbook_data: {};
         };
         tab_completed: boolean;
     };
     operational_parameters: {
         data: {
-            _id: string;
+            _id: ObjectId;
             workbook_data: {};
         };
         tab_completed: boolean;
