@@ -3,7 +3,7 @@ import { getDb } from '../../utils/db';
 import type { ExcelData, LabelTags, Product, SymbolsGraphics, ProductInformation, ComplianceInformation, LabelComponents } from '../../models/product';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { verifyJWT } from '../../utils/authUtils';
+import { authenticateRequest, verifyJWT } from '../../utils/authUtils';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -16,18 +16,12 @@ import { verifyJWT } from '../../utils/authUtils';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
     try {
-        const authHeader = event.headers?.Authorization || event.headers?.authorization;
-        if (!authHeader) {
-            return ResponseWrapper.unauthorized('Unauthorized');
-        }
+        
+				const auth = await authenticateRequest(event);
 
-        const token = authHeader.split(' ')[1];
-
-        // Check if the user is valid - both users and admins can get product data
-        const { isValid, payload } = await verifyJWT(token);
-        if (!isValid) {
-            return ResponseWrapper.unauthorized('Unauthorized');
-        }
+				if(!auth.isValid) {
+					return auth.error;
+				}
 
         // Extract query parameters
         const productId = event.queryStringParameters?.id;
