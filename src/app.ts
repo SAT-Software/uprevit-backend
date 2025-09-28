@@ -1,6 +1,6 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { verifyJWT } from './utils/authUtils';
-import { ResponseWrapper } from './utils/responseWrapper';
+import {APIGatewayProxyEvent, APIGatewayProxyResult} from 'aws-lambda';
+import {authenticateRequest} from './utils/authUtils';
+import {ResponseWrapper} from './utils/responseWrapper';
 
 /**
  *
@@ -12,48 +12,26 @@ import { ResponseWrapper } from './utils/responseWrapper';
  *
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = async (event: APIGatewayProxyEvent):
+	Promise<APIGatewayProxyResult> => {
 	try {
-		const authHeader = event.headers?.Authorization || event.headers?.authorization;
-		console.log('authHeader', authHeader);
+		const auth = await authenticateRequest(event);
 
-		if(!authHeader) {
+		if (!auth.isValid) {
 			return ResponseWrapper.unauthorized('Unauthorized');
 		}
 
-		const token = authHeader.split(' ')[1];
+		console.log('payload', auth.payload);
 
-		const { isValid, payload } = await verifyJWT(token);
-		
-		if(!isValid) {
-			return ResponseWrapper.unauthorized('Unauthorized');
-		}
-
-		console.log('payload', payload);
-
-		return {
-			statusCode: 200,
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
+		return ResponseWrapper.success(
+			{
 				message: 'Hello from Lambda!',
 				database: 'Connected successfully',
 				timestamp: new Date().toISOString(),
-			}),
-		};
+			}
+		);
 	} catch (err) {
 		console.error('Error in Lambda handler:', err);
-		return {
-			statusCode: 500,
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				message: 'Internal server error',
-				error: err instanceof Error ? err.message : 'Unknown error',
-				timestamp: new Date().toISOString(),
-			}),
-		};
+		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
 	}
 };

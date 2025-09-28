@@ -7,8 +7,8 @@ import { authenticateRequest } from '../../utils/authUtils';
 
 /**
  * API endpoint to get a workspace by id
- * @param event - API Gateway Lambda Proxy Input Format
- * @returns 
+ * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
+ * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -28,7 +28,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const workspace: Workspace | null = await db.collection<Workspace>('workspaces').findOne({ _id: new ObjectId(event.pathParameters.id) });
 
 		if (!workspace) {
-			return ResponseWrapper.badRequest('Workspace not found');
+			return ResponseWrapper.notFound('Workspace not found');
 		}
 
 		return ResponseWrapper.success({

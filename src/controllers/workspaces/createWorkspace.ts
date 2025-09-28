@@ -4,35 +4,41 @@ import type { Workspace } from '../../models/workspace';
 import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
 
 
 /**
  * API endpoint to create a workspace - only admin can create a workspace
- * @param event - API Gateway Lambda Proxy Input Format
- * @returns 
+ * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
+ * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format 
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const authHeader = event.headers?.Authorization || event.headers?.authorization;
-
 		const auth = await authenticateWithRole(event, 'admin');
 
 		if(!auth.isValid) {
 			return auth.error;
 		}
 
-		// Parse the request body from the event
-		if (!event.body) {
-			return ResponseWrapper.badRequest('Request body is required');
+		
+		let input: Workspace;
+		
+		try {
+			input = JSON.parse(event.body!);
+		} catch (error) {
+			return ResponseWrapper.badRequest('Invalid JSON in request body');
 		}
 
-		const input: Workspace = JSON.parse(event.body);
-
-		// Validate required fields
-		if (!input.workspaceName || !input.companyName || !input.companyId) {
-			return ResponseWrapper.badRequest('Missing required fields: workspace_name, company_name, and company_id are required');
+		const validationResult = validateMissingFields({
+			'workspaceName': input.workspaceName,
+			'companyName': input.companyName,
+			'companyId': input.companyId,
+		});
+		
+		if (validationResult) {
+			return validationResult;
 		}
 
 		const db = await getDb();
