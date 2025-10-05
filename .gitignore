@@ -209,3 +209,4 @@ $RECYCLE.BIN/
 env.json
 
 .kilocode/rules/*
+.vscode

@@ -1,3 +1,5 @@
+import { addComplianceStandard, updateComplianceStandard, deleteComplianceStandard, updateComplianceTabCompletion } from "./compliance-info";
+
 export interface UpdateProductInformationData {
     market_geography: string;
     country_of_origin: string;
@@ -64,4 +66,8 @@ export type UpdateProductDataRequest =
     | AddCustomField
     | UpdateCustomField
     | DeleteCustomField
-    | UpdateProductInfoTabCompletion;
+    | UpdateProductInfoTabCompletion
+    | addComplianceStandard
+    | updateComplianceStandard
+    | deleteComplianceStandard
+    | updateComplianceTabCompletion;
