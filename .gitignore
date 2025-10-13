@@ -209,4 +209,5 @@ $RECYCLE.BIN/
 env.json
 
 .kilocode/rules/*
+mongodb-data-local
 .vscode

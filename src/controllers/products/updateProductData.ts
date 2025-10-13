@@ -8,11 +8,11 @@ import { AuditLog } from '../../models/auditLog';
 import { authenticateRequest } from '../../utils/authUtils';
 import { updateAuditLog } from '../../utils/auditLog';
 import {
-    addCustomField,
-    deleteCustomField,
-    updateCustomField,
-    updateProductInformation,
-    updateProductInfoTabCompletion,
+	addCustomField,
+	deleteCustomField,
+	updateCustomField,
+	updateProductInformation,
+	updateProductInfoTabCompletion,
 } from './productData/product-info';
 import { UpdateProductDataRequest } from '../../types/products/product-info';
 import {
@@ -23,13 +23,13 @@ import {
 } from './productData/compliance-standard';
 
 const validTabs = [
-    'product-information',
-    'compliance-information',
-    'label-components',
-    'symbols-graphics',
-    'product-data',
-    'operational-parameters',
-    'label-tags',
+	'product-information',
+	'compliance-information',
+	'label-components',
+	'symbols-graphics',
+	'product-data',
+	'operational-parameters',
+	'label-tags',
 ];
 
 
@@ -40,82 +40,82 @@ const validTabs = [
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    const auth = await authenticateRequest(event);
+	const auth = await authenticateRequest(event);
 
-    if (!auth.isValid) return auth.error;
+	if (!auth.isValid) return auth.error;
 
-    try {
-        if (!event.body) return ResponseWrapper.badRequest('Request body is required to update product data');
+	try {
+		if (!event.body) return ResponseWrapper.badRequest('Request body is required to update product data');
 
-        const input: UpdateProductDataRequest = JSON.parse(event.body);
+		const input: UpdateProductDataRequest = JSON.parse(event.body);
 
-        const missingFields = validateMissingFields({
-            id: input.id,
-            tab: input.tab,
-            action: input.action,
-        });
+		const missingFields = validateMissingFields({
+			id: input.id,
+			tab: input.tab,
+			action: input.action,
+		});
 
-        if (missingFields) return missingFields;
+		if (missingFields) return missingFields;
 
-        const objectIdValidation = validateAllObjectIds({
-            _id: input.id!,
-        });
+		const objectIdValidation = validateAllObjectIds({
+			_id: input.id!,
+		});
 
-        if (objectIdValidation) return objectIdValidation;
+		if (objectIdValidation) return objectIdValidation;
 
-        if (!validTabs.includes(input.tab))
-            return ResponseWrapper.badRequest(`Invalid tab parameter. Must be one of: ${validTabs.join(', ')}`);
+		if (!validTabs.includes(input.tab))
+			return ResponseWrapper.badRequest(`Invalid tab parameter. Must be one of: ${validTabs.join(', ')}`);
 
-        const db = await getDb();
+		const db = await getDb();
 
-        const product = await db.collection<Product>('products').findOne({ _id: new ObjectId(input.id) });
+		const product = await db.collection<Product>('products').findOne({ _id: new ObjectId(input.id) });
 
-        if (!product) return ResponseWrapper.notFound('Product not found, please check the provided product id.');
+		if (!product) return ResponseWrapper.notFound('Product not found, please check the provided product id.');
 
-        let updateQuery = {};
-        let updatedData = {};
-        let actionLog = '';
+		let updateQuery = {};
+		let updatedData = {};
+		let actionLog = '';
 
-        switch (input.action) {
-            case 'update_product_information':
-                const result = updateProductInformation(input.data, input.tab, input.action);
-                if (result.error) return result.error;
+		switch (input.action) {
+		case 'update_product_information':
+			const result = updateProductInformation(input.data, input.tab, input.action);
+			if (result.error) return result.error;
 
-                ({ updateQuery, updatedData, actionLog } = result);
+			({ updateQuery, updatedData, actionLog } = result);
 
-                break;
+			break;
 
-            case 'add_custom_field':
-                const addCustomFieldResult = addCustomField(input.data, input.tab, input.action);
-                if (addCustomFieldResult.error) return addCustomFieldResult.error;
+		case 'add_custom_field':
+			const addCustomFieldResult = addCustomField(input.data, input.tab, input.action);
+			if (addCustomFieldResult.error) return addCustomFieldResult.error;
 
-                ({ updateQuery, updatedData, actionLog } = addCustomFieldResult);
+			({ updateQuery, updatedData, actionLog } = addCustomFieldResult);
 
-                break;
+			break;
 
-            case 'update_custom_field':
-                const updateCustomFieldResult = updateCustomField(input.data, input.tab, input.action);
-                if (updateCustomFieldResult.error) return updateCustomFieldResult.error;
+		case 'update_custom_field':
+			const updateCustomFieldResult = updateCustomField(input.data, input.tab, input.action);
+			if (updateCustomFieldResult.error) return updateCustomFieldResult.error;
 
-                ({ updateQuery, updatedData, actionLog } = updateCustomFieldResult);
+			({ updateQuery, updatedData, actionLog } = updateCustomFieldResult);
 
-                break;
+			break;
 
-            case 'delete_custom_field':
-                const deleteCustomFieldResult = deleteCustomField(input.data, input.tab, input.action);
-                if (deleteCustomFieldResult.error) return deleteCustomFieldResult.error;
+		case 'delete_custom_field':
+			const deleteCustomFieldResult = deleteCustomField(input.data, input.tab, input.action);
+			if (deleteCustomFieldResult.error) return deleteCustomFieldResult.error;
 
-                ({ updateQuery, updatedData, actionLog } = deleteCustomFieldResult);
+			({ updateQuery, updatedData, actionLog } = deleteCustomFieldResult);
 
-                break;
+			break;
 
-            case 'update_product_information_completion':
-                const updateTabCompletionResult = updateProductInfoTabCompletion(input.data, input.tab, input.action);
-                if (updateTabCompletionResult.error) return updateTabCompletionResult.error;
+		case 'update_product_information_completion':
+			const updateTabCompletionResult = updateProductInfoTabCompletion(input.data, input.tab, input.action);
+			if (updateTabCompletionResult.error) return updateTabCompletionResult.error;
 
-                ({ updateQuery, updatedData, actionLog } = updateTabCompletionResult);
+			({ updateQuery, updatedData, actionLog } = updateTabCompletionResult);
 
-                break;
+			break;
 
             case 'add_compliance_standard':
                 const addComplianceStandardResult = addComplianceStandard(input.data, input.tab, input.action);
@@ -173,23 +173,23 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
             .collection<Product>('products')
             .updateOne({ _id: new ObjectId(input.id) }, updateQuery, options);
 
-        if (updateResult.modifiedCount === 0) {
-            return ResponseWrapper.notFound(
-                'Custom field not found or already deleted, please check the provided custom field id.',
-            );
-        }
+		if (updateResult.modifiedCount === 0) {
+			return ResponseWrapper.notFound(
+				'Custom field not found or already deleted, please check the provided custom field id.',
+			);
+		}
 
-        await updateAuditLog(auditLog);
+		await updateAuditLog(auditLog);
 
-        return ResponseWrapper.success({
-            message: 'Product updated successfully',
-            action: input.action,
-            tab: input.tab,
-            data: updatedData,
-        });
-    } catch (error: unknown) {
-        return ResponseWrapper.internalServerError(
-            `Internal server error: ${error instanceof Error ? error.message : String(error)}`,
-        );
-    }
+		return ResponseWrapper.success({
+			message: 'Product updated successfully',
+			action: input.action,
+			tab: input.tab,
+			data: updatedData,
+		});
+	} catch (error: unknown) {
+		return ResponseWrapper.internalServerError(
+			`Internal server error: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
 };

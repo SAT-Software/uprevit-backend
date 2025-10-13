@@ -1,5 +1,4 @@
-import { addComplianceStandard, updateComplianceStandard, deleteComplianceStandard, updateComplianceTabCompletion } from "./compliance-info";
-
+// Base data interfaces
 export interface UpdateProductInformationData {
     market_geography: string;
     country_of_origin: string;
@@ -7,13 +6,8 @@ export interface UpdateProductInformationData {
     commercial_clinical: string;
 }
 
-export interface AddCustomFieldData {
-    label: string;
-    value: string;
-}
-
-export interface UpdateCustomFieldInput {
-    id: string;
+export interface CustomFieldInput {
+    id?: string;
     label?: string;
     value?: string;
 }
@@ -26,45 +20,27 @@ export interface UpdateProductInformationCompletionData {
     tab_completed: boolean;
 }
 
-export type UpdateProductInfo = {
+// Base request type with common properties
+type BaseProductRequest<TAction extends string, TData> = {
     id: string;
     tab: 'product-information';
-    action: 'update_product_information';
-    data: UpdateProductInformationData;
+    action: TAction;
+    data: TData;
 };
 
-export type AddCustomField = {
-    id: string;
-    tab: 'product-information';
-    action: 'add_custom_field';
-    data: AddCustomFieldData[];
-};
+// Specific request types using the base type
+export type UpdateProductInfo = BaseProductRequest<'update_product_information', UpdateProductInformationData>;
 
-export type UpdateCustomField = {
-    id: string;
-    tab: 'product-information';
-    action: 'update_custom_field';
-    data: UpdateCustomFieldInput[];
-};
+export type AddUpdateCustomField = BaseProductRequest<'add_custom_field' | 'update_custom_field', CustomFieldInput[]>;
 
-export type DeleteCustomField = {
-    id: string;
-    tab: 'product-information';
-    action: 'delete_custom_field';
-    data: DeleteCustomFieldInput;
-};
+export type DeleteCustomField = BaseProductRequest<'delete_custom_field', DeleteCustomFieldInput>;
 
-export type UpdateProductInfoTabCompletion = {
-    id: string;
-    tab: 'product-information';
-    action: 'update_product_information_completion';
-    data: UpdateProductInformationCompletionData;
-};
+export type UpdateProductInfoTabCompletion = BaseProductRequest<'update_product_information_completion', UpdateProductInformationCompletionData>;
 
+// Union type for all product information requests
 export type UpdateProductDataRequest =
     | UpdateProductInfo
-    | AddCustomField
-    | UpdateCustomField
+    | AddUpdateCustomField
     | DeleteCustomField
     | UpdateProductInfoTabCompletion
     | addComplianceStandard
