@@ -1,0 +1,5 @@
+{
+  "editor.formatOnSave": false,
+  "files.autoSave": "onFocusChange",
+  "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+}
