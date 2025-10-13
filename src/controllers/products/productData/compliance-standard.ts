@@ -1,8 +1,7 @@
 import { APIGatewayProxyResult } from 'aws-lambda';
 import { validateTab, validateMissingFields, validateObjectIds } from '../../../utils/validationUtils';
 import {
-	AddComplianceInfoData,
-	UpdateComplianceInfoData,
+	ComplianceStandard,
 	DeleteComplianceStandardData,
 	UpdateComplianceTabCompletionData,
 } from '../../../types/products/compliance-info';
@@ -11,26 +10,29 @@ import { ObjectId } from 'mongodb';
 
 type ComplianceStandardReturn = {
 	updateQuery: Record<string, unknown>;
-	updatedData: AddComplianceInfoData | UpdateComplianceInfoData | DeleteComplianceStandardData | UpdateComplianceTabCompletionData;
+	updatedData:
+		| (ComplianceStandard & { _id: string })[]
+		| DeleteComplianceStandardData
+		| UpdateComplianceTabCompletionData;
 	actionLog: string;
 	error: APIGatewayProxyResult | null;
 };
 
 /**
  * Handles the addition of new compliance standards.
- * @param {AddComplianceInfoData} newComplianceStandards - The array of new compliance standard items to add.
+ * @param {ComplianceStandard[]} newComplianceStandards - The array of new compliance standard items to add.
  * @param {string} tab - The current tab being updated.
  * @param {string} action - The action being performed.
  * @return {ComplianceStandardReturn} An object containing the update query, updated data, and any validation error.
  */
 export function addComplianceStandard(
-	newComplianceStandards: AddComplianceInfoData,
+	newComplianceStandards: ComplianceStandard[],
 	tab: string,
 	action: string,
 ): ComplianceStandardReturn {
 	try {
 		const isValidatedTabComplianceInfo = validateTab(tab, 'compliance-information', action);
-		if (isValidatedTabComplianceInfo) throw new Error(isValidatedTabComplianceInfo.body);;
+		if (isValidatedTabComplianceInfo) throw new Error(isValidatedTabComplianceInfo.body);
 
 		if (!Array.isArray(newComplianceStandards) || newComplianceStandards.length === 0)
 			throw new Error('Data for adding compliance standards must be a non-empty array.');
@@ -61,13 +63,13 @@ export function addComplianceStandard(
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
-				updatedData: {} as AddComplianceInfoData,
+				updatedData: [],
 				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
-			updatedData: {} as AddComplianceInfoData,
+			updatedData: [],
 			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to add compliance standards'),
 		};
@@ -76,16 +78,16 @@ export function addComplianceStandard(
 
 /**
  * Handles the update of an existing compliance standard.
- * @param {UpdateComplianceInfoData} updatedComplianceStandard - The data for the compliance standard to update, including its id.
+ * @param {ComplianceStandard} updatedComplianceStandard - The data for the compliance standard to update, including its id.
  * @param {string} tab - The current tab being updated.
  * @param {string} action - The action being performed.
  * @return {ComplianceStandardReturn} An object containing the update query, updated data, and any validation error.
  */
 export function updateComplianceStandard(
-	updatedComplianceStandard: UpdateComplianceInfoData,
+	updatedComplianceStandard: ComplianceStandard & { id: string },
 	tab: string,
 	action: string,
-): ComplianceStandardReturn {
+): Omit<ComplianceStandardReturn, 'updatedData'> & { updatedData: ComplianceStandard & { id: string } } {
 	try {
 		const isValidatedTabComplianceInfo = validateTab(tab, 'compliance-information', action);
 		if (isValidatedTabComplianceInfo) throw new Error(isValidatedTabComplianceInfo.body);
@@ -121,13 +123,13 @@ export function updateComplianceStandard(
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
-				updatedData: {} as UpdateComplianceInfoData,
+				updatedData: {} as ComplianceStandard & { id: string },
 				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
-			updatedData: {} as UpdateComplianceInfoData,
+			updatedData: {} as ComplianceStandard & { id: string },
 			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update compliance standards'),
 		};
@@ -145,7 +147,7 @@ export function deleteComplianceStandard(
 	standardId: DeleteComplianceStandardData,
 	tab: string,
 	action: string,
-): ComplianceStandardReturn {
+): Omit<ComplianceStandardReturn, 'updatedData'> & { updatedData: DeleteComplianceStandardData } {
 	try {
 		const isValidatedTabComplianceInfo = validateTab(tab, 'compliance-information', action);
 		if (isValidatedTabComplianceInfo) throw new Error(isValidatedTabComplianceInfo.body);
@@ -170,18 +172,18 @@ export function deleteComplianceStandard(
 
 		const actionLog = 'DELETE';
 
-		return { updateQuery, updatedData: {} as DeleteComplianceStandardData, actionLog, error: null };
+		return { updateQuery, updatedData: standardId, actionLog, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
-				updatedData: null as unknown as DeleteComplianceStandardData,
+				updatedData: { id: '' },
 				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
-			updatedData: null as unknown as DeleteComplianceStandardData,
+			updatedData: { id: '' },
 			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to delete compliance standard'),
 		};
@@ -199,23 +201,29 @@ export function updateComplianceTabCompletion(
 	inputData: UpdateComplianceTabCompletionData,
 	tab: string,
 	action: string,
-): ComplianceStandardReturn {
+): Omit<ComplianceStandardReturn, 'updatedData'> & { updatedData: UpdateComplianceTabCompletionData } {
 	try {
 		const isValidatedTabComplianceInfo = validateTab(tab, 'compliance-information', action);
 		if (isValidatedTabComplianceInfo) throw new Error(isValidatedTabComplianceInfo.body);
-	
+
 		if (typeof inputData.tab_completed !== 'boolean') throw new Error('tab_completed must be a boolean value.');
-	
+
 		const updateQuery = { $set: { 'compliance_information.tab_completed': inputData.tab_completed } };
 		const updatedData = { tab_completed: inputData.tab_completed };
 		const actionLog = 'UPDATE';
-	
+
 		return { updateQuery, updatedData, actionLog, error: null };
 	} catch (error) {
-		if (error instanceof Error) return { updateQuery: {}, updatedData: {} as UpdateComplianceTabCompletionData, actionLog: '', error: ResponseWrapper.badRequest(error.message) };
+		if (error instanceof Error)
+			return {
+				updateQuery: {},
+				updatedData: { tab_completed: false },
+				actionLog: '',
+				error: ResponseWrapper.badRequest(error.message),
+			};
 		return {
 			updateQuery: {},
-			updatedData: {} as UpdateComplianceTabCompletionData,
+			updatedData: { tab_completed: false },
 			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update compliance tab completion'),
 		};
