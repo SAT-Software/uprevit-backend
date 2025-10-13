@@ -1,3 +1,4 @@
+
 // Base data interfaces
 export interface UpdateProductInformationData {
     market_geography: string;
@@ -37,13 +38,4 @@ export type DeleteCustomField = BaseProductRequest<'delete_custom_field', Delete
 
 export type UpdateProductInfoTabCompletion = BaseProductRequest<'update_product_information_completion', UpdateProductInformationCompletionData>;
 
-// Union type for all product information requests
-export type UpdateProductDataRequest =
-    | UpdateProductInfo
-    | AddUpdateCustomField
-    | DeleteCustomField
-    | UpdateProductInfoTabCompletion
-    | addComplianceStandard
-    | updateComplianceStandard
-    | deleteComplianceStandard
-    | updateComplianceTabCompletion;
+

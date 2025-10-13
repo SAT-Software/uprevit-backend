@@ -1,46 +1,37 @@
+// Base data interfaces
 export interface ComplianceInfoItem {
-    _id?: string;
-    standard: string;
-    standard_description: string;
+	_id?: string;
+	standard: string;
+	standard_description: string;
 }
 
-export interface UpdateComplianceInfoItem extends ComplianceInfoItem {
-    id: string;
+export interface UpdateComplianceInfoData extends ComplianceInfoItem {
+	id: string;
 }
 
+export type AddComplianceInfoData = ComplianceInfoItem[];
 
-export type AddComplianceInfo = ComplianceInfoItem[];
-export type UpdateComplianceInfo = UpdateComplianceInfoItem;
+export interface DeleteComplianceStandardData {
+	id: string;
+}
 
-export type addComplianceStandard = {
-    id: string;
-    tab: 'compliance-information';
-    action: 'add_compliance_standard';
-    data: AddComplianceInfo;
+export interface UpdateComplianceTabCompletionData {
+	tab_completed: boolean;
+}
+
+// Base request type with common properties
+type BaseComplianceRequest<TAction extends string, TData> = {
+	id: string;
+	tab: 'compliance-information';
+	action: TAction;
+	data: TData;
 };
 
+// Specific request types using the base type
+export type AddComplianceStandard = BaseComplianceRequest<'add_compliance_standard', AddComplianceInfoData>;
 
-export type updateComplianceStandard = {
-    id: string;
-    tab: 'compliance-information';
-    action: 'update_compliance_standard';
-    data: UpdateComplianceInfoItem;
-}
+export type UpdateComplianceStandard = BaseComplianceRequest<'update_compliance_standard', UpdateComplianceInfoData>;
 
-export type deleteComplianceStandard = {
-    id: string;
-    tab: 'compliance-information';
-    action: 'delete_compliance_standard';
-    data: {
-        id: string;
-    };
-}
+export type DeleteComplianceStandard = BaseComplianceRequest<'delete_compliance_standard', DeleteComplianceStandardData>;
 
-export type updateComplianceTabCompletion = {
-    id: string;
-    tab: 'compliance-information';
-    action: 'update_compliance_tab_completion';
-    data: {
-        tab_completed: boolean;
-    };
-}
+export type UpdateComplianceTabCompletion = BaseComplianceRequest<'update_compliance_tab_completion', UpdateComplianceTabCompletionData>;
