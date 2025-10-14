@@ -14,7 +14,9 @@ import {
 	updateProductInformation,
 	updateProductInfoTabCompletion,
 } from './productData/product-info';
-import { UpdateProductDataRequest } from '../../types/products/product-info';
+import { UpdateProductDataRequest } from '../../types/products/product-data';
+import { addComplianceStandard, deleteComplianceStandard, updateComplianceStandard, updateComplianceTabCompletion } from './productData/compliance-standard';
+
 
 const validTabs = [
 	'product-information',
@@ -25,6 +27,7 @@ const validTabs = [
 	'operational-parameters',
 	'label-tags',
 ];
+
 
 /**
  * Update product data (generic PATCH endpoint)
@@ -110,6 +113,39 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 			break;
 
+		case 'add_compliance_standard':
+			const addComplianceStandardResult = addComplianceStandard(input.data, input.tab, input.action);
+			if (addComplianceStandardResult.error) return addComplianceStandardResult.error;
+
+			({ updateQuery, updatedData, actionLog } = addComplianceStandardResult);
+
+			break;
+
+		case 'update_compliance_standard':
+			const updateComplianceStandardResult = updateComplianceStandard(input.data, input.tab, input.action);
+			if (updateComplianceStandardResult.error) return updateComplianceStandardResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateComplianceStandardResult);
+
+			break;
+
+		case 'delete_compliance_standard':
+			const deleteComplianceStandardResult = deleteComplianceStandard(input.data, input.tab, input.action);
+			if (deleteComplianceStandardResult.error) return deleteComplianceStandardResult.error;
+
+			({ updateQuery, actionLog } = deleteComplianceStandardResult);
+			updatedData = input.data;
+
+			break;
+
+		case 'update_compliance_tab_completion':
+			const updateComplianceTabCompletionResult = updateComplianceTabCompletion(input.data, input.tab, input.action);
+			if (updateComplianceTabCompletionResult.error) return updateComplianceTabCompletionResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateComplianceTabCompletionResult);
+
+			break;
+
 		default:
 			return ResponseWrapper.badRequest('Invalid action');
 		}
@@ -123,9 +159,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			active: true,
 		};
 
+		const options: { arrayFilters?: any[] } = {};
+		if ('arrayFilters' in updateQuery) {
+			options.arrayFilters = (updateQuery as any).arrayFilters;
+			delete (updateQuery as any).arrayFilters; 
+		}
+
 		const updateResult = await db
 			.collection<Product>('products')
-			.updateOne({ _id: new ObjectId(input.id) }, updateQuery);
+			.updateOne({ _id: new ObjectId(input.id) }, updateQuery, options);
 
 		if (updateResult.modifiedCount === 0) {
 			return ResponseWrapper.notFound(
