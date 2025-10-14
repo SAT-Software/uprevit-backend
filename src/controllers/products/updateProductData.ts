@@ -16,6 +16,7 @@ import {
 } from './productData/product-info';
 import { UpdateProductDataRequest } from '../../types/products/product-data';
 import { addComplianceStandard, deleteComplianceStandard, updateComplianceStandard, updateComplianceTabCompletion } from './productData/compliance-standard';
+import { addLabelComponent } from './productData/label-components';
 
 
 const validTabs = [
@@ -143,6 +144,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (updateComplianceTabCompletionResult.error) return updateComplianceTabCompletionResult.error;
 
 			({ updateQuery, updatedData, actionLog } = updateComplianceTabCompletionResult);
+
+			break;
+		case 'add_label_component':
+			const addLabelComponentResult = addLabelComponent(input.data, input.tab, input.action);
+			if (addLabelComponentResult.error) return addLabelComponentResult.error;
+
+			({ updateQuery, updatedData, actionLog } = addLabelComponentResult);
 
 			break;
 
