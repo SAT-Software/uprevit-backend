@@ -15,3 +15,5 @@ type BaseLabelComponentRequest<TAction extends string, TData> = {
 
 export type AddLabelComponent = BaseLabelComponentRequest<'add_label_component', labelComponent[]>;
 export type UpdateLabelComponent = BaseLabelComponentRequest<'update_label_component', Required<labelComponent>>;
+export type DeleteLabelComponent = BaseLabelComponentRequest<'delete_label_component', { id: string }>;
+export type LabelComponentTabCompletion = BaseLabelComponentRequest<'update_label_component_tab_completion', { tab_completed: boolean }>;
