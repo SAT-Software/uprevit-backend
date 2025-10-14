@@ -13,4 +13,5 @@ type BaseLabelComponentRequest<TAction extends string, TData> = {
 	data: TData;
 };
 
-export type AddLabelComponent = BaseLabelComponentRequest<'add_label_component', labelComponent>;
+export type AddLabelComponent = BaseLabelComponentRequest<'add_label_component', labelComponent[]>;
+export type UpdateLabelComponent = BaseLabelComponentRequest<'update_label_component', Required<labelComponent>>;

@@ -1,5 +1,5 @@
 import { AddComplianceStandard, DeleteComplianceStandard, UpdateComplianceStandard, UpdateComplianceTabCompletion } from "./compliance-info";
-import { AddLabelComponent } from "./label-components";
+import { AddLabelComponent, UpdateLabelComponent } from "./label-components";
 import { AddUpdateCustomField, DeleteCustomField, UpdateProductInfo, UpdateProductInfoTabCompletion } from "./product-info";
 
 export type UpdateProductDataRequest =
@@ -10,4 +10,6 @@ export type UpdateProductDataRequest =
     | AddComplianceStandard
     | UpdateComplianceStandard
     | DeleteComplianceStandard
-    | UpdateComplianceTabCompletion | AddLabelComponent;
+    | UpdateComplianceTabCompletion 
+    | AddLabelComponent 
+    | UpdateLabelComponent;
