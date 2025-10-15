@@ -16,6 +16,7 @@ import {
 } from './productData/product-info';
 import { UpdateProductDataRequest } from '../../types/products/product-data';
 import { addComplianceStandard, deleteComplianceStandard, updateComplianceStandard, updateComplianceTabCompletion } from './productData/compliance-standard';
+import { addLabelComponent, deleteLabelComponent, updateLabelComponent, updateLabelComponentTabCompletion } from './productData/label-components';
 
 
 const validTabs = [
@@ -143,6 +144,38 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (updateComplianceTabCompletionResult.error) return updateComplianceTabCompletionResult.error;
 
 			({ updateQuery, updatedData, actionLog } = updateComplianceTabCompletionResult);
+
+			break;
+
+		case 'add_label_component':
+			const addLabelComponentResult = addLabelComponent(input.data, input.tab, input.action);
+			if (addLabelComponentResult.error) return addLabelComponentResult.error;
+
+			({ updateQuery, updatedData, actionLog } = addLabelComponentResult);
+
+			break;
+
+		case 'update_label_component':
+			const updateLabelComponentResult = updateLabelComponent(input.data, input.tab, input.action);
+			if (updateLabelComponentResult.error) return updateLabelComponentResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateLabelComponentResult);
+
+			break;
+
+		case 'delete_label_component':
+			const deleteLabelComponentResult = deleteLabelComponent(input.data, input.tab, input.action);
+			if (deleteLabelComponentResult.error) return deleteLabelComponentResult.error;
+
+			({ updateQuery, updatedData, actionLog } = deleteLabelComponentResult);
+
+			break;
+
+		case 'update_label_component_tab_completion':
+			const updateLabelComponentTabCompletionResult = updateLabelComponentTabCompletion(input.data, input.tab, input.action);
+			if (updateLabelComponentTabCompletionResult.error) return updateLabelComponentTabCompletionResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateLabelComponentTabCompletionResult);
 
 			break;
 
