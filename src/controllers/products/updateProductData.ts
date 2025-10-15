@@ -19,6 +19,7 @@ import { addComplianceStandard, deleteComplianceStandard, updateComplianceStanda
 import { addLabelComponent, deleteLabelComponent, updateLabelComponent, updateLabelComponentTabCompletion } from './productData/label-components';
 import { AddSymbolsGraphics, deleteSymbolsGraphics, UpdateSymbolsGraphics, updateSymbolsGraphicsTabCompletion } from './productData/symbols-graphics';
 import { addProductData, deleteProductData, updateProductData, updateProductDataTabCompletion } from './productData/product-data';
+import { addOperationalParameters, deleteOperationalParameters, updateOperationalParameters, updateOperationalParametersTabCompletion } from './productData/operational-parameters';
 
 
 const validTabs = [
@@ -241,6 +242,38 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (updateProductDataTabCompletionResult.error) return updateProductDataTabCompletionResult.error;
 
 			({ updateQuery, updatedData, actionLog } = updateProductDataTabCompletionResult);
+
+			break;
+
+		case 'add_operational_parameters':
+			const addOperationalParametersResult = addOperationalParameters(input.data, input.tab, input.action);
+			if (addOperationalParametersResult.error) return addOperationalParametersResult.error;
+
+			({ updateQuery, updatedData, actionLog } = addOperationalParametersResult);
+
+			break;
+
+		case 'update_operational_parameters':
+			const updateOperationalParametersResult = updateOperationalParameters(input.data, input.tab, input.action);
+			if (updateOperationalParametersResult.error) return updateOperationalParametersResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateOperationalParametersResult);
+
+			break;
+
+		case 'delete_operational_parameters':
+			const deleteOperationalParametersResult = deleteOperationalParameters(input.tab, input.action);
+			if (deleteOperationalParametersResult.error) return deleteOperationalParametersResult.error;
+
+			({ updateQuery, updatedData, actionLog } = deleteOperationalParametersResult);
+
+			break;
+
+		case 'update_operational_parameters_tab_completion':
+			const updateOperationalParametersTabCompletionResult = updateOperationalParametersTabCompletion(input.data, input.tab, input.action);
+			if (updateOperationalParametersTabCompletionResult.error) return updateOperationalParametersTabCompletionResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateOperationalParametersTabCompletionResult);
 
 			break;
 
