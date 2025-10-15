@@ -14,10 +14,11 @@ import {
 	updateProductInformation,
 	updateProductInfoTabCompletion,
 } from './productData/product-info';
-import { UpdateProductDataRequest } from '../../types/products/product-data';
+import { UpdateProductDataRequest } from '../../types/products/all-update-product-data';
 import { addComplianceStandard, deleteComplianceStandard, updateComplianceStandard, updateComplianceTabCompletion } from './productData/compliance-standard';
 import { addLabelComponent, deleteLabelComponent, updateLabelComponent, updateLabelComponentTabCompletion } from './productData/label-components';
 import { AddSymbolsGraphics, deleteSymbolsGraphics, UpdateSymbolsGraphics, updateSymbolsGraphicsTabCompletion } from './productData/symbols-graphics';
+import { addProductData, deleteProductData, updateProductData, updateProductDataTabCompletion } from './productData/product-data';
 
 
 const validTabs = [
@@ -208,6 +209,38 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (updateSymbolsGraphicsTabCompletionResult.error) return updateSymbolsGraphicsTabCompletionResult.error;
 
 			({ updateQuery, updatedData, actionLog } = updateSymbolsGraphicsTabCompletionResult);
+
+			break;
+
+		case 'add_product_data':
+			const addProductDataResult = addProductData(input.data, input.tab, input.action);
+			if (addProductDataResult.error) return addProductDataResult.error;
+
+			({ updateQuery, updatedData, actionLog } = addProductDataResult);
+
+			break;
+
+		case 'update_product_data':
+			const updateProductDataResult = updateProductData(input.data, input.tab, input.action);
+			if (updateProductDataResult.error) return updateProductDataResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateProductDataResult);
+
+			break;
+
+		case 'delete_product_data':
+			const deleteProductDataResult = deleteProductData(input.tab, input.action);
+			if (deleteProductDataResult.error) return deleteProductDataResult.error;
+
+			({ updateQuery, updatedData, actionLog } = deleteProductDataResult);
+
+			break;
+
+		case 'update_product_data_tab_completion':
+			const updateProductDataTabCompletionResult = updateProductDataTabCompletion(input.data, input.tab, input.action);
+			if (updateProductDataTabCompletionResult.error) return updateProductDataTabCompletionResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateProductDataTabCompletionResult);
 
 			break;
 
