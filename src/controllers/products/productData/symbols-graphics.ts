@@ -1,7 +1,7 @@
 import { APIGatewayProxyResult } from "aws-lambda";
 import { SymbolsGraphics, SYMBOLS_GRAPHICS_ENTITIES } from "../../../types/products/symbols-graphics";
 import { ResponseWrapper } from "../../../utils/responseWrapper";
-import { validateAllObjectIds, validateBoolean, validateEnum, validateMissingFields, validateStringArray, validateTab } from "../../../utils/validationUtils";
+import { validateAllObjectIds, validateBoolean, validateEnum, validateMissingFields, validateObjectIds, validateStringArray, validateTab } from "../../../utils/validationUtils";
 import { ObjectId } from "mongodb";
 
 type SymbolsGraphicsReturn = {
@@ -107,5 +107,98 @@ export function UpdateSymbolsGraphics(
 		if(error instanceof Error) return {updateQuery:{}, updatedData: {} as SymbolsGraphics, actionLog: '', error: ResponseWrapper.badRequest(error.message)}
 
 		return {updateQuery:{}, updatedData: {} as SymbolsGraphics, actionLog: '', error: ResponseWrapper.internalServerError('Failed to update symbols and graphics')}
+	}
+}
+
+/**
+ * Handles the deletion of an existing symbols graphics.
+ * @param {SymbolsGraphics} SymbolsGraphicsId - The ID of the symbols graphics to delete.
+ * @param {string} tab - The current tab being updated.
+ * @param {string} action - The action being performed.
+ * @return {SymbolsGraphicsReturn} An object containing the update query and any validation error.
+ */
+export function deleteSymbolsGraphics(
+	SymbolsGraphicsId: SymbolsGraphics & { id: string },
+	tab: string,
+	action: string,
+): SymbolsGraphicsReturn {
+	try {
+		const isValidatedTabSymbolsGraphics = validateTab(tab, 'symbols-graphics', action);
+		if (isValidatedTabSymbolsGraphics) throw new Error(isValidatedTabSymbolsGraphics.body);
+
+		const missingFieldsValidation = validateMissingFields({
+			id: SymbolsGraphicsId.id,
+		});
+		if (missingFieldsValidation) throw new Error(missingFieldsValidation.body);
+
+		const objectIdValidation = validateObjectIds({
+			id: SymbolsGraphicsId.id,
+		});
+
+		if (objectIdValidation) throw new Error(objectIdValidation.body);
+
+		const updateQuery = {
+			$pull: {
+				'symbols_graphics.data': { _id: new ObjectId(SymbolsGraphicsId.id) },
+			},
+		};
+
+		const actionLog = 'DELETE';
+
+		return { updateQuery, updatedData: SymbolsGraphicsId, actionLog, error: null };
+	} catch (error) {
+		if (error instanceof Error)
+			return {
+				updateQuery: {},
+				updatedData: { id: '' },
+				actionLog: '',
+				error: ResponseWrapper.badRequest(error.message),
+			};
+		return {
+			updateQuery: {},
+			updatedData: { id: '' },
+			actionLog: '',
+			error: ResponseWrapper.internalServerError('Failed to delete symbols graphics'),
+		};
+	}
+}
+
+/**
+ * Handles the update of compliance information tab completion status.
+ * @param {UpdateSymbolsGraphicsTabCompletion} inputData - The data object containing the tab completion status.
+ * @param {string} tab - The current tab being updated.
+ * @param {string} action - The action being performed.
+ * @return {SymbolsGraphicsReturn} An object containing the update query, updated data, and any validation error.
+ */
+export function updateSymbolsGraphicsTabCompletion(
+	inputData: { tab_completed: boolean },
+	tab: string,
+	action: string,
+): Omit<SymbolsGraphicsReturn, 'updatedData'> & { updatedData: { tab_completed: boolean } } {
+	try {
+		const isValidatedTabSymbolsGraphics = validateTab(tab, 'symbols-graphics', action);
+		if (isValidatedTabSymbolsGraphics) throw new Error(isValidatedTabSymbolsGraphics.body);
+
+		if (typeof inputData.tab_completed !== 'boolean') throw new Error('tab_completed must be a boolean value.');
+
+		const updateQuery = { $set: { 'symbols_graphics.tab_completed': inputData.tab_completed } };
+		const updatedData = { tab_completed: inputData.tab_completed };
+		const actionLog = 'UPDATE';
+
+		return { updateQuery, updatedData, actionLog, error: null };
+	} catch (error) {
+		if (error instanceof Error)
+			return {
+				updateQuery: {},
+				updatedData: { tab_completed: false },
+				actionLog: '',
+				error: ResponseWrapper.badRequest(error.message),
+			};
+		return {
+			updateQuery: {},
+			updatedData: { tab_completed: false },
+			actionLog: '',
+			error: ResponseWrapper.internalServerError('Failed to update symbols graphics tab completion'),
+		};
 	}
 }
