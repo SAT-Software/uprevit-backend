@@ -72,6 +72,32 @@ export function validateMissingFields(fields: Record<string, string>): APIGatewa
 }
 
 /**
+ * Validates if a value is a boolean.
+ * @param {any} value - The value to validate.
+ * @param {string} fieldName - The name of the field.
+ * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if valid.
+ */
+export function validateBoolean(value: any, fieldName: string): APIGatewayProxyResult | null {
+	if (typeof value !== 'boolean') {
+		return ResponseWrapper.badRequest(`Field '${fieldName}' must be a boolean.`);
+	}
+	return null;
+}
+
+/**
+ * Validates if a value is an array of strings.
+ * @param {any} value - The value to validate.
+ * @param {string} fieldName - The name of the field.
+ * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if valid.
+ */
+export function validateStringArray(value: any, fieldName: string): APIGatewayProxyResult | null {
+	if (!Array.isArray(value) || !value.every(item => typeof item === 'string')) {
+		return ResponseWrapper.badRequest(`Field '${fieldName}' must be an array of strings.`);
+	}
+	return null;
+}
+
+/**
  * Validates enum values
  * @param {string[]} enumValues - Array of valid enum values
  * @param {string} value - Value to validate
