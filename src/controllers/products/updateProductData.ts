@@ -17,6 +17,7 @@ import {
 import { UpdateProductDataRequest } from '../../types/products/product-data';
 import { addComplianceStandard, deleteComplianceStandard, updateComplianceStandard, updateComplianceTabCompletion } from './productData/compliance-standard';
 import { addLabelComponent, deleteLabelComponent, updateLabelComponent, updateLabelComponentTabCompletion } from './productData/label-components';
+import { AddSymbolsGraphics, deleteSymbolsGraphics, UpdateSymbolsGraphics, updateSymbolsGraphicsTabCompletion } from './productData/symbols-graphics';
 
 
 const validTabs = [
@@ -176,6 +177,37 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (updateLabelComponentTabCompletionResult.error) return updateLabelComponentTabCompletionResult.error;
 
 			({ updateQuery, updatedData, actionLog } = updateLabelComponentTabCompletionResult);
+
+			break;
+		case 'add_symbols_graphics':
+			const addSymbolsGraphicsResult = AddSymbolsGraphics(input.data, input.tab, input.action);
+			if (addSymbolsGraphicsResult.error) return addSymbolsGraphicsResult.error;
+
+			({ updateQuery, updatedData, actionLog } = addSymbolsGraphicsResult);
+
+			break;
+
+		case 'update_symbols_graphics':
+			const updateSymbolsGraphicsResult = UpdateSymbolsGraphics(input.data, input.tab, input.action);
+			if (updateSymbolsGraphicsResult.error) return updateSymbolsGraphicsResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateSymbolsGraphicsResult);
+
+			break;
+
+		case 'delete_symbols_graphics':
+			const deleteSymbolsGraphicsResult = deleteSymbolsGraphics(input.data, input.tab, input.action);
+			if (deleteSymbolsGraphicsResult.error) return deleteSymbolsGraphicsResult.error;
+
+			({ updateQuery, updatedData, actionLog } = deleteSymbolsGraphicsResult);
+
+			break;
+
+		case 'update_symbols_graphics_tab_completion':
+			const updateSymbolsGraphicsTabCompletionResult = updateSymbolsGraphicsTabCompletion(input.data, input.tab, input.action);
+			if (updateSymbolsGraphicsTabCompletionResult.error) return updateSymbolsGraphicsTabCompletionResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateSymbolsGraphicsTabCompletionResult);
 
 			break;
 
