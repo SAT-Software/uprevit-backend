@@ -1,22 +1,16 @@
-import { AddComplianceStandard, DeleteComplianceStandard, UpdateComplianceStandard, UpdateComplianceTabCompletion } from "./compliance-info";
-import { AddLabelComponent, DeleteLabelComponent, LabelComponentTabCompletion, UpdateLabelComponent } from "./label-components";
-import { AddUpdateCustomField, DeleteCustomField, UpdateProductInfo, UpdateProductInfoTabCompletion } from "./product-info";
-import { AddSymbolsGraphics, DeleteSymbolsGraphics, SymbolsGraphicsTabCompletion, UpdateSymbolsGraphics } from "./symbols-graphics";
+export interface ProductData {
+    id?: string;
+    workbook_data?: object;
+}
 
-export type UpdateProductDataRequest =
-    | UpdateProductInfo
-    | AddUpdateCustomField
-    | DeleteCustomField
-    | UpdateProductInfoTabCompletion
-    | AddComplianceStandard
-    | UpdateComplianceStandard
-    | DeleteComplianceStandard
-    | UpdateComplianceTabCompletion 
-    | AddLabelComponent 
-    | UpdateLabelComponent
-    | DeleteLabelComponent
-    | LabelComponentTabCompletion
-    | AddSymbolsGraphics
-    | UpdateSymbolsGraphics 
-    | DeleteSymbolsGraphics
-    | SymbolsGraphicsTabCompletion;
+type BaseProductDataRequest<TAction extends string, TData> = {
+    id: string;
+    tab: 'product-data';
+    action: TAction;
+    data: TData;
+};
+
+export type AddProductData = BaseProductDataRequest<'add_product_data', ProductData>;
+export type UpdateProductData = BaseProductDataRequest<'update_product_data', Required<ProductData>>;
+export type DeleteProductData = BaseProductDataRequest<'delete_product_data', {id: string}>;
+export type ProductDataTabCompletion = BaseProductDataRequest<'update_product_data_tab_completion', { tab_completed: boolean }>;
