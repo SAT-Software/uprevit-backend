@@ -27,7 +27,7 @@ export function addLabelTag(
 		if (isValidatedTab) throw new Error(isValidatedTab.body);
 
 		if (!Array.isArray(newLabelTag)) {
-			throw new Error('Data for add_label_component must be an array of label components.');
+			throw new Error('Data for addLabelTag must be an array of label tags.');
 		}
 
 		const componentsWithIds = newLabelTag.map(label => ({
