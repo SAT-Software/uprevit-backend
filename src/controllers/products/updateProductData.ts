@@ -20,6 +20,7 @@ import { addLabelComponent, deleteLabelComponent, updateLabelComponent, updateLa
 import { AddSymbolsGraphics, deleteSymbolsGraphics, UpdateSymbolsGraphics, updateSymbolsGraphicsTabCompletion } from './productData/symbols-graphics';
 import { addProductData, deleteProductData, updateProductData, updateProductDataTabCompletion } from './productData/product-data';
 import { addOperationalParameters, deleteOperationalParameters, updateOperationalParameters, updateOperationalParametersTabCompletion } from './productData/operational-parameters';
+import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion } from './productData/label-tags';
 
 
 const validTabs = [
@@ -274,6 +275,38 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (updateOperationalParametersTabCompletionResult.error) return updateOperationalParametersTabCompletionResult.error;
 
 			({ updateQuery, updatedData, actionLog } = updateOperationalParametersTabCompletionResult);
+
+			break;
+
+		case 'add_label_tags':
+			const addLabelTagResult = addLabelTag(input.data, input.tab, input.action);
+			if (addLabelTagResult.error) return addLabelTagResult.error;
+
+			({ updateQuery, updatedData, actionLog } = addLabelTagResult);
+
+			break;
+
+		case 'update_label_tags':
+			const updateLabelTagResult = updateLabelTag(input.data, input.tab, input.action);
+			if (updateLabelTagResult.error) return updateLabelTagResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateLabelTagResult);
+
+			break;
+
+		case 'delete_label_tags':
+			const deleteLabelTagResult = deleteLabelTag(input.data, input.tab, input.action);
+			if (deleteLabelTagResult.error) return deleteLabelTagResult.error;
+
+			({ updateQuery, updatedData, actionLog } = deleteLabelTagResult);
+
+			break;
+
+		case 'update_label_tags_tab_completion':
+			const updateLabelTagsTabCompletionResult = updateLabelTagsTabCompletion(input.data, input.tab, input.action);
+			if (updateLabelTagsTabCompletionResult.error) return updateLabelTagsTabCompletionResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateLabelTagsTabCompletionResult);
 
 			break;
 
