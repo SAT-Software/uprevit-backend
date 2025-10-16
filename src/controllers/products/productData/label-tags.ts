@@ -35,7 +35,7 @@ export function addLabelTag(
 			_id: new ObjectId(),
 		}));
 
-		const updateQuery = {$push: {'label_tags.data': componentsWithIds}}
+		const updateQuery = { $push: { 'label_tags.data': { $each: componentsWithIds } } }
 		const updatedData = componentsWithIds;
 		const actionLog = 'CREATE';
 
