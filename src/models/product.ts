@@ -60,10 +60,10 @@ export type ExcelData = {
 export type LabelTags = {
 	data: Array<{
 			_id: ObjectId;
-			label_name: string;
-			label_description: string;
-			label_type: string;
-			label_image: boolean;
+			name?: string;
+			description?: string;
+			type?: string;
+			image?: string;
 	}>;
 	tab_completed: boolean;
 };
