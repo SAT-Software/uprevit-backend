@@ -8,12 +8,12 @@ import type { APIGatewayProxyResult } from 'aws-lambda';
  * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if all valid
  */
 export function validateObjectIds(fields: Record<string, ObjectId | string>): APIGatewayProxyResult | null {
-    for (const [fieldName, value] of Object.entries(fields)) {
-        if (!ObjectId.isValid(value)) {
-            return ResponseWrapper.badRequest(`Invalid ${fieldName} format. Must be a valid MongoDB ObjectId.`);
-        }
-    }
-    return null;
+	for (const [fieldName, value] of Object.entries(fields)) {
+		if (!ObjectId.isValid(value)) {
+			return ResponseWrapper.badRequest(`Invalid ${fieldName} format. Must be a valid MongoDB ObjectId.`);
+		}
+	}
+	return null;
 }
 
 /**
@@ -22,17 +22,17 @@ export function validateObjectIds(fields: Record<string, ObjectId | string>): AP
  * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if all valid
  */
 export function validateObjectIdArrays(arrays: Record<string, ObjectId[] | string[]>): APIGatewayProxyResult | null {
-    for (const [fieldName, ids] of Object.entries(arrays)) {
-        if (ids && ids.length > 0) {
-            const invalidIds = ids.filter((id) => !ObjectId.isValid(id));
-            if (invalidIds.length > 0) {
-                return ResponseWrapper.badRequest(
-                    `Invalid ${fieldName} format: ${invalidIds.join(', ')}. Must be valid MongoDB ObjectIds.`,
-                );
-            }
-        }
-    }
-    return null;
+	for (const [fieldName, ids] of Object.entries(arrays)) {
+		if (ids && ids.length > 0) {
+			const invalidIds = ids.filter((id) => !ObjectId.isValid(id));
+			if (invalidIds.length > 0) {
+				return ResponseWrapper.badRequest(
+					`Invalid ${fieldName} format: ${invalidIds.join(', ')}. Must be valid MongoDB ObjectIds.`,
+				);
+			}
+		}
+	}
+	return null;
 }
 
 /**
@@ -42,18 +42,18 @@ export function validateObjectIdArrays(arrays: Record<string, ObjectId[] | strin
  * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if all valid
  */
 export function validateAllObjectIds(
-    singleIds: Record<string, ObjectId | string> = {},
-    arrayIds: Record<string, ObjectId[] | string[]> = {},
+	singleIds: Record<string, ObjectId | string> = {},
+	arrayIds: Record<string, ObjectId[] | string[]> = {},
 ): APIGatewayProxyResult | null {
-    // Validate single ObjectIds
-    const singleValidation = validateObjectIds(singleIds);
-    if (singleValidation) return singleValidation;
+	// Validate single ObjectIds
+	const singleValidation = validateObjectIds(singleIds);
+	if (singleValidation) return singleValidation;
 
-    // Validate ObjectId arrays
-    const arrayValidation = validateObjectIdArrays(arrayIds);
-    if (arrayValidation) return arrayValidation;
+	// Validate ObjectId arrays
+	const arrayValidation = validateObjectIdArrays(arrayIds);
+	if (arrayValidation) return arrayValidation;
 
-    return null;
+	return null;
 }
 
 /**
@@ -62,13 +62,13 @@ export function validateAllObjectIds(
  * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if all valid
  */
 export function validateMissingFields(fields: Record<string, string>): APIGatewayProxyResult | null {
-    for (const [fieldName, value] of Object.entries(fields)) {
-        if (!value) {
-            return ResponseWrapper.badRequest(`Missing required field(s): ${fieldName}`);
-        }
-    }
+	for (const [fieldName, value] of Object.entries(fields)) {
+		if (!value) {
+			return ResponseWrapper.badRequest(`Missing required field(s): ${fieldName}`);
+		}
+	}
 
-    return null;
+	return null;
 }
 
 /**
@@ -104,10 +104,10 @@ export function validateStringArray(value: any, fieldName: string): APIGatewayPr
  * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if all valid
  */
 export function validateEnum(enumValues: string[], value: string): APIGatewayProxyResult | null {
-    if (!enumValues.includes(value)) {
-        return ResponseWrapper.badRequest(`Invalid value. Must be one of: ${enumValues.join(', ')}`);
-    }
-    return null;
+	if (!enumValues.includes(value)) {
+		return ResponseWrapper.badRequest(`Invalid value. Must be one of: ${enumValues.join(', ')}`);
+	}
+	return null;
 }
 
 /**
@@ -118,15 +118,15 @@ export function validateEnum(enumValues: string[], value: string): APIGatewayPro
  * @param {string} prefix - A prefix to add to the field names in the update object
  */
 export function addFieldsToUpdate(
-    updateObject: Record<string, any>,
-    sourceData: Record<string, any>,
-    fields: string[],
+	updateObject: Record<string, any>,
+	sourceData: Record<string, any>,
+	fields: string[],
 ) {
-    for (const field of fields) {
-        if (sourceData[field] !== undefined) {
-            updateObject[`${field}`] = sourceData[field];
-        }
-    }
+	for (const field of fields) {
+		if (sourceData[field] !== undefined) {
+			updateObject[`${field}`] = sourceData[field];
+		}
+	}
 }
 
 /**
@@ -137,10 +137,10 @@ export function addFieldsToUpdate(
  * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if all valid
  */
 export function validateTab(tab: string, expectedTab: string, action: string): APIGatewayProxyResult | null {
-    if (tab !== expectedTab) {
-        return ResponseWrapper.badRequest(`Action ${action} must be used with tab ${expectedTab}`);
-    }
-    return null;
+	if (tab !== expectedTab) {
+		return ResponseWrapper.badRequest(`Action ${action} must be used with tab ${expectedTab}`);
+	}
+	return null;
 }
 
 /**
@@ -151,14 +151,14 @@ export function validateTab(tab: string, expectedTab: string, action: string): A
  * @param {string} prefix - A prefix to add to the field names in the update object
  */
 export function addFieldsToUpdateWithPrefix(
-    updateObject: Record<string, any>,
-    sourceData: Record<string, any>,
-    fields: string[],
-    prefix: string,
+	updateObject: Record<string, any>,
+	sourceData: Record<string, any>,
+	fields: string[],
+	prefix: string,
 ) {
-    for (const field of fields) {
-        if (sourceData[field] !== undefined) {
-            updateObject[`${prefix}.${field}`] = sourceData[field];
-        }
-    }
+	for (const field of fields) {
+		if (sourceData[field] !== undefined) {
+			updateObject[`${prefix}.${field}`] = sourceData[field];
+		}
+	}
 }
