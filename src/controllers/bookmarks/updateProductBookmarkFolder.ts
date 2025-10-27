@@ -3,7 +3,7 @@ import { ResponseWrapper } from "../../utils/responseWrapper";
 import { authenticateRequest } from "../../utils/authUtils";
 import { validateAllObjectIds, validateMissingFields } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
-import { ProductBookmarkFolder, UserBookmarks } from "../../models/bookmarks";
+import { UserBookmarks } from "../../models/bookmarks";
 import { ObjectId } from "mongodb";
 import { updateAuditLog } from "../../utils/auditLog";
 import { AuditLogAction } from "../../models/auditLog";
@@ -18,76 +18,75 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const auth = await authenticateRequest(event);
 		if(!auth.isValid) return auth.error;
 
+		const folderId = event.pathParameters?.folderId;
+		if(!folderId) return ResponseWrapper.badRequest('Folder ID is missing from path parameters.');
+
 		if(!event.body) return ResponseWrapper.badRequest('Request body is missing.');
 
 		const input = JSON.parse(event.body);
 
 		const missingFieldsResult = validateMissingFields({
 			user_id: input.user_id,
-			workspace_id: input.workspace_id,
 			folder_name: input.folder_name,
 		});
 		if (missingFieldsResult) return missingFieldsResult;
 
 		const objectIdValidation = validateAllObjectIds({
 			'user_id': input.user_id,
-			'workspace_id': input.workspace_id
+			'folderId': folderId
 		});
 		if (objectIdValidation) return objectIdValidation
-
 
 		const db = await getDb();
 		const bookmarksCollection = db.collection<UserBookmarks>('bookmarks');
 		const userId = ObjectId.createFromHexString(input.user_id);
-		const workspaceId = ObjectId.createFromHexString(input.workspace_id);
+		const productBookmarkFolderId = ObjectId.createFromHexString(folderId);
 
 		const trimmedFolderName = input.folder_name.trim();
 
-		const existingFolder = await bookmarksCollection.findOne({
+		const existingFolderWithSameName = await bookmarksCollection.findOne({
 			user_id: userId,
-			'product_folders.folder_name': trimmedFolderName,
+			product_folders: {
+				$elemMatch: {
+					folder_name: trimmedFolderName,
+					_id: { $ne: productBookmarkFolderId },
+				},
+			},
 		});
 
-		if (existingFolder) {
+		if (existingFolderWithSameName) {
 			return ResponseWrapper.conflict('A product bookmark folder with the same name already exists.');
 		}
 
-		const newProductBookmarkFolder: ProductBookmarkFolder = {
-			_id: new ObjectId(),
-			folder_name: trimmedFolderName,
-			products: [],
-		};
-
-		await bookmarksCollection.updateOne(
+		const result = await bookmarksCollection.updateOne(
 			{
 				user_id: userId,
+				'product_folders._id': productBookmarkFolderId
 			},
 			{
-				$push: { product_folders: newProductBookmarkFolder },
-				$setOnInsert: {
-					user_id: userId,
-					workspace_id: workspaceId,
-					sourceFile_folders: [],
-				}
-			},
-			{ upsert: true }
+				$set: { 'product_folders.$.folder_name': trimmedFolderName }
+			}
 		);
+
+		if (result.matchedCount === 0) {
+			return ResponseWrapper.notFound('Product bookmark folder not found.');
+		}
 
 		await updateAuditLog({
 			entity: 'product_bookmark_folder',
-			entityId: newProductBookmarkFolder._id.toString(),
-			action: AuditLogAction.CREATE,
+			entityId: folderId,
+			action: AuditLogAction.UPDATE,
 			actionBy: auth.payload?.name?.toString()!,
 			actionAt: new Date(),
 			active: true,
 		});
 
-		return ResponseWrapper.created({
-			message: 'Product bookmark folder created successfully.',
-			folder: newProductBookmarkFolder
+		return ResponseWrapper.success({
+			message: 'Product bookmark folder updated successfully.',
+			result: result
 		});
 	} catch (error) {
-		console.error('Error in creating the product bookmark folder:', error);
-		return ResponseWrapper.internalServerError('An error occurred while creating the product bookmark folder.');
+		console.error('Error in updating the product bookmark folder:', error);
+		return ResponseWrapper.internalServerError(error instanceof Error ? error : 'An unknown error occurred.');
 	}
 }
