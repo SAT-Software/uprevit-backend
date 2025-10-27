@@ -469,7 +469,7 @@ Resources:
   # BOOKMARKS
   # ──────────────────────────────────────────────────────────────────────────
 
-  getAllProductBookmarksFunction:
+  GetAllProductBookmarksFunction:
     Type: AWS::Serverless::Function # More info about Function Resource:
     Properties:
       CodeUri: src/
@@ -486,7 +486,7 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/bookmarks/getAllProductBookmarkFolders.ts]
 
-  createProductBookmarkFunction:
+  CreateProductBookmarkFunction:
     Type: AWS::Serverless::Function # More info about Function Resource:
     Properties:
       CodeUri: src/
@@ -502,6 +502,40 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/bookmarks/createProductBookmarkFolder.ts]
+
+  UpdateProductBookmarkFolderFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource:
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/updateProductBookmarkFolder.lambdaHandler
+      Events:
+        UpdateProductBookmarkFolder:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products/{folderId}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/updateProductBookmarkFolder.ts]
+
+  DeleteProductBookmarkFolderFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource:
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/deleteProductBookmarkFolder.lambdaHandler
+      Events:
+        DeleteProductBookmarkFolder:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products/{folderId}
+            Method: delete
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/deleteProductBookmarkFolder.ts]
 
   GetDashboardStatsFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
