@@ -464,6 +464,45 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/getProductData.ts]
 
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # BOOKMARKS
+  # ──────────────────────────────────────────────────────────────────────────
+
+  getAllProductBookmarksFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource:
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/getAllProductBookmarkFolders.lambdaHandler
+      Events:
+        GetAllProductBookmarks:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/getAllProductBookmarkFolders.ts]
+
+  createProductBookmarkFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource:
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/createProductBookmarkFolder.lambdaHandler
+      Events:
+        CreateProductBookmark:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/createProductBookmarkFolder.ts]
+
   GetDashboardStatsFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
