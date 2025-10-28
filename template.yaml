@@ -554,6 +554,40 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/bookmarks/addProductToBookmarkFolder.ts]
 
+  DeleteProductFromBookmarkFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/deleteProductFromBookmark.lambdaHandler
+      Events:
+        DeleteProductFromBookmark:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products/delete/{folderId}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/deleteProductFromBookmark.ts]
+
+  GetProductsFromBookmarkFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/getProductsFromBookmark.lambdaHandler
+      Events:
+        GetProductsFromBookmark:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products/{folderId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/getProductsFromBookmark.ts]
+
   GetDashboardStatsFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
