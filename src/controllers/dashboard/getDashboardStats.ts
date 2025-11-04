@@ -20,41 +20,41 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 	        return ResponseWrapper.badRequest('Missing required fields: id (workspaceId) is required');
 	    }
 
-			const validationResult = validateAllObjectIds({
-				'_id': workspaceId,
-			});
+		const validationResult = validateAllObjectIds({
+			'_id': workspaceId,
+		});
 			
-			if (validationResult) {
-				return validationResult;
-			}
+		if (validationResult) {
+			return validationResult;
+		}
 
-			const auth = await authenticateRequest(event);
+		const auth = await authenticateRequest(event);
 
-			if (!auth.isValid) {
-				return auth.error;
-			}
+		if (!auth.isValid) {
+			return auth.error;
+		}
 
-			const db = await getDb();
-			const workspaceObjectId = new ObjectId(workspaceId);
+		const db = await getDb();
+		const workspaceObjectId = new ObjectId(workspaceId);
 
-			// Count departments for the workspace
-			const departments = db.collection('departments').countDocuments({
-					workspace_id: workspaceObjectId,
-					isArchived: false,
-			});
+		// Count departments for the workspace
+		const departments = db.collection('departments').countDocuments({
+			workspace_id: workspaceObjectId,
+			isArchived: false,
+		});
 
-			// Get projects for the workspace - get both count and IDs
-			const projectsQuery = db
-				.collection('projects')
-				.find({ 
-						workspace_id: workspaceObjectId,
-						isArchived: false 
-				}, { projection: { _id: 1 } })
-				.toArray();
+		// Get projects for the workspace - get both count and IDs
+		const projectsQuery = db
+			.collection('projects')
+			.find({ 
+				workspace_id: workspaceObjectId,
+				isArchived: false 
+			}, { projection: { _id: 1 } })
+			.toArray();
 			
-			const [totalDepartments, projectsData] = await Promise.all([departments, projectsQuery]);
+		const [totalDepartments, projectsData] = await Promise.all([departments, projectsQuery]);
 
-			const totalProjects = projectsData.length;
+		const totalProjects = projectsData.length;
 	    const projectObjectIds = projectsData.map((project) => project._id);
 
 	    const totalProducts = await db.collection('products').countDocuments({
@@ -66,13 +66,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 	    // TODO: Later on when we implement source files we will need to add the count for source files here
 
 	    return ResponseWrapper.success({
-				message: 'Dashboard statistics retrieved successfully',
-				data: {
-						total_departments: totalDepartments,
-						total_projects: totalProjects,
-						total_products: totalProducts,
-						total_source_files: 50, // TODO: Hardcoding for now, will need to implement later
-				},
+			message: 'Dashboard statistics retrieved successfully',
+			data: {
+				total_departments: totalDepartments,
+				total_projects: totalProjects,
+				total_products: totalProducts,
+				total_source_files: 50, // TODO: Hardcoding for now, will need to implement later
+			},
 	    });
 	} catch (err) {
 	    console.error('Error in Lambda handler:', err);

@@ -76,7 +76,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.conflict('Product plan number already exists');
 		}
 
-		// Set default values
+		// Set default values - use client data if provided, otherwise use defaults
 		const productData = {
 			project_id: projectObjectId,
 			department_id: departmentObjectId,
@@ -88,7 +88,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			actual_completion_date: input.actual_completion_date || null,
 			status: input.status,
 			complete_count: input.complete_count || 0,
-			product_information: {
+			product_information: input.product_information || {
 				data: {
 					_id: new ObjectId(),
 					market_geography: '',
@@ -99,30 +99,30 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				},
 				tab_completed: false,
 			},
-			compliance_information: {
+			compliance_information: input.compliance_information || {
 				data: [],
 				tab_completed: false,
 			},
-			label_components: {
+			label_components: input.label_components || {
 				data: [],
 				tab_completed: false,
 			},
-			symbols_graphics: { data: [], tab_completed: false },
-			product_data: {
+			symbols_graphics: input.symbols_graphics || { data: [], tab_completed: false },
+			product_data: input.product_data || {
 				data: {
 					_id: new ObjectId(),
 					workbook_data: {},
 				},
 				tab_completed: false,
 			},
-			operational_parameters: {
+			operational_parameters: input.operational_parameters || {
 				data: {
 					_id: new ObjectId(),
 					workbook_data: {},
 				},
 				tab_completed: false,
 			},
-			label_tags: {
+			label_tags: input.label_tags || {
 				data: [],
 				tab_completed: false,
 			},

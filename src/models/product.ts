@@ -3,16 +3,27 @@ import { ObjectId } from 'mongodb';
 export type ProductInformation = {
 	data: {
 			_id: ObjectId;
+			product_name: string;
+			product_plan_number: string;
+			product_description: string;
+			status: string;
+			target_date: Date | undefined | null;
+			actual_completion_date: Date | undefined | null;
 			market_geography: string;
 			country_of_origin: string;
 			oem_contract_manufacturer: string;
 			commercial_clinical: string;
 			custom_fields?: Array<{
-					_id: ObjectId;
-					label: string;
-					value: string;
+				_id: ObjectId;
+				label: string;
+				value: string;
 			}>;
 	};
+	custom_fields?: Array<{
+		_id: ObjectId;
+		label: string;
+		value: string;
+	}>;
 	tab_completed: boolean;
 };
 

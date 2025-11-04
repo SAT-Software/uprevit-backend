@@ -5,6 +5,7 @@ import { AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { validateMissingFields } from '../../utils/validationUtils';
 
 /**
  * Update a user
@@ -22,9 +23,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const input: User = JSON.parse(event.body);
 
 		// Validate required fields
-		if (!input.name || !input.email || !input.userType) {
-			return ResponseWrapper.badRequest('Missing required fields: name, email, and userType are required');
-		}
+		const missingFields = validateMissingFields({
+			name: input.name,
+			email: input.email,
+			designation: input.designation,
+			organization: input.organization,
+		});
+
+		if(missingFields) return missingFields;
+
 
 		const db = await getDb();
 
@@ -43,10 +50,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				name: input.name,
 				profileAvatar: input.profileAvatar,
 				designation: input.designation,
+				organization: input.organization,
 				email: input.email,
 				phone: input.phone,
-				confirmed: input.confirmed,
-				userType: input.userType,
+				location: input.location
 			}
 		});
 

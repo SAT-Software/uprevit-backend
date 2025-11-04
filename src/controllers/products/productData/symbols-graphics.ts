@@ -72,20 +72,21 @@ export function UpdateSymbolsGraphics(
         
 		const missingFieldsValidation = validateMissingFields({
 			id: updatedSymbolsGraphics.id,
-			image: updatedSymbolsGraphics.image,
 			text: updatedSymbolsGraphics.text,
-			description: updatedSymbolsGraphics.description,
 		})
 		if(missingFieldsValidation) throw new Error(missingFieldsValidation.body);
-
-		const booleanValidation = validateBoolean(updatedSymbolsGraphics.text_present, 'text_present');
-		if(booleanValidation) throw new Error(booleanValidation.body);
 
 		const stringArrayValidation = validateStringArray(updatedSymbolsGraphics.label_presence, 'label_presence');
 		if(stringArrayValidation) throw new Error(stringArrayValidation.body);
 
 		const enumValidation = validateEnum(SYMBOLS_GRAPHICS_ENTITIES, updatedSymbolsGraphics.entity);
 		if(enumValidation) throw new Error(enumValidation.body);
+
+		// Only validate text_present when entity is "Symbols"
+		if (updatedSymbolsGraphics.entity === 'Symbols') {
+			const booleanValidation = validateBoolean(updatedSymbolsGraphics.text_present, 'text_present');
+			if(booleanValidation) throw new Error(booleanValidation.body);
+		}
 
 		const objectIdValidation =validateAllObjectIds({id: updatedSymbolsGraphics.id})
 		if(objectIdValidation) throw new Error(objectIdValidation.body);
