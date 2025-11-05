@@ -609,6 +609,43 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/dashboard/getDashboardStats.ts]
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # SOURCE FILES
+  # ──────────────────────────────────────────────────────────────────────────
+  CreateSourceFilesFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/sourceFiles/createSourceFilesFolder.lambdaHandler
+      Events:
+        CreateSourceFilesFolder:
+          Type: Api
+          Properties:
+            Path: /source-files/folder
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/sourceFiles/createSourceFilesFolder.ts]
+
+  GetAllSourceFilesFoldersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/sourceFiles/getAllSourceFilesFolders.lambdaHandler
+      Events:
+        GetAllSourceFilesFolders:
+          Type: Api
+          Properties:
+            Path: /source-files/folders
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/sourceFiles/getAllSourceFilesFolders.ts]
+
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
     Properties:
