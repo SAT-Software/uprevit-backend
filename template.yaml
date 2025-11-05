@@ -612,22 +612,22 @@ Resources:
   # ──────────────────────────────────────────────────────────────────────────
   # SOURCE FILES
   # ──────────────────────────────────────────────────────────────────────────
-  CreateSourceFilesFolderFunction:
+  CreateSourceFileAndFolderFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
-      Handler: controllers/sourceFiles/createSourceFilesFolder.lambdaHandler
+      Handler: controllers/sourceFiles/createSourceFileAndFolder.lambdaHandler
       Events:
-        CreateSourceFilesFolder:
+        CreateSourceFileAndFolder:
           Type: Api
           Properties:
-            Path: /source-files/folder
+            Path: /source-files
             Method: post
     Metadata:
       <<: *EsbuildBase
       BuildProperties:
         <<: *EsbuildProps
-        EntryPoints: [controllers/sourceFiles/createSourceFilesFolder.ts]
+        EntryPoints: [controllers/sourceFiles/createSourceFileAndFolder.ts]
 
   GetAllSourceFilesFoldersFunction:
     Type: AWS::Serverless::Function
@@ -638,13 +638,64 @@ Resources:
         GetAllSourceFilesFolders:
           Type: Api
           Properties:
-            Path: /source-files/folders
+            Path: /source-files
             Method: get
     Metadata:
       <<: *EsbuildBase
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/sourceFiles/getAllSourceFilesFolders.ts]
+
+  GetSourceFilesByParentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/sourceFiles/getSourceFilesByParent.lambdaHandler
+      Events:
+        GetSourceFilesByParent:
+          Type: Api
+          Properties:
+            Path: /source-files/folder
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/sourceFiles/getSourceFilesByParent.ts]
+
+  DeleteSourceFileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/sourceFiles/deleteSourceFileAndFolder.lambdaHandler
+      Events:
+        DeleteSourceFileAndFolder:
+          Type: Api
+          Properties:
+            Path: /source-files/{fileId}
+            Method: delete
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/sourceFiles/deleteSourceFileAndFolder.ts]
+
+  UpdateSourceFilesFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/sourceFiles/updateSourceFilesFolder.lambdaHandler
+      Events:
+        UpdateSourceFilesFolder:
+          Type: Api
+          Properties:
+            Path: /source-files/{folderId}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/sourceFiles/updateSourceFilesFolder.ts]
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group

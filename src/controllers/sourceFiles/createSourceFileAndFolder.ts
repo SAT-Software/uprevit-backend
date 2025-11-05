@@ -25,6 +25,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			workspace_id: input.workspace_id,
 			name: input.name,
 			type: input.type,
+			...(input.type === 'file' && { url: input.url })
 		});
 		if (missingFieldsResult) return missingFieldsResult;
 
@@ -42,7 +43,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const workspaceId = ObjectId.createFromHexString(input.workspace_id);
 		const parentId = input.parentId ? ObjectId.createFromHexString(input.parentId) : null;
 
-		const trimmedFolderName = input.name.trim();
+		const trimmedName = input.name.trim();
 
 		if (parentId) {
 			const parentFolder = await sourceFilesCollection.findOne({
@@ -53,29 +54,29 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (!parentFolder) return ResponseWrapper.badRequest('Parent folder not found or is not a folder.');
 		}
 
-		const existingFolder = await sourceFilesCollection.findOne({
+		const existingFileOrFolder = await sourceFilesCollection.findOne({
 			workspace_id: workspaceId,
 			parentId: parentId,
-			name: trimmedFolderName,
-			type: 'folder',
+			name: trimmedName,
 		});
 
-		if (existingFolder) return ResponseWrapper.conflict('A folder with the same name already exists in this location.');
+		if (existingFileOrFolder) return ResponseWrapper.conflict(`A ${existingFileOrFolder.type} with the same name already exists in this location.`);
 
 
-		const newSourceFileFolder: SourceFile = {
+		const newSourceFile: SourceFile = {
 			_id: new ObjectId(),
 			workspace_id: workspaceId,
-			name: trimmedFolderName,
+			name: trimmedName,
 			type: input.type,
 			parentId: parentId,
+			...(input.type === 'file' && {url: input.url})
 		};
 
-		await sourceFilesCollection.insertOne(newSourceFileFolder);
+		await sourceFilesCollection.insertOne(newSourceFile);
 
 		await updateAuditLog({
 			entity: 'SourceFile',
-			entityId: newSourceFileFolder._id.toString(),
+			entityId: newSourceFile._id.toString(),
 			action: AuditLogAction.CREATE,
 			actionBy: auth.payload?.name?.toString()!,
 			actionAt: new Date(),
@@ -83,11 +84,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 
 		return ResponseWrapper.created({
-			message: 'Source file folder created successfully.',
-			folder: newSourceFileFolder
+			message: input.type === 'file'  ? 'Source file created successfully.' : 'Source folder created successfully.',
+			folder: newSourceFile
 		});
 	} catch (error) {
-		console.error('Error in creating the source file folder:', error);
-		return ResponseWrapper.internalServerError('An error occurred while creating the source file folder.');
+		console.error('Error in creating the source file or folder:', error);
+		return ResponseWrapper.internalServerError('An error occurred while creating the source file or folder.');
 	}
 }

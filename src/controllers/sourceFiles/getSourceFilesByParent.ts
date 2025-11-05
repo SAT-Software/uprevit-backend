@@ -18,32 +18,36 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const workspaceId = event.queryStringParameters?.workspaceId;
 		if (!workspaceId) return ResponseWrapper.badRequest('Missing required query parameter: workspace_id');
 
-		const  validateWorkspaceId = validateAllObjectIds({ workspaceId });
-		if (validateWorkspaceId) return validateWorkspaceId;
+		const parentId = event.queryStringParameters?.parentId;
+		if (!parentId) return ResponseWrapper.badRequest('Missing required query parameter: parentId');
+
+		const validationError = validateAllObjectIds({ workspaceId, parentId });
+		if (validationError) return validationError;
 
 		const db = await getDb();
 		const sourceFilesCollection = db.collection<SourceFile>('sourceFiles');
 
-		const sourceFileFolders = await sourceFilesCollection.find({
+		const query: any = {
 			workspace_id: new ObjectId(workspaceId),
-			type: 'folder',
-			parentId: { $eq: null }
-		}).toArray();
+			parentId: new ObjectId(parentId),
+		};
 
-		if(!sourceFileFolders || sourceFileFolders.length === 0) {
+		const sourceFilesAndFolders = await sourceFilesCollection.find(query).toArray();
+
+		if(!sourceFilesAndFolders || sourceFilesAndFolders.length === 0) {
 			return ResponseWrapper.success({
-				message: 'No source file folders found for the given workspace.',
+				message: 'No source files or folders found for the given criteria.',
 				result: []
 			});
 		}
 
 		return ResponseWrapper.success({
-			message: 'Source file folders fetched successfully.',
-			result: sourceFileFolders
+			message: 'Source files and folders fetched successfully.',
+			result: sourceFilesAndFolders
 		})
         
 	} catch (error) {
-		console.error('Error in getAllSourceFilesFolders:', error);
-		return ResponseWrapper.internalServerError(error instanceof Error ? error.message : 'Something went wrong while fetching source file folders.');
+		console.error('Error in getSourceFilesByParent:', error);
+		return ResponseWrapper.internalServerError(error instanceof Error ? error.message : 'Something went wrong while fetching source files and folders.');
 	}
 }
