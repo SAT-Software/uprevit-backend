@@ -588,6 +588,40 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/bookmarks/getProductsFromBookmark.ts]
 
+  GetBookmarkedSourceFileFoldersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/getBookmarkedSourceFileFolders.lambdaHandler
+      Events:
+        GetBookmarkedSourceFileFolders:
+          Type: Api
+          Properties:
+            Path: /bookmarks/source-files
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/getBookmarkedSourceFileFolders.ts]
+
+  ToggleBookmarkSourceFileFoldersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/toggleBookmarkSourceFileFolders.lambdaHandler
+      Events:
+        ToggleBookmarkSourceFileFolders:
+          Type: Api
+          Properties:
+            Path: /bookmarks/source-files
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/toggleBookmarkSourceFileFolders.ts]
+
   # ──────────────────────────────────────────────────────────────────────────
   # DASHBOARD
   # ──────────────────────────────────────────────────────────────────────────
