@@ -663,6 +663,23 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/sourceFiles/getSourceFilesByParent.ts]
 
+  GetCurrentFolderByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/sourceFiles/getCurrentFolderById.lambdaHandler
+      Events:
+        GetCurrentFolderById:
+          Type: Api
+          Properties:
+            Path: /source-files/current-folder
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/sourceFiles/getCurrentFolderById.ts]
+
   DeleteSourceFileFunction:
     Type: AWS::Serverless::Function
     Properties:
