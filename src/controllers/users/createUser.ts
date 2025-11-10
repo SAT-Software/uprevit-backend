@@ -33,8 +33,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			designation: input.designation,
 			email: input.email,
 			phone: input.phone,
-			confirmed: input.confirmed,
 			userType: input.userType,
+			location: '',
+			cognitoSub: '',
+			workspaceId: null,
+			status: 'invited',
 		});
 
 		await updateAuditLog({

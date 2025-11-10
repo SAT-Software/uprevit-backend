@@ -145,6 +145,26 @@ Resources:
         EntryPoints: [controllers/users/deleteUser.ts]
 
   # ──────────────────────────────────────────────────────────────────────────
+  # ONBOARDING
+  # ──────────────────────────────────────────────────────────────────────────
+  AdminOnboardingCreateWorkspaceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/onboarding/adminOnboardingCreateWorkspace.lambdaHandler
+      Events:
+        AdminOnboardingCreateWorkspace:
+          Type: Api
+          Properties:
+            Path: /onboarding/admin/workspace
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/onboarding/adminOnboardingCreateWorkspace.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
   # WORKSPACES
   # ──────────────────────────────────────────────────────────────────────────
   CreateWorkspaceFunction:

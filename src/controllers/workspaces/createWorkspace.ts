@@ -52,8 +52,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			plan: input.plan || '',
 			planName: input.planName || '',
 			planId: input.planId || '',
-			planStart: input.planStart || new Date(),
-			planEnd: input.planEnd || new Date(),
+			planStart: input.planStart || null,
+			planEnd: input.planEnd || null,
 			cost: input.cost || 0,
 			userIds: input.userIds || []
 		});
