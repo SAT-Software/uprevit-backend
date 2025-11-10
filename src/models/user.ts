@@ -4,11 +4,12 @@ export type User = {
 	_id?: ObjectId;
 	name: string;
 	email: string;
-	profileAvatar: string;
-	designation: string;
-	organization: string;
+	profileAvatar?: string;
+	designation?: string;
 	phone?: string;
-	confirmed?: string;
-	userType?: string;
+	userType?: 'user' | 'admin';
 	location?: string;
+	cognitoSub: string;
+	workspaceId: ObjectId | null;
+	status: 'invited' | 'active'
 };
