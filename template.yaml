@@ -144,6 +144,23 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/users/deleteUser.ts]
 
+  GetAllUsersByWorkspaceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/users/getAllUsersByWorkspace.lambdaHandler
+      Events:
+        GetAllUsersByWorkspace:
+          Type: Api
+          Properties:
+            Path: /users/workspace
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/users/getAllUsersByWorkspace.ts]
+
   # ──────────────────────────────────────────────────────────────────────────
   # ONBOARDING
   # ──────────────────────────────────────────────────────────────────────────

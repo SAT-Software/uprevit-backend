@@ -54,7 +54,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			planStart: input.planStart ? new Date(input.planStart) : null,
 			planEnd: input.planEnd ? new Date(input.planEnd) : null,
 			cost: input.cost || 0,
-			userIds: input.userIds || [],
+			userIds: [],
 		});
 
 		const workspaceId = workspace.insertedId
@@ -78,6 +78,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 
 		const userId = user.insertedId
+
+		await db.collection<Workspace>('workspaces').updateOne(
+			{ _id: workspaceId },
+			{ $push: { "userIds": userId } }
+		)
 		
 		await updateAuditLog({
 			entity: 'user',
