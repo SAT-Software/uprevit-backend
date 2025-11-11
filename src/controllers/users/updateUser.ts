@@ -26,8 +26,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const missingFields = validateMissingFields({
 			name: input.name,
 			email: input.email,
-			designation: input.designation,
-			organization: input.organization,
 		});
 
 		if(missingFields) return missingFields;
@@ -49,8 +47,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			$set: {
 				name: input.name,
 				profileAvatar: input.profileAvatar,
-				designation: input.designation,
-				organization: input.organization,
 				email: input.email,
 				phone: input.phone,
 				location: input.location

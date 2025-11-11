@@ -181,6 +181,40 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/onboarding/adminOnboardingCreateWorkspace.ts]
 
+  InviteNewUserByAdminFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/onboarding/InviteNewUserByAdmin.handler
+      Events:
+        InviteNewUserByAdmin:
+          Type: Api
+          Properties:
+            Path: /invites/workspace/{workspaceId}
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/onboarding/InviteNewUserByAdmin.ts]
+
+  OnboardAndUpdateInvitedUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/onboarding/onboardAndUpdateInvitedUser.handler
+      Events:
+        OnboardAndUpdateInvitedUser:
+          Type: Api
+          Properties:
+            Path: /onboarding/user
+            Method: put
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/onboarding/onboardAndUpdateInvitedUser.ts]
+
   # ──────────────────────────────────────────────────────────────────────────
   # WORKSPACES
   # ──────────────────────────────────────────────────────────────────────────

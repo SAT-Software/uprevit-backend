@@ -7,7 +7,7 @@ import { ResponseWrapper } from "../../utils/responseWrapper";
 import { validateMissingFields } from "../../utils/validationUtils";
 import { authenticateRequest } from "../../utils/authUtils";
 import { User } from "../../models/user";
-import { AdminUpdateUserAttributesCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
+import { AdminAddUserToGroupCommand, AdminUpdateUserAttributesCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 
 const cognito = new CognitoIdentityProviderClient();
 
@@ -95,11 +95,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		await cognito.send(new AdminUpdateUserAttributesCommand({
 			UserPoolId: process.env.USER_POOL_ID!,
-			Username: cognitoSub, // or the Cognito username if different
+			Username: input.email,
 			UserAttributes: [
-				{ Name: "custom:dbUserId", Value: userId.toString() },
-				{ Name: "custom:workspace", Value: workspaceId.toString() },
+				{ Name: "custom:userId", Value: userId.toString() },
+				{ Name: "custom:workspaceId", Value: workspaceId.toString() },
 			],
+		}));
+
+		await cognito.send(new AdminAddUserToGroupCommand({
+			UserPoolId: process.env.USER_POOL_ID!, 
+			Username: input.email, 
+			GroupName: "admin",
 		}));
 		
 

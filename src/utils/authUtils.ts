@@ -13,6 +13,7 @@ export type TokenValidationResponse = {
 export type AuthResult = {
   isValid: true;
   payload: CognitoAccessTokenPayload;
+  token: string;
 } | {
   isValid: false;
   error: APIGatewayProxyResult;
@@ -105,7 +106,8 @@ export async function authenticateRequest(event: APIGatewayProxyEvent): Promise<
 
 	return {
 		isValid: true,
-		payload
+		payload,
+		token
 	};
 }
 
@@ -132,8 +134,5 @@ export async function authenticateWithRole(event: APIGatewayProxyEvent, required
 		};
 	}
 
-	return {
-		isValid: true,
-		payload
-	};
+	return authResult;
 }
