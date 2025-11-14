@@ -1,4 +1,3 @@
-arn:aws:iam::940900040930:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_82514e47b9d8cbe8
 
 # .github/workflows/deploy.yml
 
@@ -15,7 +14,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     
-    # These permissions are required for the OIDC flow to work
     permissions:
       id-token: write
       contents: read
@@ -28,8 +26,8 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           # PASTE THE ARN OF THE ROLE YOU CREATED IN AWS HERE
-          role-to-assume: arn:aws:iam::940900040930:role/GitHubActionsSamDeployRole
-          aws-region: us-east-1 # Change to your region
+          role-to-assume: arn:aws:iam::940900040930:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_82514e47b9d8cbe8
+          aws-region: us-east-1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
