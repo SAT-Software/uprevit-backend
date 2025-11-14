@@ -11,5 +11,5 @@ export type User = {
 	location?: string;
 	cognitoSub: string;
 	workspaceId: ObjectId | null;
-	status: 'invited' | 'active'
+	status: 'invited' | 'active' | 'inactive';
 };

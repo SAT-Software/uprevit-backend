@@ -38,7 +38,7 @@ Metadata:
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 15
+    Timeout: 120
     Runtime: nodejs20.x
     Architectures:
       - x86_64
@@ -144,6 +144,23 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/users/deleteUser.ts]
 
+  GetAllUsersByWorkspaceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/users/getAllUsersByWorkspace.lambdaHandler
+      Events:
+        GetAllUsersByWorkspace:
+          Type: Api
+          Properties:
+            Path: /users/workspace
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/users/getAllUsersByWorkspace.ts]
+
   # ──────────────────────────────────────────────────────────────────────────
   # ONBOARDING
   # ──────────────────────────────────────────────────────────────────────────
@@ -163,6 +180,40 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/onboarding/adminOnboardingCreateWorkspace.ts]
+
+  InviteNewUserByAdminFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/onboarding/InviteNewUserByAdmin.handler
+      Events:
+        InviteNewUserByAdmin:
+          Type: Api
+          Properties:
+            Path: /invites/workspace/{workspaceId}
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/onboarding/InviteNewUserByAdmin.ts]
+
+  OnboardAndUpdateInvitedUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/onboarding/onboardAndUpdateInvitedUser.handler
+      Events:
+        OnboardAndUpdateInvitedUser:
+          Type: Api
+          Properties:
+            Path: /onboarding/user
+            Method: put
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/onboarding/onboardAndUpdateInvitedUser.ts]
 
   # ──────────────────────────────────────────────────────────────────────────
   # WORKSPACES

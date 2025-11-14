@@ -38,42 +38,64 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const workspaceObjectId = new ObjectId(workspaceId);
 
 		// Count departments for the workspace
-		const departments = db.collection('departments').countDocuments({
+		const departmentsPromise = db.collection('departments').countDocuments({
 			workspace_id: workspaceObjectId,
 			isArchived: false,
 		});
 
-		// Get projects for the workspace - get both count and IDs
-		const projectsQuery = db
-			.collection('projects')
-			.find({ 
-				workspace_id: workspaceObjectId,
-				isArchived: false 
-			}, { projection: { _id: 1 } })
-			.toArray();
+		const projectAndProductStatsPromise = db.collection('projects').aggregate([
+			{
+				$match: {
+					workspace_id: workspaceObjectId,
+					isArchived: false
+				}
+			},
+			{
+				$lookup: {
+					from: 'products',
+					let: { projectId: '$_id' },
+					pipeline: [
+						{
+							$match: {
+								$expr: { $eq: ['$project_id', '$$projectId'] },
+								status: { $ne: 'archived' }
+							}
+						}
+					],
+					as: 'projectProducts'
+				}
+			},
+			{
+				$group: {
+					_id: null,
+					totalProjects: { $sum: 1 },
+					totalProducts: { $sum: { $size: '$projectProducts' } }
+				}
+			},
+			{
+				$project: {
+					_id: 0,
+					totalProjects: 1,
+					totalProducts: 1
+				}
+			}
+		]).toArray();
 			
-		const [totalDepartments, projectsData] = await Promise.all([departments, projectsQuery]);
+		const [totalDepartments, projectAndProductStats] = await Promise.all([departmentsPromise, projectAndProductStatsPromise]);
 
-		const totalProjects = projectsData.length;
-	    const projectObjectIds = projectsData.map((project) => project._id);
-
-	    const totalProducts = await db.collection('products').countDocuments({
-	        project_id: { $in: projectObjectIds },
-	        status: { $ne: 'archived' },
-	    });
-
+		const stats = projectAndProductStats[0] || { totalProjects: 0, totalProducts: 0 };
 				
-	    // TODO: Later on when we implement source files we will need to add the count for source files here
+		   // TODO: Later on when we implement source files we will need to add the count for source files here
 
-	    return ResponseWrapper.success({
+		   return ResponseWrapper.success({
 			message: 'Dashboard statistics retrieved successfully',
 			data: {
 				total_departments: totalDepartments,
-				total_projects: totalProjects,
-				total_products: totalProducts,
+				total_projects: stats.totalProjects,
+				total_products: stats.totalProducts,
 				total_source_files: 50, // TODO: Hardcoding for now, will need to implement later
 			},
-	    });
+		   });
 	} catch (err) {
 	    console.error('Error in Lambda handler:', err);
 	    return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));

@@ -162,3 +162,21 @@ export function addFieldsToUpdateWithPrefix(
 		}
 	}
 }
+
+/**
+ * Validates if a value is an array of user objects with name and email.
+ * @param {any} value - The value to validate.
+ * @param {string} fieldName - The name of the field.
+ * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if valid.
+ */
+export function validateUserArray(value: any, fieldName: string): APIGatewayProxyResult | null {
+	if (!Array.isArray(value) || !value.every(item => 
+		typeof item === 'object' &&
+    item !== null &&
+    typeof item.name === 'string' &&
+    typeof item.email === 'string'
+	)) {
+		return ResponseWrapper.badRequest(`Field '${fieldName}' must be an array of objects with 'name' and 'email' string properties.`);
+	}
+	return null;
+}
