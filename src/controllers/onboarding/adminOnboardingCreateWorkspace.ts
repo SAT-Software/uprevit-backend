@@ -99,6 +99,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			UserAttributes: [
 				{ Name: "custom:userId", Value: userId.toString() },
 				{ Name: "custom:workspaceId", Value: workspaceId.toString() },
+				{ Name: "custom:status", Value: "active" },
 			],
 		}));
 

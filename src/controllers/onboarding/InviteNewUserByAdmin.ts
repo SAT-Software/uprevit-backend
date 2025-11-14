@@ -6,6 +6,7 @@ import { ObjectId } from "mongodb";
 import { authenticateRequest } from "../../utils/authUtils";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { validateUserArray } from "../../utils/validationUtils";
+import { Workspace } from "../../models/workspace";
 
 const cognito = new CognitoIdentityProviderClient({ region: 'us-east-1' });
 
@@ -60,6 +61,11 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 				};
 				const userResult = await db.collection("users").insertOne(newUserDoc);
 				const dbUserId = userResult.insertedId.toString();
+
+				await db.collection<Workspace>("workspaces").updateOne(
+					{ _id: new ObjectId(workspaceId) },
+					{ $push: { userIds: new ObjectId(dbUserId) } }
+				);
 		      
 				await cognito.send(new AdminUpdateUserAttributesCommand({
 					UserPoolId: process.env.USER_POOL_ID,
@@ -67,6 +73,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 					UserAttributes: [
 						{ Name: "custom:userId", Value: dbUserId },
 						{ Name: "custom:workspaceId", Value: workspaceId },
+						{ Name: "custom:status", Value: "invited" }
 					],
 				}));
 
