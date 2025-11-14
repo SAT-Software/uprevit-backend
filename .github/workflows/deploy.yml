@@ -1,0 +1,51 @@
+arn:aws:iam::940900040930:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_AdministratorAccess_82514e47b9d8cbe8
+
+# .github/workflows/deploy.yml
+
+name: Deploy Backend to AWS
+
+# This workflow runs on any push to the 'main' branch
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    # These permissions are required for the OIDC flow to work
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # PASTE THE ARN OF THE ROLE YOU CREATED IN AWS HERE
+          role-to-assume: arn:aws:iam::940900040930:role/GitHubActionsSamDeployRole
+          aws-region: us-east-1 # Change to your region
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install AWS SAM CLI
+        run: pip install aws-sam-cli
+
+      - name: Build SAM Application
+        run: sam build --use-container
+
+      - name: Deploy SAM Application
+        run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset

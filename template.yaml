@@ -6,18 +6,18 @@ Description: >
   Sample SAM Template for uprevit-backend
 
 Parameters:
-  MONGODB_URI:
+  MongoDbUri:
     Type: String
     Description: "MongoDB connection string URI"
     Default: "mongodb://host.docker.internal:27017"
-  DB_NAME:
+  DbName:
     Type: String
     Description: "MongoDB database name"
     Default: "uprevit"
-  USER_POOL_ID:
+  UserPoolId:
     Type: String
     Description: "The Cognito User Pool ID for token validation"
-  CLIENT_ID:
+  ClientId:
     Type: String
     Description: "The Cognito App Client ID for token validation"
 
@@ -45,10 +45,10 @@ Globals:
     Tracing: Active
     Environment:
       Variables:
-        MONGODB_URI: !Ref MONGODB_URI
-        DB_NAME: !Ref DB_NAME
-        USER_POOL_ID: !Ref USER_POOL_ID
-        CLIENT_ID: !Ref CLIENT_ID
+        MONGODB_URI: !Ref MongoDbUri
+        DB_NAME: !Ref DbName
+        USER_POOL_ID: !Ref UserPoolId
+        CLIENT_ID: !Ref ClientId
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
@@ -169,6 +169,13 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/onboarding/adminOnboardingCreateWorkspace.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminAddUserToGroup
+              Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
       Events:
         AdminOnboardingCreateWorkspace:
           Type: Api
@@ -186,6 +193,14 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/onboarding/InviteNewUserByAdmin.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminAddUserToGroup
+              Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
       Events:
         InviteNewUserByAdmin:
           Type: Api
@@ -794,7 +809,7 @@ Resources:
         DeleteSourceFileAndFolder:
           Type: Api
           Properties:
-            Path: /source-files/{fileId}
+            Path: /source-files/file/{fileId}
             Method: delete
     Metadata:
       <<: *EsbuildBase
@@ -811,7 +826,7 @@ Resources:
         UpdateSourceFilesFolder:
           Type: Api
           Properties:
-            Path: /source-files/{folderId}
+            Path: /source-files/folder/{folderId}
             Method: patch
     Metadata:
       <<: *EsbuildBase
