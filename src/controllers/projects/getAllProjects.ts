@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
+import { ObjectId } from 'mongodb';
 import { Project } from '../../models/project';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { authenticateRequest } from '../../utils/authUtils';
@@ -24,7 +25,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const limit = parseInt(event.queryStringParameters?.limit || '10');
 		const page = parseInt(event.queryStringParameters?.page || '1');
 		const sort = event.queryStringParameters?.sort || 'actionAt';
+		const workspaceId = event.queryStringParameters?.workspaceId;
 		const isArchiveParam = event.queryStringParameters?.isArchive || 'false';
+
+		if (!workspaceId) return ResponseWrapper.badRequest('Workspace ID is required.');
+
 
 		// Validate isArchive parameter
 		if (isArchiveParam !== 'true' && isArchiveParam !== 'false') {
@@ -59,7 +64,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const skip = (page - 1) * limit;
 
 		// filter based on isArchive parameter
-		const filter = isArchive ? { isArchived: true } : { isArchived: { $ne: true } };
+		const filter = isArchive
+			? { isArchived: true, workspace_id: new ObjectId(workspaceId) }
+			: { isArchived: { $ne: true }, workspace_id: new ObjectId(workspaceId) };
 
 		// If sorting by actionAt, use aggregation to join with audit_logs
 		if (sort === 'actionAt') {

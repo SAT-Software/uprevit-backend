@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
+import { ObjectId } from 'mongodb';
 import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { authenticateRequest } from '../../utils/authUtils';
@@ -18,9 +19,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 	   
 		const auth = await authenticateRequest(event);
 
-		if(!auth.isValid) {
-			return auth.error;
-		}
+		if(!auth.isValid) return auth.error;
+
 
 		const db = await getDb();
 
@@ -30,6 +30,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const sort = event.queryStringParameters?.sort || 'product_name';
 		const statusFilter = event.queryStringParameters?.status;
 		const filterParam = event.queryStringParameters?.filter;
+		const workspaceId = event.queryStringParameters?.workspaceId;
 
 		// Validate pagination parameters
 		if (limit < 1 || limit > 100) {
@@ -60,7 +61,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		// Build filter object
 		const filter: any = {};
 
-		// Status filter - default to ['draft', 'submitted'] if not specified
+		if (workspaceId) filter.workspace_id = new ObjectId(workspaceId);
+		
+
 		if (statusFilter) {
 			try {
 				const statusArray = JSON.parse(statusFilter);

@@ -9,11 +9,11 @@ Parameters:
   MongoDbUri:
     Type: String
     Description: "MongoDB connection string URI"
-    Default: "mongodb://host.docker.internal:27017"
+    Default: "mongodb+srv://uprevit-testing:sat272011-uprevit@uprevit-test.bh21hmu.mongodb.net/?retryWrites=true&w=majority&appName=Uprevit-test"
   DbName:
     Type: String
     Description: "MongoDB database name"
-    Default: "uprevit"
+    Default: "uprevit-test"
   UserPoolId:
     Type: String
     Description: "The Cognito User Pool ID for token validation"

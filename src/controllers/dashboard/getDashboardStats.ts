@@ -43,6 +43,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			isArchived: false,
 		});
 
+		const sourceFilesPromise = db.collection('sourceFiles').countDocuments({
+			workspace_id: workspaceObjectId,
+			type: 'file',
+		});
+
 		const projectAndProductStatsPromise = db.collection('projects').aggregate([
 			{
 				$match: {
@@ -81,21 +86,23 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}
 		]).toArray();
 			
-		const [totalDepartments, projectAndProductStats] = await Promise.all([departmentsPromise, projectAndProductStatsPromise]);
+		const [totalDepartments, totalSourceFiles, projectAndProductStats] = await Promise.all([
+			departmentsPromise,
+			sourceFilesPromise,
+			projectAndProductStatsPromise,
+		]);
 
 		const stats = projectAndProductStats[0] || { totalProjects: 0, totalProducts: 0 };
-				
-		   // TODO: Later on when we implement source files we will need to add the count for source files here
 
-		   return ResponseWrapper.success({
+		return ResponseWrapper.success({
 			message: 'Dashboard statistics retrieved successfully',
 			data: {
 				total_departments: totalDepartments,
 				total_projects: stats.totalProjects,
 				total_products: stats.totalProducts,
-				total_source_files: 50, // TODO: Hardcoding for now, will need to implement later
+				total_source_files: totalSourceFiles,
 			},
-		   });
+		});
 	} catch (err) {
 	    console.error('Error in Lambda handler:', err);
 	    return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
