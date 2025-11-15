@@ -16,23 +16,16 @@ import { authenticateRequest } from '../../utils/authUtils';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-					
-		if(!auth.isValid) {
-			return auth.error;
-		}
+		const auth = await authenticateRequest(event);	
+		if(!auth.isValid) return auth.error;
 
-		if (!event.body) {
-			return ResponseWrapper.badRequest('Request body is required');
-		}
+		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
 
-		let input: Product;
-			
-		try {
-			input = JSON.parse(event.body);
-		} catch (error) {
-			return ResponseWrapper.badRequest('Invalid JSON in request body');
-		}
+
+		
+		const input = JSON.parse(event.body);
+		if(!input)return ResponseWrapper.badRequest('Invalid JSON in request body');
+	
 
 		const missingFieldsResult = validateMissingFields({
 			'project_id': input.project_id.toString(),
@@ -43,31 +36,29 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			'master_version': input.master_version,
 		});
 
-		if(missingFieldsResult) {
-			return missingFieldsResult;
-		}
+		if(missingFieldsResult) return missingFieldsResult;
+
 
 		const enumValidation = validateEnum(['draft', 'submitted', 'archived'], input.status);
 				
-		if(enumValidation) {
-			return enumValidation;
-		}
+		if(enumValidation) return enumValidation;
+
 
 		const objectIdValidation = validateObjectIds({
 			'project_id': input.project_id,
 			'department_id': input.department_id!,
+			'workspace_id': input.workspace_id,
 		});
 
-		if(objectIdValidation) {
-			return objectIdValidation;
-		}
+		if(objectIdValidation) return objectIdValidation;
+
 
 		const db = await getDb();
 
 		const projectObjectId = new ObjectId(input.project_id);
-		const departmentObjectId = input.department_id ? new ObjectId(input.department_id) : undefined;
+		const departmentObjectId = new ObjectId(input.department_id);
+		const workspaceObjectId = new ObjectId(input.workspace_id);
 
-		// Check if product_plan_number already exists
 		const existingProduct = await db.collection<Product>('products').findOne({
 			product_plan_number: input.product_plan_number,
 		});
@@ -76,9 +67,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.conflict('Product plan number already exists');
 		}
 
-		// Set default values - use client data if provided, otherwise use defaults
 		const productData = {
 			project_id: projectObjectId,
+			workspace_id: workspaceObjectId,
 			department_id: departmentObjectId,
 			product_plan_number: input.product_plan_number,
 			product_name: input.product_name,
