@@ -24,10 +24,67 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 		const db = await getDb();
 		
-		const department: Department | null = await db.collection<Department>('departments').findOne({ 
-			_id: new ObjectId(event.pathParameters.id),
-			isArchived: { $ne: true }
-		});
+		const departmentData = await db.collection<Department>('departments').aggregate([
+			{
+				$match: {
+					_id: new ObjectId(event.pathParameters.id),
+					isArchived: { $ne: true }
+				}
+			},
+			{
+				$lookup: {
+					from: 'users',
+					localField: 'users',
+					foreignField: '_id',
+					pipeline: [
+						{
+							$project: {
+								_id: 1,
+								name: 1,
+								email: 1,
+								profileAvatar: 1,
+							},
+						},
+					],
+					as: 'users',
+				},
+			},
+			{
+				$lookup: {
+					from: 'audit_log',
+					let: { deptIdString: { $toString: '$_id' } },
+					pipeline: [
+						{
+							$match: {
+								$expr: {
+									$and: [
+										{ $eq: ['$entity', 'department'] },
+										{ $eq: ['$entityId', '$$deptIdString'] },
+										{ $in: ['$action', ['create', 'update']] },
+										{ $eq: ['$active', true] }
+									]
+								}
+							}
+						},
+						{ $sort: { actionAt: -1 } },
+						{
+							$project: {
+								entity: 1,
+								entityId: 1,
+								action: 1,
+								actionBy: 1,
+								actionAt: 1,
+								active: 1
+							}
+						},
+						{ $limit: 2 }
+					],
+					as: 'auditLogs'
+				}
+			}
+		]).toArray();
+
+		const department = departmentData[0];
 
 		if (!department) {
 			return ResponseWrapper.badRequest('Department not found');

@@ -16,23 +16,15 @@ import { authenticateWithRole } from '../../utils/authUtils';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-
 		const auth = await authenticateWithRole(event, 'admin');
-		if(!auth.isValid) {
-			return auth.error;
-		}
+		if(!auth.isValid) return auth.error;
 
-		if (!event.body) {
-			return ResponseWrapper.badRequest('Request body is required');
-		}
 
-		let input: Department;
-		
-		try {
-			input = JSON.parse(event.body!);
-		} catch (error) {
-			return ResponseWrapper.badRequest('Invalid JSON in request body');
-		}
+		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
+
+		const input = JSON.parse(event.body!);
+		if(!input) return ResponseWrapper.badRequest('Invalid JSON in request body');
+	
 
 		const missingFieldsResult = validateMissingFields({
 			'department_name': input.department_name,
@@ -40,10 +32,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			'admin_id': input.admin_id.toString(),
 			'workspace_id': input.workspace_id.toString(),
 		});
+		if (missingFieldsResult) return missingFieldsResult;
 
-		if (missingFieldsResult) {
-			return missingFieldsResult;
-		}
 		
 		const objectIdValidation = validateAllObjectIds({
 			'admin_id': input.admin_id,
@@ -51,17 +41,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}, {
 			'users': input.users,
 		});
-
-		if (objectIdValidation) {
-			return objectIdValidation;
-		}
+		if (objectIdValidation) return objectIdValidation;
 		
 
 		const db = await getDb();
 		
 		const adminObjectId = new ObjectId(input.admin_id);
 		const workspaceObjectId = new ObjectId(input.workspace_id);
-		const userObjectIds = input.users ? input.users.map(userId => new ObjectId(userId)) : [];
+		const userObjectIds = input.users ? input.users.map((userId: string) => new ObjectId(userId)) : [];
 
 		const department = await db.collection<Department>('departments').insertOne({
 			department_name: input.department_name,

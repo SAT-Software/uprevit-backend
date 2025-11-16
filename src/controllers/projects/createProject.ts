@@ -18,21 +18,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 	try {
 		const auth = await authenticateRequest(event);
 
-		if(!auth.isValid) {
-			return auth.error;
-		}
+		if(!auth.isValid) return auth.error;
 
-		if (!event.body) {
-			return ResponseWrapper.badRequest('Request body is required');
-		}
 
-		let input: Project;
-
-		try {
-			input = JSON.parse(event.body!);
-		} catch (error) {
-			return ResponseWrapper.badRequest('Invalid JSON in request body');
-		}
+		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
+	
+		const input = JSON.parse(event.body!);
+		if(!input) return ResponseWrapper.badRequest('Invalid JSON in request body');
+	
 
 		const missingFieldsResult = validateMissingFields({
 			'workspace_id': input.workspace_id.toString(),

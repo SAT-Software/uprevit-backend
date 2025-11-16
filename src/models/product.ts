@@ -81,6 +81,7 @@ export type LabelTags = {
 
 export type Product = {
 	_id?: ObjectId;
+	workspace_id: ObjectId;
 	project_id: ObjectId;
 	department_id?: ObjectId;
 	product_plan_number: string;
