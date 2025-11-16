@@ -60,10 +60,30 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const departments = await db
 			.collection<Department>('departments')
-			.find(filter)
-			.sort(sortObj)
-			.skip(skip)
-			.limit(limit)
+			.aggregate([
+				{ $match: filter },
+				{ $sort: sortObj },
+				{ $skip: skip },
+				{ $limit: limit },
+				{
+					$lookup: {
+						from: 'users',
+						localField: 'users',
+						foreignField: '_id',
+						pipeline: [
+							{
+								$project: {
+									_id: 1,
+									name: 1,
+									email: 1,
+									profileAvatar: 1,
+								},
+							},
+						],
+						as: 'users',
+					},
+				},
+			])
 			.toArray();
 
 		const totalPages = Math.ceil(totalCount / limit);

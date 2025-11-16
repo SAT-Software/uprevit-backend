@@ -1,16 +1,6 @@
 {
-  "name": "uprevit-backend",
-  "version": "1.0.0",
-  "description": "Lambda function-based backend for Uprevit",
-  "main": "app.js",
-  "repository": "https://github.com/awslabs/aws-sam-cli/tree/develop/samcli/local/init/templates/cookiecutter-aws-sam-hello-nodejs",
-  "author": "Uprevit",
-  "license": "MIT",
-  "scripts": {
-    "unit": "jest",
-    "lint": "eslint '*.ts' --quiet --fix",
-    "compile": "tsc",
-    "test": "npm run compile && npm run unit"
+  "scripts":{
+    "start:local": "sam build --cached && AWS_PROFILE=uprevit-amit sam local start-api --parameter-overrides 'MongoDbUri=mongodb+srv://uprevit-testing:sat272011-uprevit@uprevit-test.bh21hmu.mongodb.net/?retryWrites=true&w=majority&appName=Uprevit-test DbName=uprevit-test UserPoolId=us-east-1_mpuQjaoL2 ClientId=7vvr577cmdnbbo1qjv8e0m40nd'"
   },
   "dependencies": {
     "aws-jwt-verify": "^5.1.0",
