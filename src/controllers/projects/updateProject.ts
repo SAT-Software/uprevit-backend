@@ -97,6 +97,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				project_description: input.project_description,
 				project_manager: input.project_manager,
 				admin_id: adminObjectId,
+				image: input.image,
 			}
 		});
 

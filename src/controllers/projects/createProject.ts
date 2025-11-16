@@ -44,6 +44,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			'workspace_id': input.workspace_id,
 			'department_id': input.department_id,
 			'admin_id': input.admin_id,
+		}, {
+			'users': input.users,
 		});
 
 		if(objectIdValidation) {
@@ -55,6 +57,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const workspaceObjectId = new ObjectId(input.workspace_id);
 		const departmentObjectId = new ObjectId(input.department_id);
 		const adminObjectId = new ObjectId(input.admin_id);
+		const userObjectIds = input.users ? input.users.map((userId: string) => new ObjectId(userId)) : [];
 
 		// Check if project_number already exists
 		const existingProject = await db.collection<Project>('projects').findOne({
@@ -74,7 +77,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			project_description: input.project_description,
 			project_manager: input.project_manager,
 			admin_id: adminObjectId,
+			users: userObjectIds,
 			isArchived: false,
+			image: input.image,
 		});
 
 		await updateAuditLog({
