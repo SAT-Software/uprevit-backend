@@ -83,6 +83,39 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 						as: 'users',
 					},
 				},
+				{
+					$lookup: {
+						from: 'audit_log',
+						let: { deptIdString: { $toString: '$_id' } },
+						pipeline: [
+							{
+								$match: {
+									$expr: {
+										$and: [
+											{ $eq: ['$entity', 'department'] },
+											{ $eq: ['$entityId', '$$deptIdString'] },
+											{ $in: ['$action', ['create', 'update']] },
+											{ $eq: ['$active', true] }
+										]
+									}
+								}
+							},
+							{ $sort: { actionAt: -1 } },
+							{
+								$project: {
+									entity: 1,
+									entityId: 1,
+									action: 1,
+									actionBy: 1,
+									actionAt: 1,
+									active: 1
+								}
+							},
+							{ $limit: 2 }
+						],
+						as: 'auditLogs'
+					}
+				},
 			])
 			.toArray();
 

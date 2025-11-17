@@ -1,4 +1,5 @@
 import { ObjectId } from 'mongodb';
+import { AuditLog } from './auditLog';
 
 export type ProductInformation = {
 	data: {
@@ -99,4 +100,5 @@ export type Product = {
 	product_data: ExcelData;
 	operational_parameters: ExcelData;
 	label_tags: LabelTags;
+	auditLogs?: AuditLog[];
 };

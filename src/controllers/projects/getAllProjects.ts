@@ -75,43 +75,54 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				{ $match: filter },
 				{
 					$lookup: {
-						from: 'audit_logs',
-						let: { projectId: { $toString: '$_id' } },
+						from: 'users',
+						localField: 'users',
+						foreignField: '_id',
+						pipeline: [
+							{
+								$project: {
+									_id: 1,
+									name: 1,
+									email: 1,
+									profileAvatar: 1,
+								},
+							},
+						],
+						as: 'users',
+					},
+				},
+				{
+					$lookup: {
+						from: 'audit_log',
+						let: { projectIdString: { $toString: '$_id' } },
 						pipeline: [
 							{
 								$match: {
 									$expr: {
 										$and: [
-											{ $eq: ['$entityId', '$$projectId'] },
 											{ $eq: ['$entity', 'project'] },
-											{ $eq: ['$active', true] },
-										],
-									},
-								},
+											{ $eq: ['$entityId', '$$projectIdString'] },
+											{ $in: ['$action', ['create', 'update']] },
+											{ $eq: ['$active', true] }
+										]
+									}
+								}
 							},
 							{ $sort: { actionAt: -1 } },
-							{ $limit: 1 },
+							{
+								$project: {
+									entity: 1,
+									entityId: 1,
+									action: 1,
+									actionBy: 1,
+									actionAt: 1,
+									active: 1
+								}
+							},
+							{ $limit: 2 }
 						],
-						as: 'latestAuditLog',
-					},
-				},
-				{
-					$addFields: {
-						actionAt: {
-							$ifNull: [
-								{ $arrayElemAt: ['$latestAuditLog.actionAt', 0] },
-								new Date(0), // Default to epoch if no audit log found
-							],
-						},
-					},
-				},
-				{ $sort: { actionAt: -1 } },
-				{ $skip: skip },
-				{ $limit: limit },
-				{
-					$project: {
-						latestAuditLog: 0, // Remove the audit log data from final result
-					},
+						as: 'auditLogs'
+					}
 				},
 			];
 

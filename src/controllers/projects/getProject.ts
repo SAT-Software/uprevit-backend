@@ -25,10 +25,67 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const db = await getDb();
 
-		const project: Project | null = await db.collection<Project>('projects').findOne({
-			_id: new ObjectId(event.pathParameters.id),
-			isArchived: { $ne: true },
-		});
+		const projectData = await db.collection<Project>('projects').aggregate([
+			{
+				$match: {
+					_id: new ObjectId(event.pathParameters.id),
+					isArchived: { $ne: true }
+				}
+			},
+			{
+				$lookup: {
+					from: 'users',
+					localField: 'users',
+					foreignField: '_id',
+					pipeline: [
+						{
+							$project: {
+								_id: 1,
+								name: 1,
+								email: 1,
+								profileAvatar: 1,
+							},
+						},
+					],
+					as: 'users',
+				},
+			},
+			{
+				$lookup: {
+					from: 'audit_log',
+					let: { projectIdString: { $toString: '$_id' } },
+					pipeline: [
+						{
+							$match: {
+								$expr: {
+									$and: [
+										{ $eq: ['$entity', 'project'] },
+										{ $eq: ['$entityId', '$$projectIdString'] },
+										{ $in: ['$action', ['create', 'update']] },
+										{ $eq: ['$active', true] }
+									]
+								}
+							}
+						},
+						{ $sort: { actionAt: -1 } },
+						{
+							$project: {
+								entity: 1,
+								entityId: 1,
+								action: 1,
+								actionBy: 1,
+								actionAt: 1,
+								active: 1
+							}
+						},
+						{ $limit: 2 }
+					],
+					as: 'auditLogs'
+				}
+			}
+		]).toArray();
+
+		const project = projectData[0];
 
 		if (!project) {
 			return ResponseWrapper.notFound('Project not found');
