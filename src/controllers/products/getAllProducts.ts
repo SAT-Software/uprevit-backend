@@ -88,165 +88,84 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			];
 		}
 
-		// If sorting by actionAt, use aggregation to join with audit_logs
+		// Use aggregation pipeline to include audit logs for all products
+		const pipeline: any[] = [
+			{ $match: filter },
+			{
+				$lookup: {
+					from: 'audit_log',
+					let: { productIdString: { $toString: '$_id' } },
+					pipeline: [
+						{
+							$match: {
+								$expr: {
+									$and: [
+										{ $eq: ['$entity', 'product'] },
+										{ $eq: ['$entityId', '$$productIdString'] },
+										{ $in: ['$action', ['create', 'update']] },
+										{ $eq: ['$active', true] }
+									]
+								}
+							}
+						},
+						{ $sort: { actionAt: -1 } },
+						{
+							$project: {
+								entity: 1,
+								entityId: 1,
+								action: 1,
+								actionBy: 1,
+								actionAt: 1,
+								active: 1
+							}
+						},
+						{ $limit: 2 }
+					],
+					as: 'auditLogs'
+				}
+			}
+		];
+
+		// Add sorting based on the sort parameter
 		if (sort === 'actionAt') {
-			// Aggregation pipeline
-			const pipeline = [
-				{ $match: filter },
-				{
-					$lookup: {
-						from: 'audit_logs',
-						let: { productId: { $toString: '$_id' } },
-						pipeline: [
-							{
-								$match: {
-									$expr: {
-										$and: [
-											{ $eq: ['$entityId', '$$productId'] },
-											{ $eq: ['$entity', 'product'] },
-											{ $eq: ['$active', true] },
-										],
-									},
-								},
-							},
-							{ $sort: { actionAt: -1 } },
-							{ $limit: 1 },
-						],
-						as: 'latestAuditLog',
-					},
-				},
-				{
-					$addFields: {
-						actionAt: {
-							$ifNull: [
-								{ $arrayElemAt: ['$latestAuditLog.actionAt', 0] },
-								new Date(0), // Default to epoch if no audit log found
-							],
-						},
-						action: {
-							$ifNull: [{ $arrayElemAt: ['$latestAuditLog.action', 0] }, null],
-						},
-						action_by: {
-							$ifNull: [{ $arrayElemAt: ['$latestAuditLog.actionBy', 0] }, null],
-						},
-					},
-				},
-				{ $sort: { actionAt: -1 } },
-				{ $skip: skip },
-				{ $limit: limit },
-				{
-					$project: {
-						_id: 1,
-						product_plan_number: 1,
-						product_name: 1,
-						project_id: 1,
-						department_id: 1,
-						master_version: 1,
-						status: 1,
-						actionAt: 1,
-						action: 1,
-						action_by: 1,
-						latestAuditLog: 0, // Remove the audit log data from final result
-					},
-				},
-			];
-
-			// Get total count for pagination
-			const countPipeline = [{ $match: filter }, { $count: 'total' }];
-
-			const [products, countResult] = await Promise.all([
-				db.collection<Product>('products').aggregate(pipeline).toArray(),
-				db.collection<Product>('products').aggregate(countPipeline).toArray(),
-			]);
-
-			const totalCount = countResult.length > 0 ? countResult[0].total : 0;
-			const totalPages = Math.ceil(totalCount / limit);
-
-			return ResponseWrapper.success({
-				message: 'Products fetched successfully',
-				result: {
-					products,
-					pagination: {
-						currentPage: page,
-						totalPages,
-						totalCount,
-						limit,
-						hasNextPage: page < totalPages,
-						hasPrevPage: page > 1,
-					},
-				},
-			});
+			// Sort by the first audit log's actionAt
+			pipeline.push({ $sort: { 'auditLogs.0.actionAt': -1 } });
 		} else {
-			// For other sort fields, use regular find with sort
+			// Sort by the specified field
 			const sortObj: { [key: string]: 1 | -1 } = {};
 			sortObj[sort] = 1;
-
-			// Get total count based on filter
-			const totalCount = await db.collection<Product>('products').countDocuments(filter);
-
-			// Get paginated products based on filter
-			const products = await db
-				.collection<Product>('products')
-				.find(filter)
-				.sort(sortObj)
-				.skip(skip)
-				.limit(limit)
-				.toArray();
-
-			// Get audit log data for these products
-			const productIds = products.map((p) => p._id!.toString());
-			const auditLogs = await db
-				.collection('audit_logs')
-				.find({
-					entityId: { $in: productIds },
-					entity: 'product',
-					active: true,
-				})
-				.sort({ actionAt: -1 })
-				.toArray();
-
-			// Create a map of productId to latest audit log
-			const auditLogMap = new Map();
-			auditLogs.forEach((log) => {
-				if (!auditLogMap.has(log.entityId)) {
-					auditLogMap.set(log.entityId, log);
-				}
-			});
-
-			// Add audit log data to products
-			const productsWithAudit = products.map((product) => {
-				const auditLog = auditLogMap.get(product._id!.toString());
-				return {
-					_id: product._id,
-					product_plan_number: product.product_plan_number,
-					product_name: product.product_name,
-					project_id: product.project_id,
-					department_id: product.department_id,
-					master_version: product.master_version,
-					status: product.status,
-					actionAt: auditLog?.actionAt || null,
-					action: auditLog?.action || null,
-					action_by: auditLog?.actionBy || null,
-				};
-			});
-
-			const totalPages = Math.ceil(totalCount / limit);
-
-			return ResponseWrapper.success({
-				message: 'Products fetched successfully',
-				result: {
-					products: productsWithAudit,
-					pagination: {
-						currentPage: page,
-						totalPages,
-						totalCount,
-						limit,
-						hasNextPage: page < totalPages,
-						hasPrevPage: page > 1,
-					},
-				},
-			});
+			pipeline.push({ $sort: sortObj });
 		}
+
+		// Add pagination
+		pipeline.push({ $skip: skip });
+		pipeline.push({ $limit: limit });
+
+		// Get total count for pagination
+		const countPipeline = [{ $match: filter }, { $count: 'total' }];
+
+		const [products, countResult] = await Promise.all([
+			db.collection<Product>('products').aggregate(pipeline).toArray(),
+			db.collection<Product>('products').aggregate(countPipeline).toArray(),
+		]);
+
+		const totalCount = countResult.length > 0 ? countResult[0].total : 0;
+		const totalPages = Math.ceil(totalCount / limit);
+
+		return ResponseWrapper.success({
+			message: 'Products fetched successfully',
+			result: {
+				products,
+				pagination: {
+					currentPage: page,
+					totalPages,
+					totalCount,
+					limit,
+					hasNextPage: page < totalPages,
+					hasPrevPage: page > 1,
+				},
+			},
+		});
 	} catch (err) {
 	    console.error('Error in Lambda handler:', err);
 	    return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));

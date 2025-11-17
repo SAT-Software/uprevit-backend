@@ -86,14 +86,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				{
 					$lookup: {
 						from: 'audit_log',
-						let: { projectIdString: { $toString: '$_id' } },
+						let: { deptIdString: { $toString: '$_id' } },
 						pipeline: [
 							{
 								$match: {
 									$expr: {
 										$and: [
-											{ $eq: ['$entity', 'project'] },
-											{ $eq: ['$entityId', '$$projectIdString'] },
+											{ $eq: ['$entity', 'department'] },
+											{ $eq: ['$entityId', '$$deptIdString'] },
 											{ $in: ['$action', ['create', 'update']] },
 											{ $eq: ['$active', true] }
 										]
