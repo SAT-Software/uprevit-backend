@@ -88,7 +88,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			];
 		}
 
-		// Use aggregation pipeline to include audit logs for all products
 		const pipeline: any[] = [
 			{ $match: filter },
 			{
@@ -122,6 +121,32 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 						{ $limit: 2 }
 					],
 					as: 'auditLogs'
+				}
+			},
+			{
+				$lookup: {
+					from: 'departments',
+					localField: 'department_id',
+					foreignField: '_id',
+					as: 'department',
+					pipeline: [
+						{ 
+							$project: { department_name: 1 }
+						}
+					]
+				}
+			},
+			{
+				$lookup: {
+					from: 'projects',
+					localField: 'project_id',
+					foreignField: '_id',
+					as: 'project',
+					pipeline: [
+						{ 
+							$project: { project_name: 1 }
+						}
+					]
 				}
 			}
 		];
