@@ -8,7 +8,6 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { authenticateRequest } from '../../utils/authUtils';
 
 /**
- * Update a product
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
@@ -16,66 +15,44 @@ import { authenticateRequest } from '../../utils/authUtils';
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const auth = await authenticateRequest(event);
+		if(!auth.isValid) return auth.error;
 
-		if(!auth.isValid) {
-			return auth.error;
-		}
 
 		if (!event.body) {
 			return ResponseWrapper.badRequest('Request body is required');
 		}
 
-		// Extract product ID from path parameters
 		const productId = event.pathParameters?.id;
+		if (!productId) return ResponseWrapper.badRequest('Product ID is required in path parameters');
+		if (!ObjectId.isValid(productId)) return ResponseWrapper.badRequest('Invalid product ID format. Must be a valid MongoDB ObjectId.');
 
-		if (!productId) {
-			return ResponseWrapper.badRequest('Product ID is required in path parameters');
-		}
+	
+		const input = JSON.parse(event.body);
+		
 
-		// Validate ObjectId format
-		if (!ObjectId.isValid(productId)) {
-			return ResponseWrapper.badRequest('Invalid product ID format. Must be a valid MongoDB ObjectId.');
-		}
-
-		let input: any;
-		try {
-			input = JSON.parse(event.body);
-		} catch (error) {
-			return ResponseWrapper.badRequest('Invalid JSON in request body');
-		}
-
-		// Validate required fields for action-based approach
-		if (!input.action) {
-			return ResponseWrapper.badRequest('action field is required');
-		}
-
+		if (!input.action) return ResponseWrapper.badRequest('action field is required');
 		const validActions = ['update-product', 'update-status'];
-		if (!validActions.includes(input.action)) {
-			return ResponseWrapper.badRequest(`Invalid action. Must be one of: ${validActions.join(', ')}`);
-		}
+		if (!validActions.includes(input.action)) return ResponseWrapper.badRequest(`Invalid action. Must be one of: ${validActions.join(', ')}`);
 
-		if (!input.data) {
-			return ResponseWrapper.badRequest('data field is required');
-		}
+
+		if (!input.data) return ResponseWrapper.badRequest('data field is required');
+
 
 		const db = await getDb();
 		const productObjectId = new ObjectId(productId);
 
-		// Find existing product
+
 		const existingProduct = await db.collection<Product>('products').findOne({
 			_id: productObjectId,
 		});
 
-		if (!existingProduct) {
-			return ResponseWrapper.notFound('Product not found');
-		}
+		if (!existingProduct) return ResponseWrapper.notFound('Product not found');
 
-		// Prepare update data based on action
+
 		const updateData: Partial<Product> = {};
 
 		switch (input.action) {
 		case 'update-product':
-			// Update product information fields - check if at least one field is provided
 			const productFields = ['product_name', 'product_description', 'target_date', 'actual_completion_date'];
 			const hasProductFields = productFields.some((field) => input.data[field] !== undefined);
 
@@ -85,7 +62,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				);
 			}
 
-			// Apply all provided fields directly
 			for (const field of productFields) {
 				if (input.data[field] !== undefined) {
 					updateData[field as keyof Product] = input.data[field];
@@ -94,15 +70,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			break;
 
 		case 'update-status':
-			// Handle status updates with business rules
 			const newStatus = input.data.status;
 
-			// Validate status value
 			if (!['draft', 'submitted', 'archived'].includes(newStatus)) {
 				return ResponseWrapper.badRequest('Invalid status. Must be one of: draft, submitted, archived');
 			}
 
-			// Business rules for status transitions
 			if (newStatus === 'submitted' && existingProduct.complete_count !== 100) {
 				return ResponseWrapper.badRequest(
 					'Cannot change status to "submitted" unless complete_count is 100',
@@ -116,7 +89,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest(`Unknown action: ${input.action}`);
 		}
 
-		// Update the product
 		const result = await db
 			.collection<Product>('products')
 			.updateOne({ _id: productObjectId }, { $set: updateData });
@@ -125,7 +97,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.notFound('Product not found');
 		}
 
-		// Log the update action
 		await updateAuditLog({
 			entity: 'product',
 			entityId: productId,
@@ -135,7 +106,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			active: true,
 		});
 
-		// Fetch updated product for response
 		const updatedProduct = await db.collection<Product>('products').findOne({
 			_id: productObjectId,
 		});
