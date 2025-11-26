@@ -77,7 +77,6 @@ export function updateLabelTag(
 			name: updatedLabelTag.name,
 			description: updatedLabelTag.description,
 			type: updatedLabelTag.type,
-			image: updatedLabelTag.image,
 		})
 		if(missingFieldsValidation) throw new Error(missingFieldsValidation.body);
 
