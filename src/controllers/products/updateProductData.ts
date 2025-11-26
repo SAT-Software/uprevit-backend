@@ -332,10 +332,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const updateResult = await db
 			.collection<Product>('products')
 			.updateOne({ _id: new ObjectId(input.id) }, updateQuery, options);
+		
+		console.error('updateResult 🚨', updateResult);
 
 		if (updateResult.modifiedCount === 0) {
 			return ResponseWrapper.notFound(
-				'Custom field not found or already deleted, please check the provided custom field id.',
+				'Product data not modified successfully, please check the data and try again.',
 			);
 		}
 

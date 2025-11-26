@@ -1,6 +1,11 @@
 
 // Base data interfaces
 export interface UpdateProductInformationData {
+    product_name: string;
+    product_plan_number: string;
+    product_description: string;
+    target_date: Date | null;
+    actual_completion_date: Date | null;
     market_geography: string;
     country_of_origin: string;
     oem_contract_manufacturer: string;

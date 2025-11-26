@@ -8,8 +8,8 @@ export type ProductInformation = {
 			product_plan_number: string;
 			product_description: string;
 			status: string;
-			target_date: Date | undefined | null;
-			actual_completion_date: Date | undefined | null;
+			target_date: Date | null;
+			actual_completion_date: Date | null;
 			market_geography: string;
 			country_of_origin: string;
 			oem_contract_manufacturer: string;

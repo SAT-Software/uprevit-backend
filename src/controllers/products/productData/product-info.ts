@@ -32,17 +32,34 @@ export function updateProductInformation(
 			throw new Error(isValidTabUpdateProductInfo.body);
 	
 		const requiredFields = [
+			'product_name',
+			'product_plan_number',
+			'product_description',
+			'target_date',
+			'actual_completion_date',
 			'market_geography',
 			'country_of_origin',
 			'oem_contract_manufacturer',
 			'commercial_clinical',
 		];
 	
-		const productInfoData: Partial<UpdateProductInformationData> = {};
+		const updateSet: Record<string, any> = {};
+
+		for (const field of requiredFields) {
+			if (field in inputData) {
+				let value = (inputData as any)[field];
+
+				// Update nested field
+				updateSet[`product_information.data.${field}`] = value;
+
+				// Update top-level field if applicable
+				if (['product_name', 'product_plan_number', 'product_description', 'target_date', 'actual_completion_date'].includes(field)) {
+					updateSet[field] = value;
+				}
+			}
+		}
 	
-		addFieldsToUpdate(productInfoData, inputData, requiredFields);
-	
-		const updateQuery = { $set: { 'product_information.data': productInfoData } };
+		const updateQuery = { $set: updateSet };
 		const updatedData = inputData;
 		const actionLog = 'UPDATE';
 	
