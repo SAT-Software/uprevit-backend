@@ -5,7 +5,7 @@ import { type AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { validateAllObjectIds } from '../../utils/validationUtils';
+import { validateAllObjectIds, validateBoolean } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
 
 /**
@@ -36,32 +36,42 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const db = await getDb();
 
-		// Check if department exists and is not already archived
+		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
+
+		const input = JSON.parse(event.body!);
+		if(!input) return ResponseWrapper.badRequest('Invalid JSON in request body');
+
+		const isArchived = input.isArchived;
+
+		const isBoolean = validateBoolean(isArchived, 'isArchived');
+		if (isBoolean) return isBoolean;
+
+
 		const departmentRecord: Department | null = await db.collection<Department>('departments').findOne({
 			_id: new ObjectId(event.pathParameters.id),
-			isArchived: { $ne: true },
 		});
 
 		if (!departmentRecord) {
-			return ResponseWrapper.notFound('Department not found or already archived');
+			return ResponseWrapper.notFound('Department not found');
 		}
 
-		// Archive the department instead of deleting it
 		const department = await db.collection<Department>('departments').updateOne(
 			{
 				_id: new ObjectId(event.pathParameters.id),
 			},
 			{
 				$set: {
-					isArchived: true,
+					isArchived: isArchived,
 				},
 			},
 		);
 
+		const action = isArchived ? AuditLogAction.ARCHIVE : AuditLogAction.UNARCHIVE;
+
 		const auditRecord: AuditLog = {
 			entity: 'department',
 			entityId: (event.pathParameters?.id).toString(),
-			action: AuditLogAction.ARCHIVE,
+			action: action,
 			actionBy: auth.payload?.name?.toString()!,
 			actionAt: new Date(),
 			active: true,
@@ -70,7 +80,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		await updateAuditLog(auditRecord);
 
 		return ResponseWrapper.success({
-			message: 'Department archived successfully',
+			message: `Department ${isArchived ? 'archived' : 'restored'} successfully`,
 			department: department,
 		});
 	} catch (err) {

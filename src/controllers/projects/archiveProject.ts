@@ -6,6 +6,7 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { authenticateRequest } from '../../utils/authUtils';
+import { validateBoolean } from '../../utils/validationUtils';
 
 /**
  * Archive a project
@@ -31,39 +32,48 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const db = await getDb();
 
-		// Check if project exists and is not already archived
+		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
+
+		const input = JSON.parse(event.body!);
+		if(!input) return ResponseWrapper.badRequest('Invalid JSON in request body');
+
+		const isArchived = input.isArchived;
+
+		const isBoolean = validateBoolean(isArchived, 'isArchived');
+		if (isBoolean) return isBoolean;
+
 		const projectRecord: Project | null = await db.collection<Project>('projects').findOne({
 			_id: new ObjectId(event.pathParameters.id),
-			isArchived: { $ne: true },
 		});
 
 		if (!projectRecord) {
-			return ResponseWrapper.notFound('Project not found or already archived');
+			return ResponseWrapper.notFound('Project not found');
 		}
 
-		// Archive the project instead of deleting it
 		const project = await db.collection<Project>('projects').updateOne(
 			{
 				_id: new ObjectId(event.pathParameters.id),
 			},
 			{
 				$set: {
-					isArchived: true,
+					isArchived: isArchived,
 				},
 			},
 		);
 
+		const action = isArchived ? AuditLogAction.ARCHIVE : AuditLogAction.UNARCHIVE;
+
 		await updateAuditLog({
 			entity: 'project',
 			entityId: event.pathParameters.id,
-			action: AuditLogAction.ARCHIVE,
+			action: action,
 			actionBy: auth.payload?.name?.toString()!,
 			actionAt: new Date(),
 			active: true,
 		});
 
 		return ResponseWrapper.success({
-			message: 'Project archived successfully',
+			message: `Project ${isArchived ? 'archived' : 'restored'} successfully`,
 			project: project,
 		});
 	} catch (err) {
