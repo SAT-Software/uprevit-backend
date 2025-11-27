@@ -37,15 +37,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const auth = await authenticateRequest(event);
 		if(!auth.isValid) return auth.error;
 
-		const fileId = event.pathParameters?.fileId;
-		if (!fileId) return ResponseWrapper.badRequest('Missing required path parameter: fileId');
+		const id = event.pathParameters?.id;
+		if (!id) return ResponseWrapper.badRequest('Missing required path parameter: id');
 
-		const  validateFileId = validateAllObjectIds({ fileId });
-		if (validateFileId) return validateFileId;
+		const validateId = validateAllObjectIds({ id });
+		if (validateId) return validateId;
 
 		const db = await getDb();
 		const sourceFilesCollection = db.collection<SourceFile>('sourceFiles');
-		const fileObjectId = new ObjectId(fileId);
+		const fileObjectId = new ObjectId(id);
 
 		const fileOrFolder = await sourceFilesCollection.findOne({ _id: fileObjectId });
 		if (!fileOrFolder) {
@@ -64,7 +64,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		await updateAuditLog({
 			entity: 'SourceFile',
-			entityId: fileId,
+			entityId: id,
 			action: AuditLogAction.DELETE,
 			actionBy: auth.payload?.name?.toString()!,
 			actionAt: new Date(),

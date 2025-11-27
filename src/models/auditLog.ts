@@ -9,6 +9,7 @@ export enum AuditLogAction {
 	UPDATE = 'update',
 	DELETE = 'delete',
 	ARCHIVE = 'archive',
+	UNARCHIVE = 'unarchive',
 }
 
 export type AuditLog = {

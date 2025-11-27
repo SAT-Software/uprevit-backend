@@ -48,8 +48,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				name: input.name,
 				profileAvatar: input.profileAvatar,
 				email: input.email,
+				designation: input.designation || '',
 				phone: input.phone,
-				location: input.location
+				location: input.location || '',
 			}
 		});
 

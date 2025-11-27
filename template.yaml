@@ -809,7 +809,7 @@ Resources:
         DeleteSourceFileAndFolder:
           Type: Api
           Properties:
-            Path: /source-files/file/{fileId}
+            Path: /source-files/{id}
             Method: delete
     Metadata:
       <<: *EsbuildBase

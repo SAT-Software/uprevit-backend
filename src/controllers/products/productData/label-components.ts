@@ -76,7 +76,6 @@ export function updateLabelComponent(
 
 		const missingFieldsValidation = validateMissingFields({
 			id: updatedLabelComponent.id,
-			image: updatedLabelComponent.image,
 			name: updatedLabelComponent.name,
 			number: updatedLabelComponent.number,
 			specification_details: updatedLabelComponent.specification_details,
