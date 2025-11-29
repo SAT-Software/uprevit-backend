@@ -53,12 +53,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		switch (input.action) {
 		case 'update-product':
-			const productFields = ['product_name', 'product_description', 'target_date', 'actual_completion_date'];
+			const productFields = ['product_name', 'product_description', 'target_date', 'actual_completion_date', 'complete_count'];
 			const hasProductFields = productFields.some((field) => input.data[field] !== undefined);
 
 			if (!hasProductFields) {
 				return ResponseWrapper.badRequest(
-					'At least one product field is required: product_name, product_description, target_date, or actual_completion_date',
+					'At least one product field is required: product_name, product_description, target_date, complete_count or actual_completion_date',
 				);
 			}
 

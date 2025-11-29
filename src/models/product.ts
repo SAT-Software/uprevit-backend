@@ -40,10 +40,12 @@ export type ComplianceInformation = {
 export type LabelComponents = {
 	data: Array<{
 			_id: ObjectId;
-			component_image: string;
-			component_name: string;
+			image?: string | null;
+			dimensions?: string;
+			label_type?: string[];
 			component_number: string;
-			specification_details: string;
+			component_type: string;
+			component_description: string;
 	}>;
 	tab_completed: boolean;
 };
