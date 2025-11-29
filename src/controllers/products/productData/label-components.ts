@@ -66,7 +66,7 @@ export function addLabelComponent(
  * @return {LabelComponentReturn} An object containing the update query, updated data, and any validation error.
  */
 export function updateLabelComponent(
-	updatedLabelComponent: Required<labelComponent>,
+	updatedLabelComponent: labelComponent & { id: string },
 	tab: string,
 	action: string,
 ): LabelComponentReturn {
@@ -76,9 +76,9 @@ export function updateLabelComponent(
 
 		const missingFieldsValidation = validateMissingFields({
 			id: updatedLabelComponent.id,
-			name: updatedLabelComponent.name,
-			number: updatedLabelComponent.number,
-			specification_details: updatedLabelComponent.specification_details,
+			component_number: updatedLabelComponent.component_number as string,
+			component_type: updatedLabelComponent.component_type as string,
+			component_description: updatedLabelComponent.component_description as string,
 		});
 		if (missingFieldsValidation) throw new Error(missingFieldsValidation.body);
 
@@ -90,9 +90,11 @@ export function updateLabelComponent(
 		const updateQuery = {
 			$set: {
 				'label_components.data.$[elem].image': updatedLabelComponent.image,
-				'label_components.data.$[elem].name': updatedLabelComponent.name,
-				'label_components.data.$[elem].number': updatedLabelComponent.number,
-				'label_components.data.$[elem].specification_details': updatedLabelComponent.specification_details,
+				'label_components.data.$[elem].dimensions': updatedLabelComponent.dimensions,
+				'label_components.data.$[elem].label_type': updatedLabelComponent.label_type,
+				'label_components.data.$[elem].component_number': updatedLabelComponent.component_number,
+				'label_components.data.$[elem].component_type': updatedLabelComponent.component_type,
+				'label_components.data.$[elem].component_description': updatedLabelComponent.component_description,
 			},
 			arrayFilters: [{ 'elem._id': new ObjectId(updatedLabelComponent.id) }],
 		};
@@ -159,13 +161,13 @@ export function deleteLabelComponent(
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
-				updatedData: {},
+				updatedData: {} as labelComponent,
 				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
-			updatedData: {},
+			updatedData: {} as labelComponent,
 			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update label component'),
 		};
