@@ -59,14 +59,53 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const db = await getDb();
 		const productObjectId = new ObjectId(productId);
 
-		// Find the product
-		const product = await db.collection<Product>('products').findOne({
-			_id: productObjectId,
-		});
+		// Build aggregation pipeline with audit log lookup
+		const pipeline = [
+			{ $match: { _id: productObjectId } },
+			{
+				$lookup: {
+					from: 'audit_log',
+					let: { productIdString: { $toString: '$_id' } },
+					pipeline: [
+						{
+							$match: {
+								$expr: {
+									$and: [
+										{ $eq: ['$entity', 'product'] },
+										{ $eq: ['$entityId', '$$productIdString'] },
+										{ $in: ['$action', ['create', 'update']] },
+										{ $eq: ['$active', true] }
+									]
+								}
+							}
+						},
+						{ $sort: { actionAt: -1 } },
+						{
+							$project: {
+								entity: 1,
+								entityId: 1,
+								action: 1,
+								actionBy: 1,
+								actionAt: 1,
+								active: 1
+							}
+						},
+						{ $limit: 2 }
+					],
+					as: 'auditLogs'
+				}
+			}
+		];
+
+		// Find the product with audit logs
+		const products = await db.collection<Product>('products').aggregate(pipeline).toArray();
+		const product = products[0] as Product & { auditLogs: any[] };
 
 		if (!product) {
 			return ResponseWrapper.notFound('Product not found');
 		}
+
+		const auditLogs = product.auditLogs || [];
 
 		// Handle all-tabs case separately to maintain type safety
 		if (tab === 'all-tabs') {
@@ -111,7 +150,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				message: 'Product data fetched successfully',
 				result: {
 					tab: tab,
-					data: allTabsData,
+					data: {...allTabsData, auditLogs},
 				},
 			});
 		}
@@ -122,7 +161,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		switch (tab) {
 		case 'product-information':
 			tabData = {
-				data: { ...product.product_information.data,product_name: product.product_name, product_plan_number: product.product_plan_number, product_description: product.product_description, status: product.status, target_date: product.target_date, actual_completion_date: product.actual_completion_date, custom_fields: product.product_information.custom_fields },
+				data: { ...product.product_information.data,product_name: product.product_name, product_plan_number: product.product_plan_number, product_description: product.product_description, status: product.status, target_date: product.target_date ?? null, actual_completion_date: product.actual_completion_date ?? null, custom_fields: product.product_information.custom_fields },
 				tab_completed: product.product_information.tab_completed,
 			};
 			break;
@@ -183,7 +222,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			message: 'Product data fetched successfully',
 			result: {
 				tab: tab,
-				data: tabData,
+				data: {...tabData, auditLogs},
 			},
 		});
 	} catch (err) {
