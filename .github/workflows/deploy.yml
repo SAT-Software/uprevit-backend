@@ -46,4 +46,4 @@ jobs:
         run: sam build --use-container
 
       - name: Deploy SAM Application
-        run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --disable-rollback
+        run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
