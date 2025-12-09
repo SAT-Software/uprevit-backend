@@ -111,7 +111,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (tab === 'all-tabs') {
 			const allTabsData = {
 				product_information: {
-					data: { ...product.product_information.data },
+					data: { ...product.product_information.data, product_name: product.product_name, product_plan_number: product.product_plan_number, product_description: product.product_description, status: product.status, target_date: product.target_date ?? null, actual_completion_date: product.actual_completion_date ?? null, custom_fields: product.product_information.custom_fields, complete_count: product.complete_count, master_version: product.master_version },
 					tab_completed: product.product_information.tab_completed,
 				},
 				compliance_information: {
@@ -161,7 +161,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		switch (tab) {
 		case 'product-information':
 			tabData = {
-				data: { ...product.product_information.data,product_name: product.product_name, product_plan_number: product.product_plan_number, product_description: product.product_description, status: product.status, target_date: product.target_date ?? null, actual_completion_date: product.actual_completion_date ?? null, custom_fields: product.product_information.custom_fields },
+				data: { ...product.product_information.data,product_name: product.product_name, product_plan_number: product.product_plan_number, product_description: product.product_description, status: product.status, target_date: product.target_date ?? null, actual_completion_date: product.actual_completion_date ?? null, custom_fields: product.product_information.custom_fields, complete_count: product.complete_count, master_version: product.master_version },
 				tab_completed: product.product_information.tab_completed,
 			};
 			break;
