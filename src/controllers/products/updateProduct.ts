@@ -22,7 +22,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Request body is required');
 		}
 
-		const productId = event.pathParameters?.id;
+		const productId = event.pathParameters?.productId;
 		if (!productId) return ResponseWrapper.badRequest('Product ID is required in path parameters');
 		if (!ObjectId.isValid(productId)) return ResponseWrapper.badRequest('Invalid product ID format. Must be a valid MongoDB ObjectId.');
 
