@@ -58,7 +58,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 								product_name: "$$product.product_name",
 								product_description: "$$product.product_description",
 								status: "$$product.status",
-								master_version: "$$product.master_version",
+								version: "$$product.version",
 								folder_name: "$product_folders.folder_name",
 							},
 						},

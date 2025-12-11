@@ -28,6 +28,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const limit = parseInt(event.queryStringParameters?.limit || '10');
 		const page = parseInt(event.queryStringParameters?.page || '1');
 		const sort = event.queryStringParameters?.sort || 'product_name';
+		const isLatest = event.queryStringParameters?.isLatest || 'true';
 		const statusFilter = event.queryStringParameters?.status;
 		const filterParam = event.queryStringParameters?.filter;
 		const workspaceId = event.queryStringParameters?.workspaceId;
@@ -46,7 +47,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			'product_name',
 			'product_plan_number',
 			'product_description',
-			'master_version',
+			'version',
 			'status',
 			'target_date',
 			'actionAt',
@@ -86,6 +87,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				{ product_plan_number: { $regex: filterParam, $options: 'i' } },
 				{ product_description: { $regex: filterParam, $options: 'i' } },
 			];
+		}
+
+		// Filter for isLatest
+		if (isLatest) {
+			filter.is_latest = true;
 		}
 
 		const pipeline: any[] = [
