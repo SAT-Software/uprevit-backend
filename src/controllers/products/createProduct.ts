@@ -21,8 +21,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
 
-
-		
 		const input = JSON.parse(event.body);
 		if(!input)return ResponseWrapper.badRequest('Invalid JSON in request body');
 	
@@ -33,7 +31,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			'product_name': input.product_name,
 			'product_description': input.product_description,
 			'status': input.status,
-			'master_version': input.master_version,
+			'version': input.version,
 		});
 
 		if(missingFieldsResult) return missingFieldsResult;
@@ -61,6 +59,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const existingProduct = await db.collection<Product>('products').findOne({
 			product_plan_number: input.product_plan_number,
+			parent_id: { $exists: false }
 		});
 
 		if (existingProduct) {
@@ -74,7 +73,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product_plan_number: input.product_plan_number,
 			product_name: input.product_name,
 			product_description: input.product_description,
-			master_version: input.master_version,
+			version: input.version,
+			is_latest: true,
+			parent_id: null,
 			target_date: input.target_date || null,
 			actual_completion_date: input.actual_completion_date || null,
 			status: input.status,

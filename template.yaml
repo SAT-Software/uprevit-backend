@@ -550,6 +550,39 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/getProductData.ts]
 
+  CreateProductVersionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/createProductVersion.lambdaHandler
+      Events:
+        CreateProductVersion:
+          Type: Api
+          Properties:
+            Path: /products/{productId}/version
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/createProductVersion.ts]
+
+  GetAllProductVersionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getAllProductVersions.lambdaHandler
+      Events:
+        GetAllProductVersions:
+          Type: Api
+          Properties:
+            Path: /products/versions
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getAllProductVersions.ts]
 
   # ──────────────────────────────────────────────────────────────────────────
   # BOOKMARKS

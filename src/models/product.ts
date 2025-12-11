@@ -1,27 +1,38 @@
 import { ObjectId } from 'mongodb';
 import { AuditLog } from './auditLog';
 
-export type ProductInformation = {
+export type ProductData ={
 	data: {
-			_id: ObjectId;
-			product_name: string;
+			_id?: ObjectId;
+			workspace_id: ObjectId;
+			project_id: ObjectId;
+			department_id?: ObjectId;
 			product_plan_number: string;
+			product_name: string;
 			product_description: string;
-			status: string;
-			target_date: Date | null;
-			actual_completion_date: Date | null;
+			version: number;
+			is_latest: boolean;
+			parent_id?: ObjectId | null;
+			target_date?: Date | null;
+			actual_completion_date?: Date | null;
+			status: 'draft' | 'submitted' | 'archived';
+			complete_count?: number;
+		}
+}
+
+export type ProductInformation = {
+	product_data: ProductData,
+	data: {
 			market_geography: string;
 			country_of_origin: string;
 			oem_contract_manufacturer: string;
 			commercial_clinical: string;
-			complete_count?: number;
-			master_version: string;
 			custom_fields?: Array<{
 				_id: ObjectId;
 				label: string;
 				value: string;
 			}>;
-	};
+		};
 	custom_fields?: Array<{
 		_id: ObjectId;
 		label: string;
@@ -31,6 +42,7 @@ export type ProductInformation = {
 };
 
 export type ComplianceInformation = {
+	product_data: ProductData,
 	data: Array<{
 			_id: ObjectId;
 			standard: string;
@@ -40,6 +52,7 @@ export type ComplianceInformation = {
 };
 
 export type LabelComponents = {
+	product_data: ProductData,
 	data: Array<{
 			_id: ObjectId;
 			image?: string | null;
@@ -53,6 +66,7 @@ export type LabelComponents = {
 };
 
 export type SymbolsGraphics = {
+	product_data: ProductData,
 	data: Array<{
 			_id: ObjectId;
 			image: string;
@@ -66,6 +80,7 @@ export type SymbolsGraphics = {
 };
 
 export type ExcelData = {
+	product_data: ProductData,
 	data: {
 			_id: ObjectId;
 			workbook_data: {};
@@ -74,6 +89,7 @@ export type ExcelData = {
 };
 
 export type LabelTags = {
+	product_data: ProductData,
 	data: Array<{
 			_id: ObjectId;
 			name?: string;
@@ -92,7 +108,9 @@ export type Product = {
 	product_plan_number: string;
 	product_name: string;
 	product_description: string;
-	master_version: string;
+	version: number;
+	is_latest: boolean;
+	parent_id?: ObjectId | null;
 	target_date?: Date | null;
 	actual_completion_date?: Date | null;
 	status: 'draft' | 'submitted' | 'archived';
