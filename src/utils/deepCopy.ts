@@ -37,7 +37,11 @@ export function deepCopyWithFreshIds<T>(obj: T): T {
 			const value = (obj as Record<string, unknown>)[key];
 
 			if (key === '_id') {
+				const parentId = value instanceof ObjectId ? value.toString() : value;
+				copy['parent_id'] = parentId;
 				copy[key] = new ObjectId();
+			} else if (key === 'parent_id') {
+				continue;
 			} else if (REFERENCE_FIELDS.includes(key)) {
 				copy[key] = value;
 			} else {
