@@ -1,12 +1,15 @@
 {
-  "scripts":{
+  "scripts": {
     "start:local": "sam build --cached && AWS_PROFILE=uprevit-amit sam local start-api --parameter-overrides 'MongoDbUri=mongodb+srv://uprevit-testing:sat272011-uprevit@uprevit-test.bh21hmu.mongodb.net/?retryWrites=true&w=majority&appName=Uprevit-test DbName=uprevit-test UserPoolId=us-east-1_mpuQjaoL2 ClientId=7vvr577cmdnbbo1qjv8e0m40nd'"
   },
   "dependencies": {
-    "aws-jwt-verify": "^5.1.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.679.0",
+    "aws-jwt-verify": "^5.1.0",
+    "core-js": "^3.47.0",
     "esbuild": "^0.14.14",
-    "mongodb": "^6.17.0"
+    "exceljs": "^4.4.0",
+    "mongodb": "^6.17.0",
+    "regenerator-runtime": "^0.14.1"
   },
   "devDependencies": {
     "@jest/globals": "^29.2.0",
