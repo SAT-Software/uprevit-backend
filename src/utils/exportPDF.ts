@@ -1,5 +1,6 @@
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { Product } from "../models/product";
+import transformUniverExcelData from "./transformUniverExcelData";
 
 const PAGE_WIDTH = 842;
 const PAGE_HEIGHT = 595;
@@ -107,6 +108,133 @@ export async function generateProductPDFExport(productData: Product) {
         drawTable('Product Information', 
             [{ label: 'Field', widthPct: 0.3 }, { label: 'Value', widthPct: 0.7 }], 
             infoRows
+        );
+
+        // 2. Compliance
+        const complianceRows = (productData.compliance_information?.data || []).map((item: any) => [
+            item.standard, item.standard_description
+        ]);
+        drawTable('Compliance Information', 
+            [{ label: 'Standard', widthPct: 0.3 }, { label: 'Description', widthPct: 0.7 }], 
+            complianceRows
+        );
+
+        // 3. Label Components
+        const labelComponentsRows = (productData.label_components?.data || []).map((item: any) => [
+            item.component_number, item.image, item.component_description, item.label_type?.toString(), item.dimensions, item.component_type?.toString()
+        ]);
+        drawTable('Label Components',
+            [
+                { label: 'Component Number', widthPct: 0.15 },
+                { label: 'Image', widthPct: 0.15 },
+                { label: 'Component Description', widthPct: 0.35 },
+                { label: 'Label Type', widthPct: 0.15 },
+                { label: 'Dimensions', widthPct: 0.10 },
+                { label: 'Component Type', widthPct: 0.10 },
+            ],
+            labelComponentsRows
+        );
+
+        // 4. Symbols and Graphics - Symbols
+        const symbolsRows = (productData.symbols_graphics.data.filter(data => data.entity === 'Symbols') || []).map((item: any) => [
+            item.text, item.image, item.entity, item.text_present, item.label_presence
+        ]);
+        drawTable('Symbols',
+            [
+                { label: 'Text', widthPct: 0.15 },
+                { label: 'Image', widthPct: 0.15 },
+                { label: 'Entity', widthPct: 0.35 },
+                { label: 'Text Present', widthPct: 0.15 },
+                { label: 'Label Presence', widthPct: 0.10 },
+            ],
+            symbolsRows
+        );
+
+        
+        // 5. Symbols and Graphics - Schematics
+        const schematicsRows = (productData.symbols_graphics.data.filter(data => data.entity === 'Schematics') || []).map((item: any) => [
+            item.text, item.image, item.entity, item.label_presence, item.description
+        ]);
+        drawTable('Schematics',
+            [
+                { label: 'Text', widthPct: 0.15 },
+                { label: 'Image', widthPct: 0.15 },
+                { label: 'Entity', widthPct: 0.35 },
+                { label: 'Label Presence', widthPct: 0.10 },
+                { label: 'Description', widthPct: 0.10 },
+            ],
+            schematicsRows
+        );
+
+        // 6. Symbols and Graphics - Barcodes
+        const barcodesRows = (productData.symbols_graphics.data.filter(data => data.entity === 'Barcodes') || []).map((item: any) => [
+            item.text, item.image, item.entity, item.label_presence, item.description
+        ]);
+        drawTable('Barcodes',
+            [
+                { label: 'Text', widthPct: 0.15 },
+                { label: 'Image', widthPct: 0.15 },
+                { label: 'Entity', widthPct: 0.35 },
+                { label: 'Label Presence', widthPct: 0.10 },
+                { label: 'Description', widthPct: 0.10 },
+            ],
+            barcodesRows
+        );
+
+
+        // 7. Symbols and Graphics - Other Components
+        const otherComponentsRows = (productData.symbols_graphics.data.filter(data => data.entity === 'Other Components') || []).map((item: any) => [
+            item.text, item.image, item.entity, item.label_presence, item.description
+        ]);
+        drawTable('Other Components',
+            [
+                { label: 'Text', widthPct: 0.15 },
+                { label: 'Image', widthPct: 0.15 },
+                { label: 'Entity', widthPct: 0.35 },
+                { label: 'Label Presence', widthPct: 0.10 },
+                { label: 'Description', widthPct: 0.10 },
+            ],
+            otherComponentsRows
+        );
+
+        // 8. Product Data (Univer) - Dynamic Columns
+        const pData = transformUniverExcelData(productData.product_data.data);
+        if (pData.sheets.length > 0) {
+            const rawData = pData.sheets[0].data;
+            if (rawData.length > 0) {
+                const colCount = rawData[0].length;
+                const dynamicHeaders = Array(colCount).fill(0).map((_, i) => ({ 
+                    label: `Col ${i+1}`, widthPct: 1 / colCount 
+                }));
+                drawTable('Product Data (Technical)', dynamicHeaders, rawData);
+            }
+        }
+
+         // 9. Operational Data
+        const opData = transformUniverExcelData(productData.operational_parameters.data);
+        if (opData.sheets.length > 0) {
+            const rawData = opData.sheets[0].data;
+            if (rawData.length > 0) {
+                const colCount = rawData[0].length;
+                const dynamicHeaders = Array(colCount).fill(0).map((_, i) => ({ 
+                    label: `Col ${i+1}`, widthPct: 1 / colCount 
+                }));
+                drawTable('Operational Parameters', dynamicHeaders, rawData);
+            }
+        }
+
+        // 10. Label Tags
+        const labelTagsRows = (productData.label_tags.data || []).map((item: any) => [
+            item.name, item.description, item.type, item.image
+        ]);
+        drawTable('Label Tags',
+            [
+                { label: 'Name', widthPct: 0.15 },
+                { label: 'Description', widthPct: 0.10 },
+                { label: 'Type', widthPct: 0.15 },
+                { label: 'Image', widthPct: 0.15 },
+            ],
+            labelTagsRows
         );
 
         const pdfBytes = await pdfDoc.save();
