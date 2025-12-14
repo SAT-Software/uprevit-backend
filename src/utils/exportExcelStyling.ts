@@ -37,24 +37,15 @@ export const applyStandardStyling = (worksheet: any) => {
     cell.border = borderStyle;
   });
 
-// Add zebra coloring for rows
-//   worksheet.eachRow((row: any, rowNumber: number) => {
-//     if (rowNumber === 1) return;
+  // Apply borders to all data cells
+  worksheet.eachRow((row: any, rowNumber: number) => {
+    if (rowNumber === 1) return; // Skip header row (already styled)
 
-//     const isEven = rowNumber % 2 === 0;
-//     const rowFill = isEven ? 'FFFFFFFF' : 'FFF2F2F2';
-
-//     row.eachCell({ includeEmpty: true }, (cell: any) => {
-//       cell.border = borderStyle;
-//       cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-      
-//       cell.fill = {
-//         type: 'pattern',
-//         pattern: 'solid',
-//         fgColor: { argb: rowFill }
-//       };
-//     });
-//   });
+    row.eachCell({ includeEmpty: false }, (cell: any) => {
+      cell.border = borderStyle;
+      cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+    });
+  });
 
   worksheet.columns.forEach((column: any) => {
     let maxLength = 0;
