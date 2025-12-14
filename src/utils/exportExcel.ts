@@ -1,4 +1,5 @@
 import { Product } from "../models/product";
+import { applyStandardStyling } from "./exportExcelStyling";
 import transformUniverExcelData from "./TransformUniverExcelData";
 require('core-js/modules/es.promise');
 require('core-js/modules/es.string.includes');
@@ -45,6 +46,7 @@ export async function generateProductExcelExport(productData: Product) {
         });
 
         productInfoSheet.addRows(infoRows);
+        applyStandardStyling(productInfoSheet);
         productInfoSheet.getRow(1).font = { bold: true };
 
     // 2. Compliance Info   
@@ -67,6 +69,7 @@ export async function generateProductExcelExport(productData: Product) {
         });
 
         complianceInfoSheet.addRows(ComplianceinfoRows);
+        applyStandardStyling(complianceInfoSheet);
         complianceInfoSheet.getRow(1).font = { bold: true };
 
     // 3. Label Components
@@ -93,6 +96,7 @@ export async function generateProductExcelExport(productData: Product) {
         });
 
         labelComponentsSheet.addRows(labelComponentsRows);
+        applyStandardStyling(labelComponentsSheet);
         labelComponentsSheet.getRow(1).font = { bold: true };
     
     // 4. Symbols and Graphics - Symbols
@@ -119,6 +123,7 @@ export async function generateProductExcelExport(productData: Product) {
         });
 
         symbolsSheet.addRows(symbolsRows);
+        applyStandardStyling(symbolsSheet);
         symbolsSheet.getRow(1).font = { bold: true };
 
     // 5. Symbols and Graphics - Schematics
@@ -145,6 +150,7 @@ export async function generateProductExcelExport(productData: Product) {
         });
 
         schematicsSheet.addRows(schematicsRows);
+        applyStandardStyling(schematicsSheet);
         schematicsSheet.getRow(1).font = { bold: true };
 
     // 6. Symbols and Graphics - Barcodes
@@ -171,6 +177,7 @@ export async function generateProductExcelExport(productData: Product) {
         });
 
         barcodesSheet.addRows(barcodesRows);
+        applyStandardStyling(barcodesSheet);
         barcodesSheet.getRow(1).font = { bold: true };
 
     // 7. Symbols and Graphics - Other Components
@@ -197,6 +204,7 @@ export async function generateProductExcelExport(productData: Product) {
         });
 
         otherComponentsSheet.addRows(otherComponentsRows);
+        applyStandardStyling(otherComponentsSheet);
         otherComponentsSheet.getRow(1).font = { bold: true };
 
     // 8. Product Data
@@ -210,6 +218,7 @@ export async function generateProductExcelExport(productData: Product) {
         sheetData.data.forEach(row => productDataSheet.addRow(row));
         sheetData.merges.forEach(merge => productDataSheet.mergeCells(merge));
     }
+    applyStandardStyling(productDataSheet);
     
     // 9. Operational Parameters Data
     const operationalDataSheet = workbook.addWorksheet('Operational Data', {
@@ -222,7 +231,7 @@ export async function generateProductExcelExport(productData: Product) {
         sheetData.data.forEach(row => operationalDataSheet.addRow(row));
         sheetData.merges.forEach(merge => operationalDataSheet.mergeCells(merge));
     }
-
+    applyStandardStyling(operationalDataSheet);
 
     // 10. Label Tags
     const labelTagsSheet = workbook.addWorksheet('Label Tags', {
@@ -247,6 +256,7 @@ export async function generateProductExcelExport(productData: Product) {
         });
 
         labelTagsSheet.addRows(labelTagsRows);
+        applyStandardStyling(labelTagsSheet);
         labelTagsSheet.getRow(1).font = { bold: true };
 
         const buffer = await workbook.xlsx.writeBuffer();
