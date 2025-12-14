@@ -1,4 +1,5 @@
 import { Product } from "../models/product";
+import transformUniverExcelData from "./TransformUniverExcelData";
 require('core-js/modules/es.promise');
 require('core-js/modules/es.string.includes');
 require('core-js/modules/es.object.assign');
@@ -197,6 +198,31 @@ export async function generateProductExcelExport(productData: Product) {
 
         otherComponentsSheet.addRows(otherComponentsRows);
         otherComponentsSheet.getRow(1).font = { bold: true };
+
+    // 8. Product Data
+    const productDataSheet = workbook.addWorksheet('Product Data', {
+            pageSetup: { paperSize: 9, orientation: 'landscape' }
+    });
+
+    const productDataTransformed = transformUniverExcelData(productData.product_data.data);
+    if (productDataTransformed.sheets.length > 0) {
+        const sheetData = productDataTransformed.sheets[0];
+        sheetData.data.forEach(row => productDataSheet.addRow(row));
+        sheetData.merges.forEach(merge => productDataSheet.mergeCells(merge));
+    }
+    
+    // 9. Operational Parameters Data
+    const operationalDataSheet = workbook.addWorksheet('Operational Data', {
+            pageSetup: { paperSize: 9, orientation: 'landscape' }
+    });
+
+    const operationalDataTransformed = transformUniverExcelData(productData.operational_parameters.data);
+    if (operationalDataTransformed.sheets.length > 0) {
+        const sheetData = operationalDataTransformed.sheets[0];
+        sheetData.data.forEach(row => operationalDataSheet.addRow(row));
+        sheetData.merges.forEach(merge => operationalDataSheet.mergeCells(merge));
+    }
+
 
     // 10. Label Tags
     const labelTagsSheet = workbook.addWorksheet('Label Tags', {
