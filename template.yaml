@@ -601,6 +601,23 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/compareProductVersions.ts]
 
+  ExportProductExcelFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/exportProductExcel.lambdaHandler
+      Events:
+        ExportProductExcel:
+          Type: Api
+          Properties:
+            Path: /products/{productId}/export/excel
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/exportProductExcel.ts]
+
 
   # ──────────────────────────────────────────────────────────────────────────
   # BOOKMARKS
