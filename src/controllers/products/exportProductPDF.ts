@@ -4,7 +4,7 @@ import { authenticateRequest } from "../../utils/authUtils";
 import { getDb } from "../../utils/db";
 import { Product } from "../../models/product";
 import { ObjectId } from "mongodb";
-import { generateProductExcelExport } from "../../utils/exportExcel";
+import { generateProductPDFExport } from "../../utils/exportPDF";
 
 
 /**
@@ -27,18 +27,18 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
         const productData = await db.collection<Product>('products').findOne({ _id: new ObjectId(productId) });
         if(!productData) return ResponseWrapper.notFound("Product not found");
 
-        const excelBuffer = await generateProductExcelExport(productData);
-        if (!excelBuffer) return ResponseWrapper.internalServerError("Failed to generate Excel file");
+        const pdfBuffer = await generateProductPDFExport(productData);
+        if (!pdfBuffer) return ResponseWrapper.internalServerError("Failed to generate PDF file");
 
 
         return {
             statusCode: 200,
             headers: {
-                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                'Content-Disposition': `attachment; filename="Product_${productData.product_plan_number}_v${productData.version}.xlsx"`,
+                'Content-Type': 'application/pdf',
+                'Content-Disposition': `attachment; filename="Product_${productData.product_plan_number}_v${productData.version}.pdf"`,
                 'Access-Control-Allow-Origin': '*',
             },
-            body: Buffer.from(excelBuffer).toString('base64'),
+            body: Buffer.from(pdfBuffer).toString('base64'),
             isBase64Encoded: true
         };
     } catch (error) {

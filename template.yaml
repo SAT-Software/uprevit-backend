@@ -618,6 +618,22 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/exportProductExcel.ts]
 
+  ExportProductPDFFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/exportProductPDF.lambdaHandler
+      Events:
+        ExportProductPDF:
+          Type: Api
+          Properties:
+            Path: /products/{productId}/export/pdf
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/exportProductPDF.ts]
 
   # ──────────────────────────────────────────────────────────────────────────
   # BOOKMARKS
