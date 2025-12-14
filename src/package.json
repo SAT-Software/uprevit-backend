@@ -9,7 +9,8 @@
     "esbuild": "^0.14.14",
     "exceljs": "^4.4.0",
     "mongodb": "^6.17.0",
-    "regenerator-runtime": "^0.14.1"
+    "regenerator-runtime": "^0.14.1",
+    "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
     "@jest/globals": "^29.2.0",

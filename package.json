@@ -10,6 +10,7 @@
     "aws-jwt-verify": "^4.0.1",
     "aws-sdk": "^2.1692.0",
     "client-cognito-identity-provider": "github:aws-sdk/client-cognito-identity-provider",
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "pdf-lib": "^1.17.1"
   }
 }
