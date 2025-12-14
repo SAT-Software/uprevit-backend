@@ -1,6 +1,6 @@
 import { Product } from "../models/product";
 import { applyStandardStyling } from "./exportExcelStyling";
-import transformUniverExcelData from "./TransformUniverExcelData";
+import transformUniverExcelData from "./transformUniverExcelData";
 require('core-js/modules/es.promise');
 require('core-js/modules/es.string.includes');
 require('core-js/modules/es.object.assign');
