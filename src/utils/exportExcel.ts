@@ -68,6 +68,161 @@ export async function generateProductExcelExport(productData: Product) {
         complianceInfoSheet.addRows(ComplianceinfoRows);
         complianceInfoSheet.getRow(1).font = { bold: true };
 
+    // 3. Label Components
+     const labelComponentsSheet = workbook.addWorksheet('Label Components', {
+            pageSetup: { paperSize: 9, orientation: 'landscape' }
+        });
+
+        labelComponentsSheet.columns = [
+            { header: 'Component Number', key: 'component_number', width: 30 },
+            { header: 'Image', key: 'image', width: 50 },
+            { header: 'Component Description', key: 'component_description', width: 50 },
+            { header: 'Label Type', key: 'label_type', width: 50 },
+            { header: 'Dimensions', key: 'dimensions', width: 50 },
+            { header: 'Component Type', key: 'component_type', width: 50 }
+        ]; 
+
+        const labelComponentsData = productData.label_components?.data;
+        const labelComponentsRows: { component_number: string; image: string; component_description: string; label_type: string[]; dimensions: string; component_type: string }[] = [];
+
+        labelComponentsData.map((item: any) => {
+            labelComponentsRows.push(
+                { component_number: item.component_number || '', image: item.image || '', component_description: item.component_description || '', label_type: item.label_type.join(', ') || '', dimensions: item.dimensions || '', component_type: item.component_type || '' }
+            );
+        });
+
+        labelComponentsSheet.addRows(labelComponentsRows);
+        labelComponentsSheet.getRow(1).font = { bold: true };
+    
+    // 4. Symbols and Graphics - Symbols
+    const symbolsSheet = workbook.addWorksheet('Symbols', {
+            pageSetup: { paperSize: 9, orientation: 'landscape' }
+        });
+
+        symbolsSheet.columns = [
+            { header: 'Text', key: 'text', width: 30 },
+            { header: 'Image', key: 'image', width: 50 },
+            { header: 'Entity', key: 'entity', width: 50 },
+            { header: 'Text Present', key: 'text_present', width: 50 },
+            { header: 'Label Presence', key: 'label_presence', width: 50 },
+        ];
+
+        const symbolsData = productData.symbols_graphics.data.filter(data => data.entity === 'Symbols');
+        const symbolsRows: { text: string; image: string; entity: string; text_present: string; label_presence: string }[] = [];
+
+
+        symbolsData.map((item: any) => {
+            symbolsRows.push(
+                { text: item.text || '', image: item.image || '', entity: item.entity || '', text_present: item.text_present || '', label_presence: item.label_presence.join(',') || '' }
+            );
+        });
+
+        symbolsSheet.addRows(symbolsRows);
+        symbolsSheet.getRow(1).font = { bold: true };
+
+    // 5. Symbols and Graphics - Schematics
+    const schematicsSheet = workbook.addWorksheet('Schematics', {
+            pageSetup: { paperSize: 9, orientation: 'landscape' }
+        });
+
+        schematicsSheet.columns = [
+            { header: 'Text', key: 'text', width: 30 },
+            { header: 'Image', key: 'image', width: 50 },
+            { header: 'Entity', key: 'entity', width: 50 },
+            { header: 'Label Presence', key: 'label_presence', width: 50 },
+            { header: 'Description', key: 'description', width: 50 },
+        ];
+
+        const schematicsData = productData.symbols_graphics.data.filter(data => data.entity === 'Schematics');
+        const schematicsRows: { text: string; image: string; entity: string; label_presence: string; description: string }[] = [];
+
+
+        schematicsData.map((item: any) => {
+            schematicsRows.push(
+                { text: item.text || '', image: item.image || '', entity: item.entity || '', label_presence: item.label_presence.join(',')  || '', description: item.description || '' }
+            );
+        });
+
+        schematicsSheet.addRows(schematicsRows);
+        schematicsSheet.getRow(1).font = { bold: true };
+
+    // 6. Symbols and Graphics - Barcodes
+    const barcodesSheet = workbook.addWorksheet('Barcodes', {
+            pageSetup: { paperSize: 9, orientation: 'landscape' }
+        });
+
+        barcodesSheet.columns = [
+            { header: 'Text', key: 'text', width: 30 },
+            { header: 'Image', key: 'image', width: 50 },
+            { header: 'Entity', key: 'entity', width: 50 },
+            { header: 'Label Presence', key: 'label_presence', width: 50 },
+            { header: 'Description', key: 'description', width: 50 },
+        ];
+
+        const barcodesData = productData.symbols_graphics.data.filter(data => data.entity === 'Barcodes');
+        const barcodesRows: { text: string; image: string; entity: string; label_presence: string; description: string }[] = [];
+
+
+        barcodesData.map((item: any) => {
+            barcodesRows.push(
+                { text: item.text || '', image: item.image || '', entity: item.entity || '', label_presence: item.label_presence.join(',')  || '', description: item.description || '' }
+            );
+        });
+
+        barcodesSheet.addRows(barcodesRows);
+        barcodesSheet.getRow(1).font = { bold: true };
+
+    // 7. Symbols and Graphics - Other Components
+    const otherComponentsSheet = workbook.addWorksheet('Other Components', {
+            pageSetup: { paperSize: 9, orientation: 'landscape' }
+        });
+
+        otherComponentsSheet.columns = [
+            { header: 'Text', key: 'text', width: 30 },
+            { header: 'Image', key: 'image', width: 50 },
+            { header: 'Entity', key: 'entity', width: 50 },
+            { header: 'Label Presence', key: 'label_presence', width: 50 },
+            { header: 'Description', key: 'description', width: 50 },
+        ];
+
+        const otherComponentsData = productData.symbols_graphics.data.filter(data => data.entity === 'Other Components');
+        const otherComponentsRows: { text: string; image: string; entity: string; label_presence: string; description: string }[] = [];
+
+
+        otherComponentsData.map((item: any) => {
+            otherComponentsRows.push(
+                { text: item.text || '', image: item.image || '', entity: item.entity || '', label_presence: item.label_presence.join(',') || '', description: item.description || '' }
+            );
+        });
+
+        otherComponentsSheet.addRows(otherComponentsRows);
+        otherComponentsSheet.getRow(1).font = { bold: true };
+
+    // 10. Label Tags
+    const labelTagsSheet = workbook.addWorksheet('Label Tags', {
+            pageSetup: { paperSize: 9, orientation: 'landscape' }
+        });
+
+        labelTagsSheet.columns = [
+            { header: 'Name', key: 'name', width: 30 },
+            { header: 'Description', key: 'description', width: 50 },
+            { header: 'Type', key: 'type', width: 50 },
+            { header: 'Image', key: 'image', width: 50 },
+        ];
+
+        const labelTagsData = productData.label_tags.data;
+        const labelTagsRows: { name: string; description: string; type: string; image: string }[] = [];
+
+
+        labelTagsData.map((item: any) => {
+            labelTagsRows.push(
+                { name: item.name || '', description: item.description || '', type: item.type || '', image: item.image || '' }
+            );
+        });
+
+        labelTagsSheet.addRows(labelTagsRows);
+        labelTagsSheet.getRow(1).font = { bold: true };
+
         const buffer = await workbook.xlsx.writeBuffer();
         return buffer;
     } catch (error) {
