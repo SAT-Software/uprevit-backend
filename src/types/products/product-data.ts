@@ -5,7 +5,7 @@ export interface ProductData {
 
 type BaseProductDataRequest<TAction extends string, TData> = {
     id: string;
-    tab: 'product-data';
+    tab: 'product-specifications';
     action: TAction;
     data: TData;
 };

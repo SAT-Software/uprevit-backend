@@ -265,7 +265,7 @@ export async function generateProductPDFExport(productData: Product) {
             true // Start new page
         );
 
-        // 8. Product Data (Technical) - Use first row as headers (New Page)
+        // 8. Product Specifications - Use first row as headers (New Page)
         const pData = transformUniverExcelData(productData.product_data?.data);
         if (pData.sheets.length > 0) {
             const rawData = pData.sheets[0].data;
@@ -281,7 +281,7 @@ export async function generateProductPDFExport(productData: Product) {
                     widthPct: 1 / colCount 
                 }));
                 
-                drawTable('Product Data (Technical)', dynamicHeaders, dataRows, true);
+                drawTable('Product Specifications', dynamicHeaders, dataRows, true);
             }
         }
 

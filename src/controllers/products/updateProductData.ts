@@ -28,7 +28,7 @@ const validTabs = [
 	'compliance-information',
 	'label-components',
 	'symbols-graphics',
-	'product-data',
+	'product-specifications',
 	'operational-parameters',
 	'label-tags',
 ];

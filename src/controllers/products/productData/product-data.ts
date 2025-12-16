@@ -23,7 +23,7 @@ export function addProductData(
 	action: string,
 ): ProductDataReturn {
 	try {
-		const isValidatedTab = validateTab(tab, 'product-data', action);
+		const isValidatedTab = validateTab(tab, 'product-specifications', action);
 		if (isValidatedTab) throw new Error(isValidatedTab.body);
 
 		if (!newProductData.workbook_data || typeof newProductData.workbook_data !== 'object') {
@@ -71,7 +71,7 @@ export function updateProductData(
 	action: string,
 ): ProductDataReturn {
 	try {
-		const isValidatedTab = validateTab(tab, 'product-data', action);
+		const isValidatedTab = validateTab(tab, 'product-specifications', action);
 		if (isValidatedTab) throw new Error(isValidatedTab.body);
 
 		if (!updatedProductData.workbook_data || typeof updatedProductData.workbook_data !== 'object') {
@@ -115,7 +115,7 @@ export function deleteProductData(
 	action: string,
 ): ProductDataReturn {
 	try {
-		const isValidatedTab = validateTab(tab, 'product-data', action);
+		const isValidatedTab = validateTab(tab, 'product-specifications', action);
 		if (isValidatedTab) throw new Error(isValidatedTab.body);
 
 		const updateQuery = {
@@ -155,7 +155,7 @@ export function updateProductDataTabCompletion(
 	action: string,
 ): Omit<ProductDataReturn, 'updatedData'> & { updatedData: { tab_completed: boolean } } {
 	try {
-		const isValidatedTab = validateTab(tab, 'product-data', action);
+		const isValidatedTab = validateTab(tab, 'product-specifications', action);
 		if (isValidatedTab) throw new Error(isValidatedTab.body);
 
 		if (typeof inputData.tab_completed !== 'boolean') {

@@ -208,8 +208,8 @@ export async function generateProductExcelExport(productData: Product) {
         applyStandardStyling(otherComponentsSheet);
         otherComponentsSheet.getRow(1).font = { bold: true };
 
-    // 8. Product Data
-    const productDataSheet = workbook.addWorksheet('Product Data', {
+    // 8. Product Specifications
+    const productDataSheet = workbook.addWorksheet('Product Specifications', {
             pageSetup: { paperSize: 9, orientation: 'landscape' }
     });
 
