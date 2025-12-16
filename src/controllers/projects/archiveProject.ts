@@ -5,7 +5,7 @@ import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { authenticateRequest } from '../../utils/authUtils';
+import { authenticateWithRole } from '../../utils/authUtils';
 import { validateBoolean } from '../../utils/validationUtils';
 
 /**
@@ -16,7 +16,7 @@ import { validateBoolean } from '../../utils/validationUtils';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
+		const auth = await authenticateWithRole(event, 'admin');
 
 		if(!auth.isValid) {
 			return auth.error;

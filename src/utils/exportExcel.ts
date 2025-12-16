@@ -36,7 +36,8 @@ export async function generateProductExcelExport(productData: Product) {
                 { field: 'Market Geography', value: infoData.market_geography || '' },
                 { field: 'Country of Origin', value: infoData.country_of_origin || '' },
                 { field: 'OEM Contract Manufacturer', value: infoData.oem_contract_manufacturer || '' },
-                { field: 'Commercial/Clinical', value: infoData.commercial_clinical || '' }
+                { field: 'Commercial/Clinical', value: infoData.commercial_clinical || '' },
+                { field: 'Manufacturing Location', value: infoData.manufacturing_location || '' }
             );
         }
 

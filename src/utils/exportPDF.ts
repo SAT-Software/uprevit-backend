@@ -162,6 +162,7 @@ export async function generateProductPDFExport(productData: Product) {
             infoRows.push(['Country of Origin', d.country_of_origin]);
             infoRows.push(['OEM/Contract', d.oem_contract_manufacturer]);
             infoRows.push(['Commercial/Clinical', d.commercial_clinical]);
+            infoRows.push(['Manufacturing Location', d.manufacturing_location]);
         }
         (productData.product_information?.custom_fields || []).forEach(f => infoRows.push([f.label, f.value]));
         
