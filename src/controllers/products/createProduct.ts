@@ -87,6 +87,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					country_of_origin: '',
 					oem_contract_manufacturer: '',
 					commercial_clinical: '',
+					manufacturing_location: '',
 					custom_fields: [],
 				},
 				tab_completed: false,

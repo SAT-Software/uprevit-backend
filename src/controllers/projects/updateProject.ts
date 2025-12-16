@@ -6,7 +6,7 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
-import { authenticateRequest } from '../../utils/authUtils';
+import { authenticateWithRole } from '../../utils/authUtils';
 
 /**
  * Update a project
@@ -16,7 +16,7 @@ import { authenticateRequest } from '../../utils/authUtils';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
+		const auth = await authenticateWithRole(event, 'admin');
 		
 		if(!auth.isValid) {
 			return auth.error;
@@ -53,6 +53,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			'workspace_id': input.workspace_id,
 			'department_id': input.department_id,
 			'admin_id': input.admin_id,
+		}, {
+			'users': input.users as unknown as string[],
 		});
 
 		if (objectIdValidation) {
@@ -85,6 +87,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const workspaceObjectId = new ObjectId(input.workspace_id);
 		const departmentObjectId = new ObjectId(input.department_id);
 		const adminObjectId = new ObjectId(input.admin_id);
+		const userObjectIds = input.users ? (input.users as unknown as string[]).map((userId: string) => new ObjectId(userId)) : [];
 
 		const project = await db.collection<Project>('projects').updateOne({
 			_id: new ObjectId(input._id),
@@ -97,6 +100,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				project_description: input.project_description,
 				project_manager: input.project_manager,
 				admin_id: adminObjectId,
+				users: userObjectIds,
 				image: input.image,
 			}
 		});

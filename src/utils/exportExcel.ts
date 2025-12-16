@@ -36,7 +36,8 @@ export async function generateProductExcelExport(productData: Product) {
                 { field: 'Market Geography', value: infoData.market_geography || '' },
                 { field: 'Country of Origin', value: infoData.country_of_origin || '' },
                 { field: 'OEM Contract Manufacturer', value: infoData.oem_contract_manufacturer || '' },
-                { field: 'Commercial/Clinical', value: infoData.commercial_clinical || '' }
+                { field: 'Commercial/Clinical', value: infoData.commercial_clinical || '' },
+                { field: 'Manufacturing Location', value: infoData.manufacturing_location || '' }
             );
         }
 
@@ -207,8 +208,8 @@ export async function generateProductExcelExport(productData: Product) {
         applyStandardStyling(otherComponentsSheet);
         otherComponentsSheet.getRow(1).font = { bold: true };
 
-    // 8. Product Data
-    const productDataSheet = workbook.addWorksheet('Product Data', {
+    // 8. Product Specifications
+    const productDataSheet = workbook.addWorksheet('Product Specifications', {
             pageSetup: { paperSize: 9, orientation: 'landscape' }
     });
 

@@ -44,7 +44,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			'compliance-information',
 			'label-components',
 			'symbols-graphics',
-			'product-data',
+			'product-specifications',
 			'operational-parameters',
 			'label-tags',
 			'all-tabs',
@@ -214,7 +214,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			};
 			break;
 
-		case 'product-data':
+		case 'product-specifications':
 			tabData = {
 				product_data: productData,
 				data: {

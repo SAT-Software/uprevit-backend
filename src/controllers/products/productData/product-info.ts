@@ -41,6 +41,7 @@ export function updateProductInformation(
 			'country_of_origin',
 			'oem_contract_manufacturer',
 			'commercial_clinical',
+			'manufacturing_location',
 		];
 	
 		const updateSet: Record<string, any> = {};

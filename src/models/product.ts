@@ -27,6 +27,7 @@ export type ProductInformation = {
 			country_of_origin: string;
 			oem_contract_manufacturer: string;
 			commercial_clinical: string;
+			manufacturing_location: string;
 			custom_fields?: Array<{
 				_id: ObjectId;
 				label: string;

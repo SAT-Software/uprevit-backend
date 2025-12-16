@@ -10,6 +10,7 @@ export interface UpdateProductInformationData {
     country_of_origin: string;
     oem_contract_manufacturer: string;
     commercial_clinical: string;
+    manufacturing_location: string;
 }
 
 export interface CustomFieldInput {
