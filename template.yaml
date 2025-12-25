@@ -34,6 +34,14 @@ Metadata:
     Minify: true
     Target: es2020
     Sourcemap: true
+    External:
+      - mongodb
+      - aws-jwt-verify
+      - "@aws-sdk/client-cognito-identity-provider"
+      - exceljs
+      - pdf-lib
+      - core-js
+      - regenerator-runtime
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
@@ -52,10 +60,21 @@ Globals:
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
-
+    Layers:
+    - !Ref SharedDepsLayer
   Api:
     TracingEnabled: true
+  
 Resources:
+  SharedDepsLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: shared-deps
+      ContentUri: layers/
+      CompatibleRuntimes:
+        - nodejs20.x
+      LicenseInfo: MIT
+      RetentionPolicy: Retain
   HelloWorldFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
