@@ -201,10 +201,10 @@ export function updateLabelTagsTabCompletion(
  * @return {LabelTagReturn}
  */
 export function updateLabelTagTaggedImage(
-	inputData: { id: string; tagged_image: string },
+	inputData: { id: string; tagged_image: string; annotation_state?: object },
 	tab: string,
 	action: string,
-): Omit<LabelTagReturn, 'updatedData'> & { updatedData: { id: string; tagged_image: string } } {
+): Omit<LabelTagReturn, 'updatedData'> & { updatedData: { id: string; tagged_image: string; annotation_state?: object } } {
 	try {
 		const isValidatedTab = validateTab(tab, 'label-tags', action);
 		if (isValidatedTab) throw new Error(isValidatedTab.body);
@@ -221,11 +221,12 @@ export function updateLabelTagTaggedImage(
 		const updateQuery = {
 			$set: {
 				'label_tags.data.$[elem].tagged_image': inputData.tagged_image,
+				'label_tags.data.$[elem].annotation_state': inputData.annotation_state,
 			},
 			arrayFilters: [{ 'elem._id': new ObjectId(inputData.id) }],
 		};
 
-		const updatedData = { id: inputData.id, tagged_image: inputData.tagged_image };
+		const updatedData = { id: inputData.id, tagged_image: inputData.tagged_image, annotation_state: inputData.annotation_state };
 		const actionLog = 'UPDATE';
 
 		return { updateQuery, updatedData, actionLog, error: null };
