@@ -244,15 +244,16 @@ export async function generateProductExcelExport(productData: Product) {
             { header: 'Description', key: 'description', width: 50 },
             { header: 'Type', key: 'type', width: 50 },
             { header: 'Image', key: 'image', width: 50 },
+            { header: 'Tagged Image', key: 'tagged_image', width: 50 },
         ];
 
         const labelTagsData = productData.label_tags.data;
-        const labelTagsRows: { name: string; description: string; type: string; image: string }[] = [];
+        const labelTagsRows: { name: string; description: string; type: string; image: string; tagged_image: string }[] = [];
 
 
         labelTagsData.map((item: any) => {
             labelTagsRows.push(
-                { name: item.name || '', description: item.description || '', type: item.type || '', image: item.image || '' }
+                { name: item.name || '', description: item.description || '', type: item.type || '', image: item.image || '', tagged_image: item.tagged_image || '' }
             );
         });
 

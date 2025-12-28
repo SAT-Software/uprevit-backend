@@ -97,6 +97,7 @@ export type LabelTags = {
 			description?: string;
 			type?: string;
 			image?: string;
+			tagged_image?: string;
 	}>;
 	tab_completed: boolean;
 };

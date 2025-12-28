@@ -193,3 +193,55 @@ export function updateLabelTagsTabCompletion(
 		};
 	}
 }
+
+/**
+ * @param {object} inputData
+ * @param {string} tab
+ * @param {string} action
+ * @return {LabelTagReturn}
+ */
+export function updateLabelTagTaggedImage(
+	inputData: { id: string; tagged_image: string },
+	tab: string,
+	action: string,
+): Omit<LabelTagReturn, 'updatedData'> & { updatedData: { id: string; tagged_image: string } } {
+	try {
+		const isValidatedTab = validateTab(tab, 'label-tags', action);
+		if (isValidatedTab) throw new Error(isValidatedTab.body);
+
+		const missingFieldsValidation = validateMissingFields({
+			id: inputData.id,
+			tagged_image: inputData.tagged_image,
+		});
+		if (missingFieldsValidation) throw new Error(missingFieldsValidation.body);
+
+		const objectIdValidation = validateAllObjectIds({ id: inputData.id });
+		if (objectIdValidation) throw new Error(objectIdValidation.body);
+
+		const updateQuery = {
+			$set: {
+				'label_tags.data.$[elem].tagged_image': inputData.tagged_image,
+			},
+			arrayFilters: [{ 'elem._id': new ObjectId(inputData.id) }],
+		};
+
+		const updatedData = { id: inputData.id, tagged_image: inputData.tagged_image };
+		const actionLog = 'UPDATE';
+
+		return { updateQuery, updatedData, actionLog, error: null };
+	} catch (error) {
+		if (error instanceof Error)
+			return {
+				updateQuery: {},
+				updatedData: { id: inputData.id, tagged_image: '' },
+				actionLog: '',
+				error: ResponseWrapper.badRequest(error.message),
+			};
+		return {
+			updateQuery: {},
+			updatedData: { id: inputData.id, tagged_image: '' },
+			actionLog: '',
+			error: ResponseWrapper.internalServerError('Failed to update label tag tagged image'),
+		};
+	}
+}

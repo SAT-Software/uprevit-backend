@@ -307,14 +307,15 @@ export async function generateProductPDFExport(productData: Product) {
 
         // 10. Label Tags (New Page)
         const labelTagsRows = (productData.label_tags?.data || []).map((item: any) => [
-            item.name, item.description, item.type, item.image
+            item.name, item.description, item.type, item.image, item.tagged_image
         ]);
         drawTable('Label Tags',
             [
-                { label: 'Name', widthPct: 0.20 },
-                { label: 'Description', widthPct: 0.40 },
-                { label: 'Type', widthPct: 0.20 },
+                { label: 'Name', widthPct: 0.15 },
+                { label: 'Description', widthPct: 0.30 },
+                { label: 'Type', widthPct: 0.15 },
                 { label: 'Image', widthPct: 0.20 },
+                { label: 'Tagged Image', widthPct: 0.20 },
             ],
             labelTagsRows,
             true // Start new page
