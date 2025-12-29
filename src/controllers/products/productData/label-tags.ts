@@ -218,11 +218,16 @@ export function updateLabelTagTaggedImage(
 		const objectIdValidation = validateAllObjectIds({ id: inputData.id });
 		if (objectIdValidation) throw new Error(objectIdValidation.body);
 
+		const setFields: Record<string, unknown> = {
+			'label_tags.data.$[elem].tagged_image': inputData.tagged_image,
+		};
+
+		if (inputData.annotation_state !== undefined) {
+			setFields['label_tags.data.$[elem].annotation_state'] = inputData.annotation_state;
+		}
+
 		const updateQuery = {
-			$set: {
-				'label_tags.data.$[elem].tagged_image': inputData.tagged_image,
-				'label_tags.data.$[elem].annotation_state': inputData.annotation_state,
-			},
+			$set: setFields,
 			arrayFilters: [{ 'elem._id': new ObjectId(inputData.id) }],
 		};
 
@@ -234,13 +239,13 @@ export function updateLabelTagTaggedImage(
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
-				updatedData: { id: inputData.id, tagged_image: '' },
+				updatedData: { id: inputData.id, tagged_image: '', annotation_state: undefined },
 				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
-			updatedData: { id: inputData.id, tagged_image: '' },
+			updatedData: { id: inputData.id, tagged_image: '', annotation_state: undefined },
 			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update label tag tagged image'),
 		};
