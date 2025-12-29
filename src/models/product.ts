@@ -98,6 +98,7 @@ export type LabelTags = {
 			type?: string;
 			image?: string;
 			tagged_image?: string;
+			annotation_state?: object;
 	}>;
 	tab_completed: boolean;
 };

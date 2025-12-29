@@ -201,10 +201,10 @@ export function updateLabelTagsTabCompletion(
  * @return {LabelTagReturn}
  */
 export function updateLabelTagTaggedImage(
-	inputData: { id: string; tagged_image: string },
+	inputData: { id: string; tagged_image: string; annotation_state?: object },
 	tab: string,
 	action: string,
-): Omit<LabelTagReturn, 'updatedData'> & { updatedData: { id: string; tagged_image: string } } {
+): Omit<LabelTagReturn, 'updatedData'> & { updatedData: { id: string; tagged_image: string; annotation_state?: object } } {
 	try {
 		const isValidatedTab = validateTab(tab, 'label-tags', action);
 		if (isValidatedTab) throw new Error(isValidatedTab.body);
@@ -218,14 +218,20 @@ export function updateLabelTagTaggedImage(
 		const objectIdValidation = validateAllObjectIds({ id: inputData.id });
 		if (objectIdValidation) throw new Error(objectIdValidation.body);
 
+		const setFields: Record<string, unknown> = {
+			'label_tags.data.$[elem].tagged_image': inputData.tagged_image,
+		};
+
+		if (inputData.annotation_state !== undefined) {
+			setFields['label_tags.data.$[elem].annotation_state'] = inputData.annotation_state;
+		}
+
 		const updateQuery = {
-			$set: {
-				'label_tags.data.$[elem].tagged_image': inputData.tagged_image,
-			},
+			$set: setFields,
 			arrayFilters: [{ 'elem._id': new ObjectId(inputData.id) }],
 		};
 
-		const updatedData = { id: inputData.id, tagged_image: inputData.tagged_image };
+		const updatedData = { id: inputData.id, tagged_image: inputData.tagged_image, annotation_state: inputData.annotation_state };
 		const actionLog = 'UPDATE';
 
 		return { updateQuery, updatedData, actionLog, error: null };
@@ -233,13 +239,13 @@ export function updateLabelTagTaggedImage(
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
-				updatedData: { id: inputData.id, tagged_image: '' },
+				updatedData: { id: inputData.id, tagged_image: '', annotation_state: undefined },
 				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
-			updatedData: { id: inputData.id, tagged_image: '' },
+			updatedData: { id: inputData.id, tagged_image: '', annotation_state: undefined },
 			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update label tag tagged image'),
 		};
