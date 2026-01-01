@@ -1,0 +1,256 @@
+import { ObjectId, Document } from 'mongodb';
+import {
+	QueryCondition,
+	QueryOperator,
+	TAB_CONFIG,
+	ROOT_FIELDS,
+	VALID_OPERATORS,
+	NO_VALUE_OPERATORS,
+	ReportsQueryRequest,
+	ReportsExportRequest,
+} from '../../types/reports';
+import { ResponseWrapper } from '../responseWrapper';
+import { APIGatewayProxyResult } from 'aws-lambda';
+
+
+export function validateCondition(condition: QueryCondition): APIGatewayProxyResult | null {
+
+	if (!VALID_OPERATORS.includes(condition.operator)) {
+		return ResponseWrapper.badRequest(
+			`Invalid operator '${condition.operator}'. Must be one of: ${VALID_OPERATORS.join(', ')}`
+		);
+	}
+
+	if (!NO_VALUE_OPERATORS.includes(condition.operator) && !condition.value) {
+		return ResponseWrapper.badRequest(
+			`Operator '${condition.operator}' requires a value`
+		);
+	}
+
+	const isRootField = ROOT_FIELDS.includes(condition.field);
+	const isValidTab = condition.tab === 'root' || TAB_CONFIG[condition.tab];
+
+	if (!isRootField && !isValidTab) {
+		return ResponseWrapper.badRequest(
+			`Invalid tab '${condition.tab}'. Must be one of: ${Object.keys(TAB_CONFIG).join(', ')}, or 'root' for root-level fields`
+		);
+	}
+
+	return null;
+}
+
+
+export function validateConditions(conditions: QueryCondition[]): APIGatewayProxyResult | null {
+	for (const condition of conditions) {
+		const error = validateCondition(condition);
+		if (error) return error;
+	}
+	return null;
+}
+
+
+function buildOperatorQuery(operator: QueryOperator, value?: string): any {
+	switch (operator) {
+		case 'equals':
+			return value;
+		case 'not_equals':
+			return { $ne: value };
+		case 'contains':
+			return { $regex: value, $options: 'i' };
+		case 'not_contains':
+			return { $not: { $regex: value, $options: 'i' } };
+		case 'exists':
+			return { $exists: true, $ne: null, $nin: ['', null] };
+		case 'not_exists':
+			return { $in: [null, ''] };
+		default:
+			return value;
+	}
+}
+
+function buildConditionQuery(condition: QueryCondition): Document {
+	const { tab, field, operator, value } = condition;
+	const operatorQuery = buildOperatorQuery(operator, value);
+
+	if (tab === 'root' || ROOT_FIELDS.includes(field)) {
+		if (operator === 'not_exists') {
+			return {
+				$or: [
+					{ [field]: { $exists: false } },
+					{ [field]: null },
+					{ [field]: '' },
+				],
+			};
+		}
+		return { [field]: operatorQuery };
+	}
+
+	const tabConfig = TAB_CONFIG[tab];
+	if (!tabConfig) return { [field]: operatorQuery };
+
+	if (tabConfig.isArray) {
+		if (operator === 'exists') {
+			return {
+				[tabConfig.path]: {
+					$elemMatch: {
+						[field]: { $exists: true, $ne: null, $nin: ['', null] },
+					},
+				},
+			};
+		}
+		if (operator === 'not_exists') {
+			return {
+				$or: [
+					{ [tabConfig.path]: { $size: 0 } },
+					{
+						[tabConfig.path]: {
+							$not: {
+								$elemMatch: {
+									[field]: { $exists: true, $ne: null, $nin: ['', null] },
+								},
+							},
+						},
+					},
+				],
+			};
+		}
+		return {
+			[tabConfig.path]: {
+				$elemMatch: { [field]: operatorQuery },
+			},
+		};
+	}
+
+	const fullPath = `${tabConfig.path}.${field}`;
+	if (operator === 'not_exists') {
+		return {
+			$or: [
+				{ [fullPath]: { $exists: false } },
+				{ [fullPath]: null },
+				{ [fullPath]: '' },
+			],
+		};
+	}
+	return { [fullPath]: operatorQuery };
+}
+
+
+export function buildAggregationPipeline(
+	request: ReportsQueryRequest | ReportsExportRequest,
+	workspaceId: ObjectId
+): Document[] {
+	const { conditions, conditionLogic, pagination, sort } = request;
+
+	const pipeline: Document[] = [];
+
+	const baseMatch: Document = {
+		workspace_id: workspaceId,
+		is_latest: true,
+	};
+	pipeline.push({ $match: baseMatch });
+
+	if (conditions && conditions.length > 0) {
+		const conditionQueries = conditions.map(buildConditionQuery);
+		const logicOperator = conditionLogic === 'AND' ? '$and' : '$or';
+		pipeline.push({
+			$match: {
+				[logicOperator]: conditionQueries,
+			},
+		});
+	}
+
+	const sortObject: Document = {};
+	if (sort && sort.field) {
+		sortObject[sort.field] = sort.order === 'desc' ? -1 : 1;
+	} else {
+		sortObject['product_name'] = 1;
+	}
+
+	const page = pagination?.page || 1;
+	const limit = pagination?.limit || 10;
+	const skip = (page - 1) * limit;
+
+	pipeline.push({
+		$facet: {
+			metadata: [{ $count: 'total' }],
+			data: [
+				{ $sort: sortObject },
+				{ $skip: skip },
+				{ $limit: limit },
+				{
+					$project: {
+						_id: 1,
+						product_name: 1,
+						product_plan_number: 1,
+						department_id: 1,
+						project_id: 1,
+						status: 1,
+						target_date: 1,
+						version: 1,
+					},
+				},
+			],
+		},
+	});
+
+	return pipeline;
+}
+
+
+export function buildExportPipeline(
+	request: ReportsExportRequest,
+	workspaceId: ObjectId,
+	maxLimit: number
+): Document[] {
+	const { conditions, conditionLogic, sort } = request;
+
+	const pipeline: Document[] = [];
+
+	pipeline.push({
+		$match: {
+			workspace_id: workspaceId,
+			is_latest: true,
+		},
+	});
+
+	if (conditions && conditions.length > 0) {
+		const conditionQueries = conditions.map(buildConditionQuery);
+		const logicOperator = conditionLogic === 'AND' ? '$and' : '$or';
+		pipeline.push({
+			$match: {
+				[logicOperator]: conditionQueries,
+			},
+		});
+	}
+
+	const sortObject: Document = {};
+	if (sort && sort.field) {
+		sortObject[sort.field] = sort.order === 'desc' ? -1 : 1;
+	} else {
+		sortObject['product_name'] = 1;
+	}
+	pipeline.push({ $sort: sortObject });
+
+	pipeline.push({ $limit: maxLimit });
+
+	pipeline.push({
+		$project: {
+			_id: 1,
+			product_name: 1,
+			product_plan_number: 1,
+			product_description: 1,
+			department_id: 1,
+			project_id: 1,
+			status: 1,
+			target_date: 1,
+			version: 1,
+			'product_information.data': 1,
+			'product_information.tab_completed': 1,
+			'compliance_information.tab_completed': 1,
+			'symbols_graphics.tab_completed': 1,
+			'label_components.tab_completed': 1,
+		},
+	});
+
+	return pipeline;
+}
