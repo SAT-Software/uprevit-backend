@@ -918,6 +918,63 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/sourceFiles/updateSourceFilesFolder.ts]
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # REPORTS
+  # ──────────────────────────────────────────────────────────────────────────
+
+  ReportsQueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/reportsQuery.lambdaHandler
+      Events:
+        ReportsQuery:
+          Type: Api
+          Properties:
+            Path: /reports/query
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/reportsQuery.ts]
+
+  ReportsExportPDFFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/reportsExportPDF.lambdaHandler
+      Timeout: 300
+      Events:
+        ReportsExportPDF:
+          Type: Api
+          Properties:
+            Path: /reports/export/pdf
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/reportsExportPDF.ts]
+
+  ReportsExportExcelFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/reportsExportExcel.lambdaHandler
+      Timeout: 300
+      Events:
+        ReportsExportExcel:
+          Type: Api
+          Properties:
+            Path: /reports/export/excel
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/reportsExportExcel.ts]
+
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
     Properties:
