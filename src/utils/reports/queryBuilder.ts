@@ -8,6 +8,7 @@ import {
 	NO_VALUE_OPERATORS,
 	ReportsQueryRequest,
 	ReportsExportRequest,
+	ALLOWED_SORT_FIELDS,
 } from '../../types/reports';
 import { ResponseWrapper } from '../responseWrapper';
 import { APIGatewayProxyResult } from 'aws-lambda';
@@ -165,6 +166,9 @@ export function buildAggregationPipeline(
 
 	const sortObject: Document = {};
 	if (sort && sort.field) {
+		if (!ALLOWED_SORT_FIELDS.includes(sort.field)) {
+			throw new Error(`Invalid sort field. Allowed fields: ${ALLOWED_SORT_FIELDS.join(', ')}`);
+		}
 		sortObject[sort.field] = sort.order === 'desc' ? -1 : 1;
 	} else {
 		sortObject['product_name'] = 1;
@@ -229,6 +233,9 @@ export function buildExportPipeline(
 
 	const sortObject: Document = {};
 	if (sort && sort.field) {
+		if (!ALLOWED_SORT_FIELDS.includes(sort.field)) {
+			throw new Error(`Invalid sort field. Allowed fields: ${ALLOWED_SORT_FIELDS.join(', ')}`);
+		}
 		sortObject[sort.field] = sort.order === 'desc' ? -1 : 1;
 	} else {
 		sortObject['product_name'] = 1;

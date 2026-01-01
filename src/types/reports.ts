@@ -91,3 +91,5 @@ export const EXPORT_LIMITS = {
 	EXCEL: 1000,
 };
 
+export const ALLOWED_SORT_FIELDS = ['product_name', 'product_plan_number', 'status', 'version', 'target_date'];
+
