@@ -20,8 +20,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
 
-		const input = JSON.parse(event.body!);
-		if(!input) return ResponseWrapper.badRequest('Invalid JSON in request body');
+		let input;
+		try {
+			input = JSON.parse(event.body!);
+		} catch {
+			return ResponseWrapper.badRequest('Invalid JSON in request body');
+		}
 
 		const missingFieldsResult = validateMissingFields({
 			workspaceId: input.workspaceId,
