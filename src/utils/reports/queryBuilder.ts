@@ -49,6 +49,10 @@ export function validateConditions(conditions: QueryCondition[]): APIGatewayProx
 }
 
 
+function escapeRegex(str: string): string {
+	return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function buildOperatorQuery(operator: QueryOperator, value?: string): any {
 	switch (operator) {
 		case 'equals':
@@ -56,9 +60,9 @@ function buildOperatorQuery(operator: QueryOperator, value?: string): any {
 		case 'not_equals':
 			return { $ne: value };
 		case 'contains':
-			return { $regex: value, $options: 'i' };
+			return { $regex: escapeRegex(value || ''), $options: 'i' };
 		case 'not_contains':
-			return { $not: { $regex: value, $options: 'i' } };
+			return { $not: { $regex: escapeRegex(value || ''), $options: 'i' } };
 		case 'exists':
 			return { $exists: true, $ne: null, $nin: ['', null] };
 		case 'not_exists':
