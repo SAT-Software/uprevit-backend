@@ -1,8 +1,8 @@
 {
   "scripts": {
-    "build": "sam build --cached --parallel",
+    "build": "  sam build --cached --parallel --use-container --skip-pull-image",
     "start:api": "sam local start-api --env-vars env.json",
-    "start:local": "npm run build && sam local start-api --skip-pull-image --warm-containers EAGER --env-vars env.json"
+    "start:local": "npm run build && sam local start-api --env-vars env.json"
   },
   "devDependencies": {
     "esbuild": "^0.25.5",
