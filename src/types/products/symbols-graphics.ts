@@ -13,7 +13,8 @@ export interface SymbolsGraphics {
     description?: string,
     text_present?: boolean,
     label_presence?: string[],
-    entity?: SymbolsGraphicsEntity
+    entity?: SymbolsGraphicsEntity,
+    count?: number
 }
 
 export type BaseSymbolsGraphics<Action extends string, TData> = {
@@ -24,6 +25,6 @@ export type BaseSymbolsGraphics<Action extends string, TData> = {
 }
 
 export type AddSymbolsGraphics = BaseSymbolsGraphics<'add_symbols_graphics', SymbolsGraphics[]>;
-export type UpdateSymbolsGraphics = BaseSymbolsGraphics<'update_symbols_graphics', Required<SymbolsGraphics>>;
+export type UpdateSymbolsGraphics = BaseSymbolsGraphics<'update_symbols_graphics', SymbolsGraphics>;
 export type DeleteSymbolsGraphics = BaseSymbolsGraphics<'delete_symbols_graphics', { id: string }>;
 export type SymbolsGraphicsTabCompletion = BaseSymbolsGraphics<'update_symbols_graphics_tab_completion', { tab_completed: boolean }>;

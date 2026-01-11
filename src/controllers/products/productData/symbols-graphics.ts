@@ -91,14 +91,20 @@ export function UpdateSymbolsGraphics(
 		const objectIdValidation =validateAllObjectIds({id: updatedSymbolsGraphics.id})
 		if(objectIdValidation) throw new Error(objectIdValidation.body);
 
-		const updateQuery = {$set: {
+		const updateSet: Record<string, unknown> = {
 			'symbols_graphics.data.$[elem].image': updatedSymbolsGraphics.image,
 			'symbols_graphics.data.$[elem].text': updatedSymbolsGraphics.text,
 			'symbols_graphics.data.$[elem].description': updatedSymbolsGraphics.description,
 			'symbols_graphics.data.$[elem].text_present': updatedSymbolsGraphics.text_present,
 			'symbols_graphics.data.$[elem].label_presence': updatedSymbolsGraphics.label_presence,
-			'symbols_graphics.data.$[elem].entity': updatedSymbolsGraphics.entity
-		}, arrayFilters: [{'elem._id': new ObjectId(updatedSymbolsGraphics.id!)}]}
+			'symbols_graphics.data.$[elem].entity': updatedSymbolsGraphics.entity,
+		};
+
+		if (typeof updatedSymbolsGraphics.count === 'number') {
+			updateSet['symbols_graphics.data.$[elem].count'] = updatedSymbolsGraphics.count;
+		}
+
+		const updateQuery = {$set: updateSet, arrayFilters: [{'elem._id': new ObjectId(updatedSymbolsGraphics.id!)}]}
 
 		const updatedData = updatedSymbolsGraphics;
 		const actionLog = 'UPDATE';

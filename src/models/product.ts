@@ -76,6 +76,7 @@ export type SymbolsGraphics = {
 			text_present?: boolean;
 			label_presence: string[];
 			entity: 'Symbols' | 'Schematics' | 'Barcodes' | 'Other Components';
+			count?: number;
 	}>;
 	tab_completed: boolean;
 };
