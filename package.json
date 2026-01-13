@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "sam build --cached --parallel --use-container --skip-pull-image",
+    "build": "sam build --cached --parallel",
     "start:api": "sam local start-api --env-vars env.json",
     "start:local": "npm run build && sam local start-api --env-vars env.json"
   },
