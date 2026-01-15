@@ -21,7 +21,7 @@ import { AddSymbolsGraphics, deleteSymbolsGraphics, UpdateSymbolsGraphics, updat
 import { addProductData, deleteProductData, updateProductData, updateProductDataTabCompletion } from './productData/product-data';
 import { addOperationalParameters, deleteOperationalParameters, updateOperationalParameters, updateOperationalParametersTabCompletion } from './productData/operational-parameters';
 import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion, updateLabelTagTaggedImage } from './productData/label-tags';
-
+import { SymbolsGraphics } from '../../types/products/symbols-graphics';
 
 const validTabs = [
 	'product-information',
@@ -191,7 +191,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			break;
 
 		case 'update_symbols_graphics':
-			const updateSymbolsGraphicsResult = UpdateSymbolsGraphics(input.data, input.tab, input.action);
+			const updateSymbolsGraphicsResult = UpdateSymbolsGraphics(input.data as Required<SymbolsGraphics>, input.tab, input.action);
 			if (updateSymbolsGraphicsResult.error) return updateSymbolsGraphicsResult.error;
 
 			({ updateQuery, updatedData, actionLog } = updateSymbolsGraphicsResult);

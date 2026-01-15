@@ -151,11 +151,15 @@ export async function generateProductPDFExport(productData: Product) {
                 y -= ROW_HEIGHT;
             });
 
-            y -= 25; // Reduced spacing after table
+            y -= 25; 
         };
 
-        // 1. Product Info (First section - no new page)
+
         const infoRows = [];
+        infoRows.push(['Product Name', productData.product_name || '']);
+        infoRows.push(['Product Description', productData.product_description || '']);
+        infoRows.push(['Product Plan Number', productData.product_plan_number || '']);
+        
         if (productData.product_information?.data) {
             const d = productData.product_information.data;
             infoRows.push(['Market Geography', d.market_geography]);
@@ -188,9 +192,9 @@ export async function generateProductPDFExport(productData: Product) {
         ]);
         drawTable('Label Components',
             [
-                { label: 'Component #', widthPct: 0.12 },
-                { label: 'Image', widthPct: 0.12 },
-                { label: 'Description', widthPct: 0.32 },
+                { label: 'Component #', widthPct: 0.10 },
+                { label: 'Image', widthPct: 0.18 },
+                { label: 'Description', widthPct: 0.28 },
                 { label: 'Label Type', widthPct: 0.16 },
                 { label: 'Dimensions', widthPct: 0.14 },
                 { label: 'Component Type', widthPct: 0.14 },
@@ -201,15 +205,14 @@ export async function generateProductPDFExport(productData: Product) {
 
         // 4. Symbols (New Page)
         const symbolsRows = (productData.symbols_graphics?.data?.filter(data => data.entity === 'Symbols') || []).map((item: any) => [
-            item.text, item.image, item.entity, item.text_present, item.label_presence
+            item.text, item.image, item.text_present, item.label_presence
         ]);
         drawTable('Symbols',
             [
-                { label: 'Text', widthPct: 0.20 },
-                { label: 'Image', widthPct: 0.20 },
-                { label: 'Entity', widthPct: 0.25 },
-                { label: 'Text Present', widthPct: 0.17 },
-                { label: 'Label Presence', widthPct: 0.18 },
+                { label: 'Name', widthPct: 0.25 },
+                { label: 'Image', widthPct: 0.25 },
+                { label: 'Text Present', widthPct: 0.25 },
+                { label: 'Label Presence', widthPct: 0.25 },
             ],
             symbolsRows,
             true // Start new page
@@ -218,15 +221,14 @@ export async function generateProductPDFExport(productData: Product) {
         
         // 5. Schematics (New Page)
         const schematicsRows = (productData.symbols_graphics?.data?.filter(data => data.entity === 'Schematics') || []).map((item: any) => [
-            item.text, item.image, item.entity, item.label_presence, item.description
+            item.text, item.image, item.label_presence, item.description
         ]);
         drawTable('Schematics',
             [
-                { label: 'Text', widthPct: 0.18 },
-                { label: 'Image', widthPct: 0.18 },
-                { label: 'Entity', widthPct: 0.24 },
-                { label: 'Label Presence', widthPct: 0.18 },
-                { label: 'Description', widthPct: 0.22 },
+                { label: 'Name', widthPct: 0.20 },
+                { label: 'Image', widthPct: 0.20 },
+                { label: 'Label Presence', widthPct: 0.25 },
+                { label: 'Description', widthPct: 0.35 },
             ],
             schematicsRows,
             true // Start new page
@@ -234,15 +236,15 @@ export async function generateProductPDFExport(productData: Product) {
 
         // 6. Barcodes (New Page)
         const barcodesRows = (productData.symbols_graphics?.data?.filter(data => data.entity === 'Barcodes') || []).map((item: any) => [
-            item.text, item.image, item.entity, item.label_presence, item.description
+            item.text, item.image, item.label_presence, item.count?.toString() || 1, item.description
         ]);
         drawTable('Barcodes',
             [
-                { label: 'Text', widthPct: 0.18 },
+                { label: 'Type', widthPct: 0.18 },
                 { label: 'Image', widthPct: 0.18 },
-                { label: 'Entity', widthPct: 0.24 },
-                { label: 'Label Presence', widthPct: 0.18 },
-                { label: 'Description', widthPct: 0.22 },
+                { label: 'Label Presence', widthPct: 0.22 },
+                { label: 'Count', widthPct: 0.10 },
+                { label: 'Description', widthPct: 0.32 },
             ],
             barcodesRows,
             true // Start new page
@@ -251,15 +253,14 @@ export async function generateProductPDFExport(productData: Product) {
 
         // 7. Other Components (New Page)
         const otherComponentsRows = (productData.symbols_graphics?.data?.filter(data => data.entity === 'Other Components') || []).map((item: any) => [
-            item.text, item.image, item.entity, item.label_presence, item.description
+            item.text, item.image, item.label_presence, item.description
         ]);
         drawTable('Other Components',
             [
-                { label: 'Text', widthPct: 0.18 },
-                { label: 'Image', widthPct: 0.18 },
-                { label: 'Entity', widthPct: 0.24 },
-                { label: 'Label Presence', widthPct: 0.18 },
-                { label: 'Description', widthPct: 0.22 },
+                { label: 'Name', widthPct: 0.20 },
+                { label: 'Image', widthPct: 0.20 },
+                { label: 'Label Presence', widthPct: 0.25 },
+                { label: 'Description', widthPct: 0.35 },
             ],
             otherComponentsRows,
             true // Start new page
