@@ -199,11 +199,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			({ updateQuery, updatedData, actionLog } = updateLabelComponentTabCompletionResult);
 
 			break;
-		case 'add_symbols_graphics':
+		case 'add_symbols_graphics': {
 			const addSymbolsGraphicsResult = AddSymbolsGraphics(input.data, input.tab, input.action);
 			if (addSymbolsGraphicsResult.error) return addSymbolsGraphicsResult.error;
 
-			if(input.data[0].entity === 'barcode') {
+			if(input.data[0].entity?.toLowerCase() === 'barcodes') {
 				const isDuplicateBarcode = await db.collection<Product>('products').findOne({
 					_id: new ObjectId(input.id),
 					'symbols_graphics.data': {
@@ -231,12 +231,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			({ updateQuery, updatedData, actionLog } = addSymbolsGraphicsResult);
 
 			break;
+		}
 
-		case 'update_symbols_graphics':
+		case 'update_symbols_graphics': {
 			const updateSymbolsGraphicsResult = UpdateSymbolsGraphics(input.data as Required<SymbolsGraphics>, input.tab, input.action);
 			if (updateSymbolsGraphicsResult.error) return updateSymbolsGraphicsResult.error;
 
-			if(input.data.entity === 'barcode') {
+			if(input.data.entity?.toLowerCase() === 'barcodes') {
 				const isDuplicateBarcode = await db.collection<Product>('products').findOne({
 					_id: new ObjectId(input.id),
 					'symbols_graphics.data': {
@@ -266,6 +267,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			({ updateQuery, updatedData, actionLog } = updateSymbolsGraphicsResult);
 
 			break;
+		}
 
 		case 'delete_symbols_graphics':
 			const deleteSymbolsGraphicsResult = deleteSymbolsGraphics(input.data, input.tab, input.action);
