@@ -31,6 +31,12 @@ export async function generateProductExcelExport(productData: Product) {
         const infoData = productData.product_information?.data;
         const infoRows: { field: string; value: string }[] = [];
         
+        infoRows.push(
+            { field: 'Product Name', value: productData.product_name || '' },
+            { field: 'Product Description', value: productData.product_description || '' },
+            { field: 'Product Plan Number', value: productData.product_plan_number || '' }
+        );
+        
         if (infoData) {
             infoRows.push(
                 { field: 'Market Geography', value: infoData.market_geography || '' },
@@ -106,20 +112,19 @@ export async function generateProductExcelExport(productData: Product) {
         });
 
         symbolsSheet.columns = [
-            { header: 'Text', key: 'text', width: 30 },
+            { header: 'Name', key: 'text', width: 30 },
             { header: 'Image', key: 'image', width: 50 },
-            { header: 'Entity', key: 'entity', width: 50 },
             { header: 'Text Present', key: 'text_present', width: 50 },
             { header: 'Label Presence', key: 'label_presence', width: 50 },
         ];
 
         const symbolsData = productData.symbols_graphics.data.filter(data => data.entity === 'Symbols');
-        const symbolsRows: { text: string; image: string; entity: string; text_present: string; label_presence: string }[] = [];
+        const symbolsRows: { text: string; image: string; text_present: string; label_presence: string }[] = [];
 
 
         symbolsData.map((item: any) => {
             symbolsRows.push(
-                { text: item.text || '', image: item.image || '', entity: item.entity || '', text_present: item.text_present || '', label_presence: item.label_presence.join(',') || '' }
+                { text: item.text || '', image: item.image || '', text_present: item.text_present || '', label_presence: item.label_presence.join(',') || '' }
             );
         });
 
@@ -133,20 +138,19 @@ export async function generateProductExcelExport(productData: Product) {
         });
 
         schematicsSheet.columns = [
-            { header: 'Text', key: 'text', width: 30 },
+            { header: 'Name', key: 'text', width: 30 },
             { header: 'Image', key: 'image', width: 50 },
-            { header: 'Entity', key: 'entity', width: 50 },
             { header: 'Label Presence', key: 'label_presence', width: 50 },
             { header: 'Description', key: 'description', width: 50 },
         ];
 
         const schematicsData = productData.symbols_graphics.data.filter(data => data.entity === 'Schematics');
-        const schematicsRows: { text: string; image: string; entity: string; label_presence: string; description: string }[] = [];
+        const schematicsRows: { text: string; image: string; label_presence: string; description: string }[] = [];
 
 
         schematicsData.map((item: any) => {
             schematicsRows.push(
-                { text: item.text || '', image: item.image || '', entity: item.entity || '', label_presence: item.label_presence.join(',')  || '', description: item.description || '' }
+                { text: item.text || '', image: item.image || '', label_presence: item.label_presence.join(',')  || '', description: item.description || '' }
             );
         });
 
@@ -160,20 +164,20 @@ export async function generateProductExcelExport(productData: Product) {
         });
 
         barcodesSheet.columns = [
-            { header: 'Text', key: 'text', width: 30 },
+            { header: 'Type', key: 'text', width: 30 },
             { header: 'Image', key: 'image', width: 50 },
-            { header: 'Entity', key: 'entity', width: 50 },
             { header: 'Label Presence', key: 'label_presence', width: 50 },
+            { header: 'Count', key: 'count', width: 20 },
             { header: 'Description', key: 'description', width: 50 },
         ];
 
         const barcodesData = productData.symbols_graphics.data.filter(data => data.entity === 'Barcodes');
-        const barcodesRows: { text: string; image: string; entity: string; label_presence: string; description: string }[] = [];
+        const barcodesRows: { text: string; image: string; label_presence: string; count: number; description: string }[] = [];
 
 
         barcodesData.map((item: any) => {
             barcodesRows.push(
-                { text: item.text || '', image: item.image || '', entity: item.entity || '', label_presence: item.label_presence.join(',')  || '', description: item.description || '' }
+                { text: item.text || '', image: item.image || '', label_presence: item.label_presence.join(',')  || '', count: item.count || 1, description: item.description || '' }
             );
         });
 
@@ -187,20 +191,19 @@ export async function generateProductExcelExport(productData: Product) {
         });
 
         otherComponentsSheet.columns = [
-            { header: 'Text', key: 'text', width: 30 },
+            { header: 'Name', key: 'text', width: 30 },
             { header: 'Image', key: 'image', width: 50 },
-            { header: 'Entity', key: 'entity', width: 50 },
             { header: 'Label Presence', key: 'label_presence', width: 50 },
             { header: 'Description', key: 'description', width: 50 },
         ];
 
         const otherComponentsData = productData.symbols_graphics.data.filter(data => data.entity === 'Other Components');
-        const otherComponentsRows: { text: string; image: string; entity: string; label_presence: string; description: string }[] = [];
+        const otherComponentsRows: { text: string; image: string; label_presence: string; description: string }[] = [];
 
 
         otherComponentsData.map((item: any) => {
             otherComponentsRows.push(
-                { text: item.text || '', image: item.image || '', entity: item.entity || '', label_presence: item.label_presence.join(',') || '', description: item.description || '' }
+                { text: item.text || '', image: item.image || '', label_presence: item.label_presence.join(',') || '', description: item.description || '' }
             );
         });
 

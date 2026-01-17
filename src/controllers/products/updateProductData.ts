@@ -21,7 +21,7 @@ import { AddSymbolsGraphics, deleteSymbolsGraphics, UpdateSymbolsGraphics, updat
 import { addProductData, deleteProductData, updateProductData, updateProductDataTabCompletion } from './productData/product-data';
 import { addOperationalParameters, deleteOperationalParameters, updateOperationalParameters, updateOperationalParametersTabCompletion } from './productData/operational-parameters';
 import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion, updateLabelTagTaggedImage } from './productData/label-tags';
-
+import { SymbolsGraphics } from '../../types/products/symbols-graphics';
 
 const validTabs = [
 	'product-information',
@@ -155,6 +155,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const addLabelComponentResult = addLabelComponent(input.data, input.tab, input.action);
 			if (addLabelComponentResult.error) return addLabelComponentResult.error;
 
+			const isDuplicateAddLabelComponent = await db.collection<Product>('products').findOne({
+				_id: new ObjectId(input.id),
+				'label_components.data.component_number': input.data[0].component_number,
+			});
+			if (isDuplicateAddLabelComponent) return ResponseWrapper.conflict('Component number already exists, please use a different component number.');
+
 			({ updateQuery, updatedData, actionLog } = addLabelComponentResult);
 
 			break;
@@ -162,6 +168,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		case 'update_label_component':
 			const updateLabelComponentResult = updateLabelComponent(input.data, input.tab, input.action);
 			if (updateLabelComponentResult.error) return updateLabelComponentResult.error;
+
+			const isDuplicateUpdateLabelComponent = await db.collection<Product>('products').findOne({
+				_id: new ObjectId(input.id),
+				'label_components.data': {
+					$elemMatch: {
+						_id: {$ne: new ObjectId(input.data.id)},
+						component_number: input.data.component_number,
+					}		
+				}
+			});
+			if (isDuplicateUpdateLabelComponent) return ResponseWrapper.conflict('Component number already exists, please use a different component number.');
 
 			({ updateQuery, updatedData, actionLog } = updateLabelComponentResult);
 
@@ -182,21 +199,75 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			({ updateQuery, updatedData, actionLog } = updateLabelComponentTabCompletionResult);
 
 			break;
-		case 'add_symbols_graphics':
+		case 'add_symbols_graphics': {
 			const addSymbolsGraphicsResult = AddSymbolsGraphics(input.data, input.tab, input.action);
 			if (addSymbolsGraphicsResult.error) return addSymbolsGraphicsResult.error;
+
+			if(input.data[0].entity?.toLowerCase() === 'barcodes') {
+				const isDuplicateBarcode = await db.collection<Product>('products').findOne({
+					_id: new ObjectId(input.id),
+					'symbols_graphics.data': {
+						$elemMatch: {
+							entity: 'Barcodes',
+							text: input.data[0].text,
+							description: input.data[0].description,
+						}
+					}
+				});
+				if (isDuplicateBarcode) return ResponseWrapper.conflict('Barcode description already exists, please use a different barcode description.');
+			} else {
+				const isDuplicategraphics = await db.collection<Product>('products').findOne({
+					_id: new ObjectId(input.id),
+					'symbols_graphics.data': {
+						$elemMatch:{
+							entity: input.data[0].entity,
+							text: input.data[0].text,
+						}
+					}
+				});
+				if (isDuplicategraphics) return ResponseWrapper.conflict('Graphics description already exists, please use a different graphics description.');
+			}
 
 			({ updateQuery, updatedData, actionLog } = addSymbolsGraphicsResult);
 
 			break;
+		}
 
-		case 'update_symbols_graphics':
-			const updateSymbolsGraphicsResult = UpdateSymbolsGraphics(input.data, input.tab, input.action);
+		case 'update_symbols_graphics': {
+			const updateSymbolsGraphicsResult = UpdateSymbolsGraphics(input.data as Required<SymbolsGraphics>, input.tab, input.action);
 			if (updateSymbolsGraphicsResult.error) return updateSymbolsGraphicsResult.error;
+
+			if(input.data.entity?.toLowerCase() === 'barcodes') {
+				const isDuplicateBarcode = await db.collection<Product>('products').findOne({
+					_id: new ObjectId(input.id),
+					'symbols_graphics.data': {
+						$elemMatch: {
+							_id: {$ne: new ObjectId(input.data.id)},
+							entity: 'Barcodes',
+							text: input.data.text,
+							description: input.data.description,
+						}
+					}
+				});
+				if (isDuplicateBarcode) return ResponseWrapper.conflict('Barcode description already exists, please use a different barcode description.');
+			} else {
+				const isDuplicategraphics = await db.collection<Product>('products').findOne({
+					_id: new ObjectId(input.id),
+					'symbols_graphics.data': {
+						$elemMatch:{
+							_id: {$ne: new ObjectId(input.data.id)},
+							entity: input.data.entity,
+							text: input.data.text,
+						}
+					}
+				});
+				if (isDuplicategraphics) return ResponseWrapper.conflict('Graphics description already exists, please use a different graphics description.');
+			}
 
 			({ updateQuery, updatedData, actionLog } = updateSymbolsGraphicsResult);
 
 			break;
+		}
 
 		case 'delete_symbols_graphics':
 			const deleteSymbolsGraphicsResult = deleteSymbolsGraphics(input.data, input.tab, input.action);

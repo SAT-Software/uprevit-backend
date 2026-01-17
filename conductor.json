@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "setup": "cp \"$CONDUCTOR_ROOT_PATH/.env.json\" . && npm install && cd layers/nodejs && npm install",
+    "run": "npm run start:local"
+  }
+}
