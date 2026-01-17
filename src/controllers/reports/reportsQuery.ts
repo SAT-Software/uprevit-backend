@@ -5,10 +5,7 @@ import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { authenticateRequest } from '../../utils/authUtils';
 import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
-import { 
-	validateConditions, 
-	buildAggregationPipeline 
-} from '../../utils/reports/queryBuilder';
+import { validateConditions, buildAggregationPipeline } from '../../utils/reports/queryBuilder';
 
 /**
  * @param {APIGatewayProxyEvent} event
@@ -39,10 +36,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const page = input.pagination?.page || 1;
 		const limit = Math.min(input.pagination?.limit || 10, 100);
 
-
-		if (input.conditionLogic && !['AND', 'OR'].includes(input.conditionLogic)) 
+		if (input.conditionLogic && !['AND', 'OR'].includes(input.conditionLogic)) {
 			return ResponseWrapper.badRequest('conditionLogic must be either "AND" or "OR"');
-
+		}
 
 		if (input.conditions && input.conditions.length > 0) {
 			const conditionError = validateConditions(input.conditions);

@@ -5,7 +5,7 @@ import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { authenticateRequest } from '../../utils/authUtils';
 import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
-import { ReportsExportRequest, EXPORT_LIMITS } from '../../types/reports';
+import { EXPORT_LIMITS } from '../../types/reports';
 import { validateConditions, buildExportPipeline } from '../../utils/reports/queryBuilder';
 import { generateReportsExcelExport } from '../../utils/reports/exportReportsExcel';
 
@@ -48,7 +48,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const pipeline = buildExportPipeline(input, workspaceId, EXPORT_LIMITS.EXCEL);
 
 		const db = await getDb();
-		const products = await db.collection<Product>('products').aggregate(pipeline).toArray() as any[];
+		const products = (await db.collection<Product>('products').aggregate(pipeline).toArray()) as any[];
 
 		const excelBuffer = await generateReportsExcelExport(products);
 		if (!excelBuffer) return ResponseWrapper.internalServerError('Failed to generate Excel file');
