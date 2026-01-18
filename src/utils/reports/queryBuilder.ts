@@ -66,11 +66,17 @@ function escapeRegex(str: string): string {
 	return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function buildOperatorQuery(operator: QueryOperator, value?: string | string[]): any {
+function buildOperatorQuery(operator: QueryOperator, value?: string | string[], field?: string): any {
     switch (operator) {
     case 'equals':
+        if (field === 'version' && typeof value === 'string') {
+            return parseInt(value, 10);
+        }
         return value;
     case 'not_equals':
+        if (field === 'version' && typeof value === 'string') {
+            return { $ne: parseInt(value, 10) };
+        }
         return { $ne: value };
     case 'contains':
         return { $regex: escapeRegex(value as string || ''), $options: 'i' };
@@ -82,11 +88,17 @@ function buildOperatorQuery(operator: QueryOperator, value?: string | string[]):
         return { $in: [null, ''] };
     case 'contains_any':
         if (Array.isArray(value) && value.length > 0) {
+            if (field === 'version') {
+                return { $in: value.map((v) => parseInt(v, 10)) };
+            }
             return { $in: value };
         }
         return { $in: [] };
     case 'contains_all':
         if (Array.isArray(value) && value.length > 0) {
+            if (field === 'version') {
+                return { $all: value.map((v) => parseInt(v, 10)) };
+            }
             return { $all: value };
         }
         return { $in: [] };
@@ -97,7 +109,7 @@ function buildOperatorQuery(operator: QueryOperator, value?: string | string[]):
 
 function buildConditionQuery(condition: QueryCondition): Document {
 	const { tab, field, operator, value } = condition;
-	const operatorQuery = buildOperatorQuery(operator, value);
+	const operatorQuery = buildOperatorQuery(operator, value, field);
 
 	if (tab === 'root' || ROOT_FIELDS.includes(field)) {
 		if (operator === 'not_exists') {
@@ -192,7 +204,6 @@ export function buildAggregationPipeline(
 
 	const baseMatch: Document = {
 		workspace_id: workspaceId,
-		is_latest: true,
 	};
 	pipeline.push({ $match: baseMatch });
 
@@ -254,7 +265,6 @@ export function buildExportPipeline(
 	pipeline.push({
 		$match: {
 			workspace_id: workspaceId,
-			is_latest: true,
 		},
 	});
 

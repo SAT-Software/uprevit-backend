@@ -74,7 +74,7 @@ export const TAB_CONFIG: Record<string, { path: string; isArray: boolean }> = {
 	},
 };
 
-export const ROOT_FIELDS = ['status', 'department_id', 'project_id', 'product_name', 'product_plan_number'];
+export const ROOT_FIELDS = ['status', 'department_id', 'project_id', 'product_name', 'product_plan_number', 'version'];
 
 export const VALID_OPERATORS = [
     'equals',
