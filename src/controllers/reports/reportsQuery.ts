@@ -2,6 +2,8 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { ObjectId } from 'mongodb';
 import { Product } from '../../models/product';
+import { Department } from '../../models/department';
+import { Project } from '../../models/project';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { authenticateRequest } from '../../utils/authUtils';
 import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
@@ -55,15 +57,40 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const totalCount = result[0]?.metadata?.[0]?.total || 0;
 		const totalPages = Math.ceil(totalCount / limit);
 
+		const departmentIds = [...new Set(products.map((p: any) => p.department_id).filter(Boolean))];
+		const projectIds = [...new Set(products.map((p: any) => p.project_id).filter(Boolean))];
+
+		const objectIdIds = (ids: any[]) => ids.map((id) => (id instanceof ObjectId ? id : ObjectId.createFromHexString(id.toString())));
+
+		const [departments, projects] = await Promise.all([
+			departmentIds.length > 0
+				? await db.collection<Department>('departments').find({
+					_id: { $in: objectIdIds(departmentIds) },
+				}).project({ _id: 1, department_name: 1 }).toArray()
+				: [],
+
+			projectIds.length > 0
+				? await db.collection<Project>('projects').find({
+					_id: { $in: objectIdIds(projectIds) },
+				}).project({ _id: 1, project_name: 1 }).toArray()
+				: [],	
+		]);
+
+		const departmentMap = new Map(departments.map((d) => [d._id?.toString(), d.department_name]));
+		const projectMap = new Map(projects.map((p) => [p._id?.toString(), p.project_name]));
+
 		const transformedProducts = products.map((p: any) => ({
 			_id: p._id,
 			product_name: p.product_name,
 			product_plan_number: p.product_plan_number,
 			department_id: p.department_id,
+			department_name: departmentMap.get(p.department_id?.toString()) || null,
 			project_id: p.project_id,
+			project_name: projectMap.get(p.project_id?.toString()) || null,
 			status: p.status,
 			target_date: p.target_date,
 			version: p.version,
+			market_geography: p.product_information?.data?.market_geography || null,
 		}));
 
 		const response = {
