@@ -8,6 +8,7 @@ import {
 	ROOT_FIELDS,
 	VALID_OPERATORS,
 	NO_VALUE_OPERATORS,
+	ARRAY_OPERATORS,
 	ReportsQueryRequest,
 	ReportsExportRequest,
 	ALLOWED_SORT_FIELDS,
@@ -16,28 +17,37 @@ import { ResponseWrapper } from '../responseWrapper';
 import { APIGatewayProxyResult } from 'aws-lambda';
 
 export function validateCondition(condition: QueryCondition): APIGatewayProxyResult | null {
-	if (!VALID_OPERATORS.includes(condition.operator)) {
-		return ResponseWrapper.badRequest(
-			`Invalid operator '${condition.operator}'. Must be one of: ${VALID_OPERATORS.join(', ')}`,
-		);
-	}
+    if (!VALID_OPERATORS.includes(condition.operator)) {
+        return ResponseWrapper.badRequest(
+            `Invalid operator '${condition.operator}'. Must be one of: ${VALID_OPERATORS.join(', ')}`,
+        );
+    }
 
-	if (!NO_VALUE_OPERATORS.includes(condition.operator) && !condition.value) {
-		return ResponseWrapper.badRequest(`Operator '${condition.operator}' requires a value`);
-	}
+    const isNoValueOperator = NO_VALUE_OPERATORS.includes(condition.operator);
+    const isArrayOperator = ['contains_any', 'contains_all'].includes(condition.operator);
 
-	const isRootField = ROOT_FIELDS.includes(condition.field);
-	const isValidTab = condition.tab === 'root' || TAB_CONFIG[condition.tab];
+    if (!isNoValueOperator && !isArrayOperator && !condition.value) {
+        return ResponseWrapper.badRequest(`Operator '${condition.operator}' requires a value`);
+    }
 
-	if (!isRootField && !isValidTab) {
-		return ResponseWrapper.badRequest(
-			`Invalid tab '${condition.tab}'. Must be one of: ${Object.keys(TAB_CONFIG).join(
-				', ',
-			)}, or 'root' for root-level fields`,
-		);
-	}
+    if (isArrayOperator) {
+        if (!condition.value || !Array.isArray(condition.value) || condition.value.length === 0) {
+            return ResponseWrapper.badRequest(`Operator '${condition.operator}' requires at least one value`);
+        }
+    }
 
-	return null;
+    const isRootField = ROOT_FIELDS.includes(condition.field);
+    const isValidTab = condition.tab === 'root' || TAB_CONFIG[condition.tab];
+
+    if (!isRootField && !isValidTab) {
+        return ResponseWrapper.badRequest(
+            `Invalid tab '${condition.tab}'. Must be one of: ${Object.keys(TAB_CONFIG).join(
+                ', ',
+            )}, or 'root' for root-level fields`,
+        );
+    }
+
+    return null;
 }
 
 export function validateConditions(conditions: QueryCondition[]): APIGatewayProxyResult | null {
@@ -56,23 +66,33 @@ function escapeRegex(str: string): string {
 	return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function buildOperatorQuery(operator: QueryOperator, value?: string): any {
-	switch (operator) {
-	case 'equals':
-		return value;
-	case 'not_equals':
-		return { $ne: value };
-	case 'contains':
-		return { $regex: escapeRegex(value || ''), $options: 'i' };
-	case 'not_contains':
-		return { $not: { $regex: escapeRegex(value || ''), $options: 'i' } };
-	case 'exists':
-		return { $exists: true, $ne: null, $nin: ['', null] };
-	case 'not_exists':
-		return { $in: [null, ''] };
-	default:
-		return value;
-	}
+function buildOperatorQuery(operator: QueryOperator, value?: string | string[]): any {
+    switch (operator) {
+    case 'equals':
+        return value;
+    case 'not_equals':
+        return { $ne: value };
+    case 'contains':
+        return { $regex: escapeRegex(value as string || ''), $options: 'i' };
+    case 'not_contains':
+        return { $not: { $regex: escapeRegex(value as string || ''), $options: 'i' } };
+    case 'exists':
+        return { $exists: true, $ne: null, $nin: ['', null] };
+    case 'not_exists':
+        return { $in: [null, ''] };
+    case 'contains_any':
+        if (Array.isArray(value) && value.length > 0) {
+            return { $in: value };
+        }
+        return { $in: [] };
+    case 'contains_all':
+        if (Array.isArray(value) && value.length > 0) {
+            return { $all: value };
+        }
+        return { $in: [] };
+    default:
+        return value;
+    }
 }
 
 function buildConditionQuery(condition: QueryCondition): Document {
@@ -115,6 +135,15 @@ function buildConditionQuery(condition: QueryCondition): Document {
 						},
 					},
 				],
+			};
+		}
+		if (ARRAY_OPERATORS.includes(operator)) {
+			return {
+				[tabConfig.path]: {
+					$elemMatch: {
+						[field]: operatorQuery,
+					},
+				},
 			};
 		}
 		return {
