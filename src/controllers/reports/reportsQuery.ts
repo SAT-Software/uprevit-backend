@@ -90,7 +90,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			status: p.status,
 			target_date: p.target_date,
 			version: p.version,
-			market_geography: p.product_information?.data?.market_geography || null,
 		}));
 
 		const response = {

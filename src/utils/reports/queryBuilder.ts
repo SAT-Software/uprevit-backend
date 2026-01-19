@@ -56,7 +56,9 @@ export function validateConditions(conditions: QueryCondition[]): APIGatewayProx
 		if (error) return error;
 
 		if (condition.logic && !['AND', 'OR'].includes(condition.logic)) {
-			return ResponseWrapper.badRequest('conditionLogic must be either "AND" or "OR"');
+			return ResponseWrapper.badRequest(
+				`"condition.logic" must be either "AND" or "OR". Found: "${condition.logic}" for field "${condition.field}"`,
+			);
 		}
 	}
 	return null;
