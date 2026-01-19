@@ -2,7 +2,8 @@ import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { ResponseWrapper } from './responseWrapper';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-// Replace with your Amazon Cognito user pool ID
+
+/** Cognito User Pool ID from environment variables */
 const userPoolId = process.env.USER_POOL_ID!;
 
 export type TokenValidationResponse = {
@@ -33,11 +34,9 @@ export async function verifyJWT(token: string): Promise<TokenValidationResponse>
 		});
 
 		const payload = await verifier.verify(token);
-		console.log('Decoded JWT:', payload);
-		
 		return {payload, isValid: true};
 	} catch (err) {
-		console.error('Error verifying JWT:', err);
+		console.error('JWT verification failed');
 		return {isValid: false};
 	}
 }
@@ -63,7 +62,7 @@ export async function validateRole(token: string, role: string): Promise<TokenVa
 
 		return {isValid: false};
 	} catch (err) {
-		console.error('Error validating role:', err);
+		console.error('Role validation failed');
 		return {isValid: false};
 	}
 }

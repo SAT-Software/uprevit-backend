@@ -88,7 +88,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			folder: newSourceFile
 		});
 	} catch (error) {
-		console.error('Error in creating the source file or folder:', error);
-		return ResponseWrapper.internalServerError('An error occurred while creating the source file or folder.');
+		console.error('Create source file/folder handler failed');
+		return ResponseWrapper.internalServerError('Failed to create source file or folder');
 	}
 }

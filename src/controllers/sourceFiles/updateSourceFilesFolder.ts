@@ -62,7 +62,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		})
         
 	} catch (error) {
-		console.error('Error while update the source files folder name:', error);
-		return ResponseWrapper.internalServerError(error instanceof Error ? error.message : 'Something went wrong while updating source file folder.');
+		console.error('Update source files folder handler failed');
+		return ResponseWrapper.internalServerError('Failed to update source file folder');
 	}
 }

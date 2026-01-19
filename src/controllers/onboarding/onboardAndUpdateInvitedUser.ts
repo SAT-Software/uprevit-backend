@@ -49,8 +49,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 		return ResponseWrapper.success({ message: "Profile updated successfully." });
 
-	} catch (error: any) {
-		console.error("Error updating invited user profile:", error);
-		return ResponseWrapper.internalServerError(error.message || "Failed to update profile.");
+	} catch (error) {
+		console.error('Onboard and update invited user handler failed');
+		return ResponseWrapper.internalServerError('Failed to update profile');
 	}
 };

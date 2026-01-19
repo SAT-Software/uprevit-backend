@@ -47,7 +47,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}
 		});
 	} catch (error) {
-		console.error('Error in compareProductVersions:', error);
-		return ResponseWrapper.internalServerError(error instanceof Error ? error : String(error));
+		console.error('Compare product versions handler failed');
+		return ResponseWrapper.internalServerError('Failed to compare product versions');
 	}
 }

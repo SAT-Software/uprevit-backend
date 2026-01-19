@@ -38,7 +38,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
         
 	} catch (error) {
-		console.error('Error in getBookmarkedSourceFileFolders:', error);
-		return ResponseWrapper.internalServerError(error instanceof Error ? error.message : 'Something went wrong while fetching bookmarked source file folders.');
+		console.error('Get bookmarked source file folders handler failed');
+		return ResponseWrapper.internalServerError('Failed to get bookmarked source file folders');
 	}
 }

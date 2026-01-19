@@ -107,7 +107,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		return ResponseWrapper.success(response);
 	} catch (err) {
-		console.error('Error in reports query handler:', err);
-		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+		console.error('Reports query handler failed');
+		return ResponseWrapper.internalServerError('Failed to process reports query');
 	}
 };

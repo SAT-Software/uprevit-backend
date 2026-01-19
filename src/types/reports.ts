@@ -77,14 +77,14 @@ export const TAB_CONFIG: Record<string, { path: string; isArray: boolean }> = {
 export const ROOT_FIELDS = ['status', 'department_id', 'project_id', 'product_name', 'product_plan_number', 'version'];
 
 export const VALID_OPERATORS = [
-    'equals',
-    'not_equals',
-    'contains',
-    'not_contains',
-    'exists',
-    'not_exists',
-    'contains_any',
-    'contains_all',
+	'equals',
+	'not_equals',
+	'contains',
+	'not_contains',
+	'exists',
+	'not_exists',
+	'contains_any',
+	'contains_all',
 ];
 
 export const NO_VALUE_OPERATORS = ['exists', 'not_exists'];

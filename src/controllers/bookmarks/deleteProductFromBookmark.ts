@@ -80,7 +80,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product_id: productId.toString(),
 		});
 	} catch (error) {
-		console.error("Error in deleteProductFromBookmark:", error);
-		return ResponseWrapper.internalServerError("An unknown error occurred while deleting the product from the bookmark folder.");
+		console.error('Delete product from bookmark handler failed');
+		return ResponseWrapper.internalServerError('Failed to delete product from bookmark folder');
 	}
 };

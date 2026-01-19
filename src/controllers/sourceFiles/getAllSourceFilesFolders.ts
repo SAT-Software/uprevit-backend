@@ -43,7 +43,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		})
         
 	} catch (error) {
-		console.error('Error in getAllSourceFilesFolders:', error);
-		return ResponseWrapper.internalServerError(error instanceof Error ? error.message : 'Something went wrong while fetching source file folders.');
+		console.error('Get all source files folders handler failed');
+		return ResponseWrapper.internalServerError('Failed to get source file folders');
 	}
 }

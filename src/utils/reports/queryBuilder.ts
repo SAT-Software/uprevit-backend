@@ -17,37 +17,37 @@ import { ResponseWrapper } from '../responseWrapper';
 import { APIGatewayProxyResult } from 'aws-lambda';
 
 export function validateCondition(condition: QueryCondition): APIGatewayProxyResult | null {
-    if (!VALID_OPERATORS.includes(condition.operator)) {
-        return ResponseWrapper.badRequest(
-            `Invalid operator '${condition.operator}'. Must be one of: ${VALID_OPERATORS.join(', ')}`,
-        );
-    }
+	if (!VALID_OPERATORS.includes(condition.operator)) {
+		return ResponseWrapper.badRequest(
+			`Invalid operator '${condition.operator}'. Must be one of: ${VALID_OPERATORS.join(', ')}`,
+		);
+	}
 
-    const isNoValueOperator = NO_VALUE_OPERATORS.includes(condition.operator);
-    const isArrayOperator = ['contains_any', 'contains_all'].includes(condition.operator);
+	const isNoValueOperator = NO_VALUE_OPERATORS.includes(condition.operator);
+	const isArrayOperator = ['contains_any', 'contains_all'].includes(condition.operator);
 
-    if (!isNoValueOperator && !isArrayOperator && !condition.value) {
-        return ResponseWrapper.badRequest(`Operator '${condition.operator}' requires a value`);
-    }
+	if (!isNoValueOperator && !isArrayOperator && !condition.value) {
+		return ResponseWrapper.badRequest(`Operator '${condition.operator}' requires a value`);
+	}
 
-    if (isArrayOperator) {
-        if (!condition.value || !Array.isArray(condition.value) || condition.value.length === 0) {
-            return ResponseWrapper.badRequest(`Operator '${condition.operator}' requires at least one value`);
-        }
-    }
+	if (isArrayOperator) {
+		if (!condition.value || !Array.isArray(condition.value) || condition.value.length === 0) {
+			return ResponseWrapper.badRequest(`Operator '${condition.operator}' requires at least one value`);
+		}
+	}
 
-    const isRootField = ROOT_FIELDS.includes(condition.field);
-    const isValidTab = condition.tab === 'root' || TAB_CONFIG[condition.tab];
+	const isRootField = ROOT_FIELDS.includes(condition.field);
+	const isValidTab = condition.tab === 'root' || TAB_CONFIG[condition.tab];
 
-    if (!isRootField && !isValidTab) {
-        return ResponseWrapper.badRequest(
-            `Invalid tab '${condition.tab}'. Must be one of: ${Object.keys(TAB_CONFIG).join(
-                ', ',
-            )}, or 'root' for root-level fields`,
-        );
-    }
+	if (!isRootField && !isValidTab) {
+		return ResponseWrapper.badRequest(
+			`Invalid tab '${condition.tab}'. Must be one of: ${Object.keys(TAB_CONFIG).join(
+				', ',
+			)}, or 'root' for root-level fields`,
+		);
+	}
 
-    return null;
+	return null;
 }
 
 export function validateConditions(conditions: QueryCondition[]): APIGatewayProxyResult | null {
@@ -69,44 +69,44 @@ function escapeRegex(str: string): string {
 }
 
 function buildOperatorQuery(operator: QueryOperator, value?: string | string[], field?: string): any {
-    switch (operator) {
-    case 'equals':
-        if (field === 'version' && typeof value === 'string') {
-            return parseInt(value, 10);
-        }
-        return value;
-    case 'not_equals':
-        if (field === 'version' && typeof value === 'string') {
-            return { $ne: parseInt(value, 10) };
-        }
-        return { $ne: value };
-    case 'contains':
-        return { $regex: escapeRegex(value as string || ''), $options: 'i' };
-    case 'not_contains':
-        return { $not: { $regex: escapeRegex(value as string || ''), $options: 'i' } };
-    case 'exists':
-        return { $exists: true, $ne: null, $nin: ['', null] };
-    case 'not_exists':
-        return { $in: [null, ''] };
-    case 'contains_any':
-        if (Array.isArray(value) && value.length > 0) {
-            if (field === 'version') {
-                return { $in: value.map((v) => parseInt(v, 10)) };
-            }
-            return { $in: value };
-        }
-        return { $in: [] };
-    case 'contains_all':
-        if (Array.isArray(value) && value.length > 0) {
-            if (field === 'version') {
-                return { $all: value.map((v) => parseInt(v, 10)) };
-            }
-            return { $all: value };
-        }
-        return { $in: [] };
-    default:
-        return value;
-    }
+	switch (operator) {
+	case 'equals':
+		if (field === 'version' && typeof value === 'string') {
+			return parseInt(value, 10);
+		}
+		return value;
+	case 'not_equals':
+		if (field === 'version' && typeof value === 'string') {
+			return { $ne: parseInt(value, 10) };
+		}
+		return { $ne: value };
+	case 'contains':
+		return { $regex: escapeRegex(value as string || ''), $options: 'i' };
+	case 'not_contains':
+		return { $not: { $regex: escapeRegex(value as string || ''), $options: 'i' } };
+	case 'exists':
+		return { $exists: true, $ne: null, $nin: ['', null] };
+	case 'not_exists':
+		return { $in: [null, ''] };
+	case 'contains_any':
+		if (Array.isArray(value) && value.length > 0) {
+			if (field === 'version') {
+				return { $in: value.map((v) => parseInt(v, 10)) };
+			}
+			return { $in: value };
+		}
+		return { $in: [] };
+	case 'contains_all':
+		if (Array.isArray(value) && value.length > 0) {
+			if (field === 'version') {
+				return { $all: value.map((v) => parseInt(v, 10)) };
+			}
+			return { $all: value };
+		}
+		return { $in: [] };
+	default:
+		return value;
+	}
 }
 
 function buildConditionQuery(condition: QueryCondition): Document {

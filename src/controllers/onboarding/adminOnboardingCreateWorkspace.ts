@@ -115,7 +115,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			workspaceId: workspaceId.toString(),
 		});
 	} catch (err) {
-		console.error('Error in onboarding lambda handler:', err);
-		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+		console.error('Admin onboarding create workspace handler failed');
+		return ResponseWrapper.internalServerError('Failed to complete onboarding');
 	}
 }

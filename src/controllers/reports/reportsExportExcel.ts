@@ -66,7 +66,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			isBase64Encoded: true,
 		};
 	} catch (err) {
-		console.error('Error in reports Excel export handler:', err);
-		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+		console.error('Reports Excel export handler failed');
+		return ResponseWrapper.internalServerError('Failed to export reports Excel');
 	}
 };

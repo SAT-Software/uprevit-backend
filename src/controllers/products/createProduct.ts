@@ -137,7 +137,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product: product,
 		});
 	} catch (err) {
-	    console.error('Error in Lambda handler:', err);
-	    return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+		console.error('Create product handler failed');
+		return ResponseWrapper.internalServerError('Failed to create product');
 	}
 };

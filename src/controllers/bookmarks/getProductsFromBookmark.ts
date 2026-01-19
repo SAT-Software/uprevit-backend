@@ -79,7 +79,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			products,
 		});
 	} catch (error) {
-		console.error("Error in getProductsFromBookmark:", error);
-		return ResponseWrapper.internalServerError("An unknown error occurred while fetching products from the bookmark folder.");
+		console.error('Get products from bookmark handler failed');
+		return ResponseWrapper.internalServerError('Failed to get products from bookmark folder');
 	}
 };

@@ -82,9 +82,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product_id: productId.toString(),
 		});
 	} catch (error) {
-		console.error("Error in addProductToBookmarkFolder:", error);
-		return ResponseWrapper.internalServerError(
-			error instanceof Error ? error.message : "An unknown error occurred while adding the product to the bookmark folder."
-		);
+		console.error('Add product to bookmark folder handler failed');
+		return ResponseWrapper.internalServerError('Failed to add product to bookmark folder');
 	}
 };

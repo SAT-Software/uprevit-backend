@@ -76,7 +76,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		})
         
 	} catch (error) {
-		console.error('Error in deleteSourceFilesFolder:', error);
-		return ResponseWrapper.internalServerError(error instanceof Error ? error.message : 'Something went wrong while deleting source file folder.');
+		console.error('Delete source file/folder handler failed');
+		return ResponseWrapper.internalServerError('Failed to delete source file or folder');
 	}
 }
