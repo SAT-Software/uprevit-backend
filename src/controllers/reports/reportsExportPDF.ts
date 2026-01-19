@@ -5,7 +5,7 @@ import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { authenticateRequest } from '../../utils/authUtils';
 import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
-import { ReportsExportRequest, EXPORT_LIMITS } from '../../types/reports';
+import { EXPORT_LIMITS } from '../../types/reports';
 import { validateConditions, buildExportPipeline } from '../../utils/reports/queryBuilder';
 import { generateReportsPDFExport } from '../../utils/reports/exportReportsPDF';
 
@@ -17,7 +17,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 	try {
 		const auth = await authenticateRequest(event);
 		if (!auth.isValid) return auth.error;
-
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
 
@@ -49,7 +48,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const pipeline = buildExportPipeline(input, workspaceId, EXPORT_LIMITS.PDF);
 
 		const db = await getDb();
-		const products = await db.collection<Product>('products').aggregate(pipeline).toArray() as any[];
+		const products = (await db.collection<Product>('products').aggregate(pipeline).toArray()) as any[];
 
 		const pdfBuffer = await generateReportsPDFExport(products);
 		if (!pdfBuffer) return ResponseWrapper.internalServerError('Failed to generate PDF file');
