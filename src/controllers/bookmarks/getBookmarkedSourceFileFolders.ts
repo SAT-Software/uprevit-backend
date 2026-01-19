@@ -39,7 +39,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
         
 	} catch (error) {
-		logError('Get bookmarked source file folders handler failed', err);
+		logError('Get bookmarked source file folders handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to get bookmarked source file folders');
 	}
 }

@@ -87,7 +87,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			result: result
 		});
 	} catch (error) {
-		logError('Update product bookmark folder handler failed', err);
+		logError('Update product bookmark folder handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to update product bookmark folder');
 	}
 }

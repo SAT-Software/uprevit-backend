@@ -88,7 +88,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			folder: newProductBookmarkFolder
 		});
 	} catch (error) {
-		logError('Create product bookmark folder handler failed', err);
+		logError('Create product bookmark folder handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to create product bookmark folder');
 	}
 }

@@ -63,7 +63,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		})
         
 	} catch (error) {
-		logError('Update source files folder handler failed', err);
+		logError('Update source files folder handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to update source file folder');
 	}
 }

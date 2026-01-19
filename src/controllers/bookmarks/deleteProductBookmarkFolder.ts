@@ -63,7 +63,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			result: result
 		});
 	} catch (error) {
-		logError('Delete product bookmark folder handler failed', err);
+		logError('Delete product bookmark folder handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to delete product bookmark folder');
 	}
 }

@@ -53,7 +53,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product: revisedUpdatedProduct,
 		});
 	} catch (error) {
-		logError('Create product version handler failed', err);
+		logError('Create product version handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to create product version');
 	}
 }

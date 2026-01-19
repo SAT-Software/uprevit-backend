@@ -83,7 +83,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product_id: productId.toString(),
 		});
 	} catch (error) {
-		logError('Add product to bookmark folder handler failed', err);
+		logError('Add product to bookmark folder handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to add product to bookmark folder');
 	}
 };

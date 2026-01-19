@@ -86,14 +86,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 				results.push({ email, status: "Success" });
 			} catch (error: any) {
-				logError(`Failed to invite user: ${email}`);
+				logError(`Failed to invite user: ${email}`, error);
 				results.push({ email, status: "Failed", reason: error.message || 'Invitation failed' });
 			}
 		}
 
 		return ResponseWrapper.success({ message: 'Users invited successfully', data:results });
 	} catch (error) {
-		logError('Invite new user by admin handler failed', err);
+		logError('Invite new user by admin handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to invite users');
 	}
 };

@@ -78,7 +78,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			result,
 		});
 	} catch (error) {
-		logError('Toggle bookmark source file folders handler failed', err);
+		logError('Toggle bookmark source file folders handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to toggle source file folder bookmark');
 	}
 }

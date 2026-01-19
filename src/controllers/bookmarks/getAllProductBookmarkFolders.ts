@@ -44,7 +44,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		})
         
 	} catch (error) {
-		logError('Get all product bookmark folders handler failed', err);
+		logError('Get all product bookmark folders handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to get product bookmark folders');
 	}
 }

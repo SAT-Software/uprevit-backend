@@ -43,7 +43,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			isBase64Encoded: true
 		};
 	} catch (error) {
-		logError('Product Excel export handler failed', err);
+		logError('Product Excel export handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to export product Excel');
 	}
 }

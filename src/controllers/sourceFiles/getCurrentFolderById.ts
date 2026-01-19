@@ -42,7 +42,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		})
         
 	} catch (error) {
-		logError('Get current folder by ID handler failed', err);
+		logError('Get current folder by ID handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to get folder');
 	}
 }
