@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { StatusCodes } from "../../utils/statusCodes";
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from "../../utils/authUtils";
 import { getDb } from "../../utils/db";
@@ -33,7 +34,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 
 		return {
-			statusCode: 200,
+			statusCode: StatusCodes.SUCCESS,
 			headers: {
 				'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 				'Content-Disposition': `attachment; filename="Product_${productData.product_plan_number}_v${productData.version}.xlsx"`,

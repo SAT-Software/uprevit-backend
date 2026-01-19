@@ -3,6 +3,7 @@ import { getDb } from '../../utils/db';
 import { ObjectId } from 'mongodb';
 import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { StatusCodes } from '../../utils/statusCodes';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
@@ -57,7 +58,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const timestamp = new Date().toISOString().split('T')[0];
 
 		return {
-			statusCode: 200,
+			statusCode: StatusCodes.SUCCESS,
 			headers: {
 				'Content-Type': 'application/pdf',
 				'Content-Disposition': `attachment; filename="Products_Report_${timestamp}.pdf"`,
