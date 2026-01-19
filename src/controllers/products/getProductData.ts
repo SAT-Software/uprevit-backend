@@ -3,6 +3,7 @@ import { getDb } from '../../utils/db';
 import type { ExcelData, LabelTags, Product, SymbolsGraphics, ProductInformation, ComplianceInformation, LabelComponents, ProductData } from '../../models/product';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateEnum } from '../../utils/validationUtils';
 import { authenticateRequest } from '../../utils/authUtils';
 
@@ -256,7 +257,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			},
 		});
 	} catch (err) {
-		console.error('Get product data handler failed');
+		logError('Get product data handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get product data');
 	}
 };

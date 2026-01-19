@@ -3,6 +3,7 @@ import { getDb } from "../../utils/db";
 import { ObjectId } from "mongodb";
 import { authenticateRequest } from "../../utils/authUtils";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { validateMissingFields } from "../../utils/validationUtils";
 import { updateAuditLog } from "../../utils/auditLog";
 import { AuditLogAction } from "../../models/auditLog";
@@ -50,7 +51,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 		return ResponseWrapper.success({ message: "Profile updated successfully." });
 
 	} catch (error) {
-		console.error('Onboard and update invited user handler failed');
+		logError('Onboard and update invited user handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to update profile');
 	}
 };

@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from "../../utils/authUtils";
 import { getDb } from "../../utils/db";
 import { validateAllObjectIds, validateMissingFields } from "../../utils/validationUtils";
@@ -77,7 +78,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			result,
 		});
 	} catch (error) {
-		console.error('Toggle bookmark source file folders handler failed');
+		logError('Toggle bookmark source file folders handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to toggle source file folder bookmark');
 	}
 }

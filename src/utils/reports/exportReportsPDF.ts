@@ -1,4 +1,5 @@
 import { PDFDocument, rgb, StandardFonts, PDFPage } from 'pdf-lib';
+import { logError } from '../logger';
 
 const PAGE_WIDTH = 842;
 const PAGE_HEIGHT = 595;
@@ -237,7 +238,7 @@ export async function generateReportsPDFExport(products: ProductForExport[]): Pr
 		const pdfBytes = await pdfDoc.save();
 		return Buffer.from(pdfBytes);
 	} catch (error) {
-		console.error('Reports PDF export failed');
+		logError('Reports PDF export failed', error);
 		return null;
 	}
 }

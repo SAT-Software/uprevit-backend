@@ -3,6 +3,7 @@ import { getDb } from '../../utils/db';
 import { ObjectId } from 'mongodb';
 import { Project } from '../../models/project';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 
 /**
@@ -185,7 +186,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			});
 		}
 	} catch (err) {
-		console.error('Get all projects handler failed');
+		logError('Get all projects handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get projects');
 	}
 };

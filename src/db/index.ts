@@ -19,11 +19,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 	        }),
 	    };
 	} catch (err) {
-	    console.log(err);
 	    return {
 	        statusCode: 500,
 	        body: JSON.stringify({
-	            message: 'some error happened',
+	            message: 'Hello world error',
 	        }),
 	    };
 	}

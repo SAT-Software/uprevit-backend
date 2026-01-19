@@ -5,6 +5,7 @@ import { AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { validateMissingFields } from '../../utils/validationUtils';
 
 /**
@@ -71,7 +72,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 		
 	} catch (err) {
-		console.error('Update user handler failed');
+		logError('Update user handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to update user');
 	}
 };

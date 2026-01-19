@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from "../../utils/authUtils";
 import { getDb } from "../../utils/db";
 import { Product } from "../../models/product";
@@ -42,7 +43,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			isBase64Encoded: true
 		};
 	} catch (error) {
-		console.error('Product PDF export handler failed');
+		logError('Product PDF export handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to export product PDF');
 	}
 }

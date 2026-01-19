@@ -3,6 +3,7 @@ import { getDb } from '../../utils/db';
 import { ObjectId } from 'mongodb';
 import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { validateAllObjectIds } from '../../utils/validationUtils';
 
@@ -126,7 +127,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			},
 		});
 	} catch (err) {
-		console.error('Get all product versions handler failed');
+		logError('Get all product versions handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get product versions');
 	}
 };

@@ -5,6 +5,7 @@ import { Product } from '../../models/product';
 import { Department } from '../../models/department';
 import { Project } from '../../models/project';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
 import { validateConditions, buildAggregationPipeline } from '../../utils/reports/queryBuilder';
@@ -107,7 +108,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		return ResponseWrapper.success(response);
 	} catch (err) {
-		console.error('Reports query handler failed');
+		logError('Reports query handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to process reports query');
 	}
 };

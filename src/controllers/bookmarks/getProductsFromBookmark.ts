@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from "../../utils/authUtils";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
@@ -79,7 +80,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			products,
 		});
 	} catch (error) {
-		console.error('Get products from bookmark handler failed');
+		logError('Get products from bookmark handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get products from bookmark folder');
 	}
 };

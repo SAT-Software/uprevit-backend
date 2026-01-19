@@ -1,6 +1,7 @@
 import { Product } from "../models/product";
 import { applyStandardStyling } from "./exportExcelStyling";
 import transformUniverExcelData from "./transformUniverExcelData";
+import { logError } from "./logger";
 require('core-js/modules/es.promise');
 require('core-js/modules/es.string.includes');
 require('core-js/modules/es.object.assign');
@@ -274,7 +275,7 @@ export async function generateProductExcelExport(productData: Product) {
 		const buffer = await workbook.xlsx.writeBuffer();
 		return buffer;
 	} catch (error) {
-		console.error('Excel export failed');
+		logError('Excel export failed', error);
 		return null;
 	}
 }

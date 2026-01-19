@@ -7,6 +7,7 @@ import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateEnum, validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
 import { authenticateRequest } from '../../utils/authUtils';
+import { logError } from '../../utils/logger';
 
 /**
  * Create a product
@@ -15,14 +16,21 @@ import { authenticateRequest } from '../../utils/authUtils';
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+	let userId: string | undefined;
+	let workspaceId: string | undefined;
+	
 	try {
 		const auth = await authenticateRequest(event);	
 		if(!auth.isValid) return auth.error;
+		
+		userId = auth.payload?.sub;
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
 
 		const input = JSON.parse(event.body);
 		if(!input)return ResponseWrapper.badRequest('Invalid JSON in request body');
+		
+		workspaceId = input.workspace_id;
 	
 
 		const missingFieldsResult = validateMissingFields({
@@ -137,7 +145,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product: product,
 		});
 	} catch (err) {
-		console.error('Create product handler failed');
+		logError('Create product handler failed', err, {
+			userId,
+			workspaceId,
+		});
 		return ResponseWrapper.internalServerError('Failed to create product');
 	}
 };

@@ -4,6 +4,7 @@ import { User } from '../../models/user';
 import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 
 /**
  * Create a user
@@ -55,7 +56,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 
 	} catch (err) {
-		console.error('Create user handler failed');
+		logError('Create user handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to create user');
 	}
 };

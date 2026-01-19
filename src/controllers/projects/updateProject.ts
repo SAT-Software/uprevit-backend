@@ -5,6 +5,7 @@ import { type AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
 
@@ -121,7 +122,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			project: project,
 		});
 	} catch (err) {
-		console.error('Update project handler failed');
+		logError('Update project handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to update project');
 	}
 };

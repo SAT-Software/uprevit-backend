@@ -7,6 +7,7 @@ require('core-js/modules/es.symbol.async-iterator');
 require('regenerator-runtime/runtime');
 
 const ExcelJS = require('exceljs/dist/es5');
+import { logError } from '../logger';
 
 interface ProductForExport {
 	_id: any;
@@ -169,7 +170,7 @@ export async function generateReportsExcelExport(products: ProductForExport[]): 
 		const buffer = await workbook.xlsx.writeBuffer();
 		return buffer;
 	} catch (error) {
-		console.error('Reports Excel export failed');
+		logError('Reports Excel export failed', error);
 		return null;
 	}
 }

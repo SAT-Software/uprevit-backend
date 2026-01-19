@@ -5,6 +5,7 @@ import { type AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateBoolean } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
 
@@ -84,7 +85,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			department: department,
 		});
 	} catch (err) {
-		console.error('Archive department handler failed');
+		logError('Archive department handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to archive department');
 	}
 };

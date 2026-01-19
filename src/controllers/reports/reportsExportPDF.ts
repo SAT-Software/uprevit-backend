@@ -3,6 +3,7 @@ import { getDb } from '../../utils/db';
 import { ObjectId } from 'mongodb';
 import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
 import { EXPORT_LIMITS } from '../../types/reports';
@@ -66,7 +67,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			isBase64Encoded: true,
 		};
 	} catch (err) {
-		console.error('Reports PDF export handler failed');
+		logError('Reports PDF export handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to export reports PDF');
 	}
 };

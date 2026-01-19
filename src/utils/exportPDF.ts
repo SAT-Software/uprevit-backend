@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, PDFPage } from "pdf-lib";
 import { Product } from "../models/product";
 import transformUniverExcelData from "./transformUniverExcelData";
+import { logError } from "./logger";
 
 const PAGE_WIDTH = 842;
 const PAGE_HEIGHT = 595;
@@ -364,7 +365,7 @@ export async function generateProductPDFExport(productData: Product) {
 		const pdfBytes = await pdfDoc.save();
 		return Buffer.from(pdfBytes);
 	} catch (error) {
-		console.error('PDF export failed');
+		logError('PDF export failed', error);
 		return null;
 	}
 }

@@ -2,6 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { validateAllObjectIds } from '../../utils/validationUtils';
 import { authenticateRequest } from '../../utils/authUtils';
 
@@ -104,7 +105,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			},
 		});
 	} catch (err) {
-		console.error('Get dashboard stats handler failed');
+		logError('Get dashboard stats handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get dashboard stats');
 	}
 };

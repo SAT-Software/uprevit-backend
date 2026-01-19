@@ -1,4 +1,5 @@
 import { MongoClient, Db, ServerApiVersion } from 'mongodb';
+import { logError, logInfo } from './logger';
 
 const { MONGODB_URI, DB_NAME } = process.env;
 
@@ -27,10 +28,10 @@ export const getDb = async (): Promise<Db> => {
 
 		await client.connect();
 		cachedDb = client.db(DB_NAME);
-		console.log('MongoDB connection established');
+		logInfo('MongoDB connection established', { dbName: DB_NAME });
 		return cachedDb;
 	} catch (err) {
-		console.error('MongoDB connection failed');
+		logError('MongoDB connection failed', err, { dbName: DB_NAME });
 		throw err;
 	}
 };

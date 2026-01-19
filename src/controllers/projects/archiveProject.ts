@@ -5,6 +5,7 @@ import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { authenticateWithRole } from '../../utils/authUtils';
 import { validateBoolean } from '../../utils/validationUtils';
 
@@ -77,7 +78,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			project: project,
 		});
 	} catch (err) {
-		console.error('Archive project handler failed');
+		logError('Archive project handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to archive project');
 	}
 };

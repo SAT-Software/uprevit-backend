@@ -4,6 +4,7 @@ import type { Workspace } from "../../models/workspace";
 import { AuditLogAction } from "../../models/auditLog";
 import { updateAuditLog } from "../../utils/auditLog";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { validateMissingFields } from "../../utils/validationUtils";
 import { authenticateRequest } from "../../utils/authUtils";
 import { User } from "../../models/user";
@@ -115,7 +116,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			workspaceId: workspaceId.toString(),
 		});
 	} catch (err) {
-		console.error('Admin onboarding create workspace handler failed');
+		logError('Admin onboarding create workspace handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to complete onboarding');
 	}
 }

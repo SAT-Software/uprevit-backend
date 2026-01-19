@@ -3,6 +3,7 @@ import { getDb } from '../../utils/db';
 import type { Department } from '../../models/department';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 
 /**
@@ -96,7 +97,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 		
 	} catch (err) {
-		console.error('Get department handler failed');
+		logError('Get department handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get department');
 	}
 }; 

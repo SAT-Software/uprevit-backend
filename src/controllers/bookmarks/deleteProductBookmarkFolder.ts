@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from "../../utils/authUtils";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
@@ -62,7 +63,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			result: result
 		});
 	} catch (error) {
-		console.error('Delete product bookmark folder handler failed');
+		logError('Delete product bookmark folder handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to delete product bookmark folder');
 	}
 }

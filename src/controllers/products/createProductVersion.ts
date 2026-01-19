@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from "../../utils/authUtils";
 import { getDb } from "../../utils/db";
 import { ObjectId } from "mongodb";
@@ -52,7 +53,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product: revisedUpdatedProduct,
 		});
 	} catch (error) {
-		console.error('Create product version handler failed');
+		logError('Create product version handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to create product version');
 	}
 }

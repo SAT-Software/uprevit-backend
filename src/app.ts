@@ -1,6 +1,7 @@
 import {APIGatewayProxyEvent, APIGatewayProxyResult} from 'aws-lambda';
 import {authenticateRequest} from './utils/authUtils';
 import {ResponseWrapper} from './utils/responseWrapper';
+import {logError} from './utils/logger';
 
 /**
  *
@@ -29,7 +30,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent):
 			}
 		);
 	} catch (err) {
-		console.error('Hello world handler failed');
+		logError('Hello world handler failed', err);
 		return ResponseWrapper.internalServerError('An error occurred');
 	}
 };

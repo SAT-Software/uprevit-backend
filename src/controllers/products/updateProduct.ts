@@ -5,6 +5,7 @@ import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 
 /**
@@ -116,7 +117,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product: updatedProduct,
 		});
 	} catch (err) {
-		console.error('Update product handler failed');
+		logError('Update product handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to update product');
 	}
 };

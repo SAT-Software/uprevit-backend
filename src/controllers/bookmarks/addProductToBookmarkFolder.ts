@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from "../../utils/authUtils";
 import { validateAllObjectIds, validateMissingFields } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
@@ -82,7 +83,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product_id: productId.toString(),
 		});
 	} catch (error) {
-		console.error('Add product to bookmark folder handler failed');
+		logError('Add product to bookmark folder handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to add product to bookmark folder');
 	}
 };
