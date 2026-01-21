@@ -34,7 +34,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const objectIdValidation = validateAllObjectIds({
 			workspace_id: input.workspace_id,
-			...(input.parentId && { 'parentId': input.parentId })
+			...(input.parentId && { 'parentId': input.parentId }),
+			...(input.product_id && { 'product_id': input.product_id })
 		});
 		if (objectIdValidation) return objectIdValidation;
 
@@ -42,6 +43,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const sourceFilesCollection = db.collection<SourceFile>('sourceFiles');
 		const workspaceId = ObjectId.createFromHexString(input.workspace_id);
 		const parentId = input.parentId ? ObjectId.createFromHexString(input.parentId) : null;
+		const productId = typeof input.product_id === 'string' ? ObjectId.createFromHexString(input.product_id) : null;
+
+		if (productId && input.type !== 'folder') {
+			return ResponseWrapper.badRequest('product_id can only be set for folders.');
+		}
+
+		if (productId && parentId) {
+			return ResponseWrapper.badRequest('product_id can only be set on top-level folders.');
+		}
 
 		const trimmedName = input.name.trim();
 
@@ -69,6 +79,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			name: trimmedName,
 			type: input.type,
 			parentId: parentId,
+			...(input.type === 'folder' && productId && { product_id: productId }),
 			...(input.type === 'file' && {url: input.url})
 		};
 
