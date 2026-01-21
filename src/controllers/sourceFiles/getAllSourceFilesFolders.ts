@@ -18,17 +18,28 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const workspaceId = event.queryStringParameters?.workspaceId;
 		if (!workspaceId) return ResponseWrapper.badRequest('Missing required query parameter: workspace_id');
 
-		const  validateWorkspaceId = validateAllObjectIds({ workspaceId });
+		const productId = event.queryStringParameters?.productId;
+
+		const  validateWorkspaceId = validateAllObjectIds({
+			workspaceId,
+			...(productId && { productId })
+		});
 		if (validateWorkspaceId) return validateWorkspaceId;
 
 		const db = await getDb();
 		const sourceFilesCollection = db.collection<SourceFile>('sourceFiles');
 
-		const sourceFileFolders = await sourceFilesCollection.find({
+		const query: any = {
 			workspace_id: new ObjectId(workspaceId),
 			type: 'folder',
 			parentId: { $eq: null }
-		}).toArray();
+		};
+
+		if (productId) {
+			query.product_id = new ObjectId(productId);
+		}
+
+		const sourceFileFolders = await sourceFilesCollection.find(query).toArray();
 
 		if(!sourceFileFolders || sourceFileFolders.length === 0) {
 			return ResponseWrapper.success({

@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { authenticateRequest } from "../../utils/authUtils";
 import { getDb } from "../../utils/db";
-import { validateAllObjectIds, validateMissingFields } from "../../utils/validationUtils";
+import { validateAllObjectIds } from "../../utils/validationUtils";
 import { ObjectId } from "mongodb";
 import { SourceFile } from "../../models/sourceFiles";
 import { updateAuditLog } from "../../utils/auditLog";
@@ -24,22 +24,50 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const input = JSON.parse(event.body);
 
-		const missingFieldsResult = validateMissingFields({
-			name: input.name,
-		});
-		if (missingFieldsResult) return missingFieldsResult;
+		const hasName = typeof input.name === 'string';
+		const hasProductId = Object.prototype.hasOwnProperty.call(input, 'product_id');
 
-		const  validateFolderId = validateAllObjectIds({ folderId });
+		if (!hasName && !hasProductId) {
+			return ResponseWrapper.badRequest('At least one of name or product_id is required.');
+		}
+
+		if (hasProductId && input.product_id !== null && typeof input.product_id !== 'string') {
+			return ResponseWrapper.badRequest('product_id must be a valid ObjectId string or null.');
+		}
+
+		const  validateFolderId = validateAllObjectIds({
+			folderId,
+			...(typeof input.product_id === 'string' && { product_id: input.product_id })
+		});
 		if (validateFolderId) return validateFolderId;
 
 		const db = await getDb();
 		const sourceFilesCollection = db.collection<SourceFile>('sourceFiles');
 		const folderObjectId = new ObjectId(folderId);
-		const trimmedFolderName = input.name.trim();
+		const updateFields: Partial<SourceFile> = {};
+
+		if (hasName) {
+			const trimmedFolderName = input.name.trim();
+			if (!trimmedFolderName) return ResponseWrapper.badRequest('Folder name cannot be empty.');
+			updateFields.name = trimmedFolderName;
+		}
+
+		if (hasProductId) {
+			const folder = await sourceFilesCollection.findOne({ _id: folderObjectId, type: 'folder' });
+			if (!folder) {
+				return ResponseWrapper.notFound('Folder not found.');
+			}
+			if (folder.parentId) {
+				return ResponseWrapper.badRequest('product_id can only be set on top-level folders.');
+			}
+			updateFields.product_id = typeof input.product_id === 'string'
+				? ObjectId.createFromHexString(input.product_id)
+				: null;
+		}
 
 		const updatedFolder = await sourceFilesCollection.findOneAndUpdate(
 			{ _id: folderObjectId, type: 'folder' },
-			{ $set: { name: trimmedFolderName } },
+			{ $set: updateFields },
 			{ returnDocument: 'after' }
 		);
 

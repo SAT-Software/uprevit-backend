@@ -7,5 +7,6 @@ export interface SourceFile {
     name: string
     type: 'file' | 'folder'
     parentId: ObjectId | null
+    product_id?: ObjectId | null
     url?: string
 }
