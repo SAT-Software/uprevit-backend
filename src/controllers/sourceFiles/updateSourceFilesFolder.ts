@@ -48,6 +48,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		if (hasName) {
 			const trimmedFolderName = input.name.trim();
+			if (!trimmedFolderName) return ResponseWrapper.badRequest('Folder name cannot be empty.');
 			updateFields.name = trimmedFolderName;
 		}
 
