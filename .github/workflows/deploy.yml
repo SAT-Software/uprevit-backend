@@ -25,14 +25,14 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: uprevit-backend/src/package-lock.json
+          cache-dependency-path: src/package-lock.json
 
       - name: Install dependencies
-        working-directory: uprevit-backend/src
+        working-directory: src
         run: npm ci
 
       - name: Run ESLint
-        working-directory: uprevit-backend/src
+        working-directory: src
         run: |
           echo "Running ESLint with zero warnings policy..."
           npx eslint \
@@ -46,7 +46,7 @@ jobs:
             --max-warnings 0
 
       - name: Run TypeScript type check
-        working-directory: uprevit-backend/src
+        working-directory: src
         run: |
           echo "Running TypeScript compiler check..."
           npx tsc --noEmit
