@@ -1,4 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { StatusCodes } from '../utils/statusCodes';
 
 /**
  *
@@ -13,17 +14,16 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 	    return {
-	        statusCode: 200,
+	        statusCode: StatusCodes.SUCCESS,
 	        body: JSON.stringify({
 	            message: 'hello world',
 	        }),
 	    };
 	} catch (err) {
-	    console.log(err);
 	    return {
-	        statusCode: 500,
+	        statusCode: StatusCodes.INTERNAL_SERVER_ERROR,
 	        body: JSON.stringify({
-	            message: 'some error happened',
+	            message: 'Hello world error',
 	        }),
 	    };
 	}

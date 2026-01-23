@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from "../../utils/authUtils";
 import { validateAllObjectIds, validateMissingFields } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
@@ -87,7 +88,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			folder: newProductBookmarkFolder
 		});
 	} catch (error) {
-		console.error('Error in creating the product bookmark folder:', error);
-		return ResponseWrapper.internalServerError('An error occurred while creating the product bookmark folder.');
+		logError('Create product bookmark folder handler failed', error);
+		return ResponseWrapper.internalServerError('Failed to create product bookmark folder');
 	}
 }

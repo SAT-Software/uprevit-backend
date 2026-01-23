@@ -584,23 +584,6 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/getAllProductVersions.ts]
 
-  CompareProductVersionsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/
-      Handler: controllers/products/compareProductVersions.lambdaHandler
-      Events:
-        CompareProductVersions:
-          Type: Api
-          Properties:
-            Path: /products/{productId}/compare
-            Method: get
-    Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/compareProductVersions.ts]
-
   ExportProductExcelFunction:
     Type: AWS::Serverless::Function
     Properties:

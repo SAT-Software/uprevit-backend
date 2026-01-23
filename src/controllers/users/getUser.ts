@@ -3,6 +3,7 @@ import { getDb } from '../../utils/db';
 import { User } from '../../models/user';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 
 /**
  * Get a user
@@ -27,7 +28,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 
 	} catch (err) {
-		console.error('Error in Lambda handler:', err);
-		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+		logError('Get user handler failed', err);
+		return ResponseWrapper.internalServerError('Failed to get user');
 	}
 };

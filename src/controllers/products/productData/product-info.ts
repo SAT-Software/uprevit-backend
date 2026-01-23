@@ -1,5 +1,5 @@
 import { APIGatewayProxyResult } from 'aws-lambda';
-import { addFieldsToUpdate, validateTab, validateAllObjectIds } from '../../../utils/validationUtils';
+import { validateTab, validateAllObjectIds } from '../../../utils/validationUtils';
 import { ResponseWrapper } from '../../../utils/responseWrapper';
 import { ObjectId } from 'mongodb';
 import {
@@ -48,7 +48,7 @@ export function updateProductInformation(
 
 		for (const field of requiredFields) {
 			if (field in inputData) {
-				let value = (inputData as any)[field];
+				const value = (inputData as any)[field];
 
 				// Update nested field
 				updateSet[`product_information.data.${field}`] = value;

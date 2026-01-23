@@ -6,6 +6,7 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
+import { logError } from '../../utils/logger';
 
 
 /**
@@ -73,7 +74,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 		
 	} catch (err) {
-		console.error('Error in Lambda handler:', err);
-		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+		logError('Create workspace handler failed', err);
+		return ResponseWrapper.internalServerError('Failed to create workspace');
 	}
 };

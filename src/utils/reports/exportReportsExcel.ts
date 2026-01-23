@@ -7,6 +7,7 @@ require('core-js/modules/es.symbol.async-iterator');
 require('regenerator-runtime/runtime');
 
 const ExcelJS = require('exceljs/dist/es5');
+import { logError } from '../logger';
 
 interface ProductForExport {
 	_id: any;
@@ -42,6 +43,13 @@ interface ProductForExport {
 	};
 }
 
+/**
+ * Generates an Excel report export for multiple products.
+ * Creates a single-sheet workbook with product information including
+ * name, plan number, description, status, market details, dates, and completion status.
+ * @param {ProductForExport[]} products - Array of products to include in the report
+ * @return {Promise<Buffer | null>} Excel buffer on success, null on failure
+ */
 export async function generateReportsExcelExport(products: ProductForExport[]): Promise<Buffer | null> {
 	try {
 		const workbook = new ExcelJS.Workbook();
@@ -162,7 +170,7 @@ export async function generateReportsExcelExport(products: ProductForExport[]): 
 		const buffer = await workbook.xlsx.writeBuffer();
 		return buffer;
 	} catch (error) {
-		console.error('Excel export error:', error);
+		logError('Reports Excel export failed', error);
 		return null;
 	}
 }

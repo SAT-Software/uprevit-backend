@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from "../../utils/authUtils";
 import { validateAllObjectIds, validateEnum, validateMissingFields } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
@@ -99,7 +100,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			folder: newSourceFile
 		});
 	} catch (error) {
-		console.error('Error in creating the source file or folder:', error);
-		return ResponseWrapper.internalServerError('An error occurred while creating the source file or folder.');
+		logError('Create source file/folder handler failed', error);
+		return ResponseWrapper.internalServerError('Failed to create source file or folder');
 	}
 }

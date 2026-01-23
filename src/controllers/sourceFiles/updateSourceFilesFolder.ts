@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from "../../utils/authUtils";
 import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
@@ -90,7 +91,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		})
         
 	} catch (error) {
-		console.error('Error while update the source files folder name:', error);
-		return ResponseWrapper.internalServerError(error instanceof Error ? error.message : 'Something went wrong while updating source file folder.');
+		logError('Update source files folder handler failed', error);
+		return ResponseWrapper.internalServerError('Failed to update source file folder');
 	}
 }

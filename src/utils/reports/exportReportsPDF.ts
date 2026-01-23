@@ -1,4 +1,5 @@
 import { PDFDocument, rgb, StandardFonts, PDFPage } from 'pdf-lib';
+import { logError } from '../logger';
 
 const PAGE_WIDTH = 842;
 const PAGE_HEIGHT = 595;
@@ -28,7 +29,13 @@ interface ProductForExport {
 	};
 }
 
-
+/**
+ * Generates a PDF report export for multiple products.
+ * Creates a tabular PDF document with product information including
+ * name, plan number, status, market geography, target date, and completion status.
+ * @param {ProductForExport[]} products - Array of products to include in the report
+ * @return {Promise<Buffer | null>} PDF buffer on success, null on failure
+ */
 export async function generateReportsPDFExport(products: ProductForExport[]): Promise<Buffer | null> {
 	try {
 		const pdfDoc = await PDFDocument.create();
@@ -231,7 +238,7 @@ export async function generateReportsPDFExport(products: ProductForExport[]): Pr
 		const pdfBytes = await pdfDoc.save();
 		return Buffer.from(pdfBytes);
 	} catch (error) {
-		console.error('Error generating reports PDF:', error);
+		logError('Reports PDF export failed', error);
 		return null;
 	}
 }

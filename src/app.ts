@@ -1,6 +1,7 @@
 import {APIGatewayProxyEvent, APIGatewayProxyResult} from 'aws-lambda';
 import {authenticateRequest} from './utils/authUtils';
 import {ResponseWrapper} from './utils/responseWrapper';
+import {logError} from './utils/logger';
 
 /**
  *
@@ -21,8 +22,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent):
 			return ResponseWrapper.unauthorized('Unauthorized');
 		}
 
-		console.log('payload', auth.payload);
-
 		return ResponseWrapper.success(
 			{
 				message: 'Hello from Lambda!',
@@ -31,7 +30,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent):
 			}
 		);
 	} catch (err) {
-		console.error('Error in Lambda handler:', err);
-		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+		logError('Hello world handler failed', err);
+		return ResponseWrapper.internalServerError('An error occurred');
 	}
 };

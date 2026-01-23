@@ -3,6 +3,8 @@ import { getDb } from '../../utils/db';
 import { ObjectId } from 'mongodb';
 import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { StatusCodes } from '../../utils/statusCodes';
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
 import { EXPORT_LIMITS } from '../../types/reports';
@@ -56,7 +58,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const timestamp = new Date().toISOString().split('T')[0];
 
 		return {
-			statusCode: 200,
+			statusCode: StatusCodes.SUCCESS,
 			headers: {
 				'Content-Type': 'application/pdf',
 				'Content-Disposition': `attachment; filename="Products_Report_${timestamp}.pdf"`,
@@ -66,7 +68,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			isBase64Encoded: true,
 		};
 	} catch (err) {
-		console.error('Error in reports PDF export handler:', err);
-		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+		logError('Reports PDF export handler failed', err);
+		return ResponseWrapper.internalServerError('Failed to export reports PDF');
 	}
 };

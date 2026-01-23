@@ -24,7 +24,7 @@ export function validateObjectIds(fields: Record<string, ObjectId | string>): AP
 export function validateObjectIdArrays(arrays: Record<string, ObjectId[] | string[]>): APIGatewayProxyResult | null {
 	for (const [fieldName, ids] of Object.entries(arrays)) {
 		if (ids && ids.length > 0) {
-			const invalidIds = ids.filter((id) => !ObjectId.isValid(id));
+			const invalidIds = (ids as Array<ObjectId | string>).filter((id) => !ObjectId.isValid(id));
 			if (invalidIds.length > 0) {
 				return ResponseWrapper.badRequest(
 					`Invalid ${fieldName} format: ${invalidIds.join(', ')}. Must be valid MongoDB ObjectIds.`,

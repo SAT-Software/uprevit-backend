@@ -2,6 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { User } from '../../models/user';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { ObjectId } from 'mongodb';
 
@@ -34,7 +35,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 
 	} catch (err) {
-		console.error('Error in Lambda handler:', err);
-		return ResponseWrapper.internalServerError(err instanceof Error ? err : String(err));
+		logError('Get users by workspace handler failed', err);
+		return ResponseWrapper.internalServerError('Failed to get users');
 	}
 };

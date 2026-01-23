@@ -1,5 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { authenticateRequest } from "../../utils/authUtils";
 import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
@@ -47,7 +48,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		})
         
 	} catch (error) {
-		console.error('Error in getSourceFilesByParent:', error);
-		return ResponseWrapper.internalServerError(error instanceof Error ? error.message : 'Something went wrong while fetching source files and folders.');
+		logError('Get source files by parent handler failed', error);
+		return ResponseWrapper.internalServerError('Failed to get source files');
 	}
 }

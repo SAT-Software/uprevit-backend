@@ -5,6 +5,7 @@ import { User } from "../../models/user";
 import { ObjectId } from "mongodb";
 import { authenticateRequest } from "../../utils/authUtils";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { logError } from '../../utils/logger';
 import { validateUserArray } from "../../utils/validationUtils";
 import { Workspace } from "../../models/workspace";
 
@@ -85,14 +86,14 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 				results.push({ email, status: "Success" });
 			} catch (error: any) {
-				console.error(`🚨 Error inviting user ${email}:`, error.message);
-				results.push({ email, status: "Failed", reason: error.message });
+				logError(`Failed to invite user: ${email}`, error);
+				results.push({ email, status: "Failed", reason: error.message || 'Invitation failed' });
 			}
 		}
 
 		return ResponseWrapper.success({ message: 'Users invited successfully', data:results });
-	} catch (error: any) {
-		console.error('Error in invite creation handler:', error);
-		return ResponseWrapper.internalServerError(error.message);
+	} catch (error) {
+		logError('Invite new user by admin handler failed', error);
+		return ResponseWrapper.internalServerError('Failed to invite users');
 	}
 };
