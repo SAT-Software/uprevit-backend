@@ -3,7 +3,7 @@ import { CognitoIdentityProviderClient, AdminCreateUserCommand, AdminUpdateUserA
 import { getDb } from "../../utils/db";
 import { User } from "../../models/user";
 import { ObjectId } from "mongodb";
-import { authenticateRequest } from "../../utils/authUtils";
+import { authenticateWithRole } from "../../utils/authUtils";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
 import { validateUserArray } from "../../utils/validationUtils";
@@ -17,7 +17,7 @@ const cognito = new CognitoIdentityProviderClient({ region: 'us-east-1' });
  */
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
+		const auth = await authenticateWithRole(event, 'admin');
 		if (!auth.isValid) return auth.error;
 
 

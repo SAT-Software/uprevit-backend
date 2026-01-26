@@ -6,7 +6,7 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from '../../utils/authUtils';
+import { authenticateRequest, authenticateWithRole } from '../../utils/authUtils';
 
 /**
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
@@ -29,7 +29,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 	
 		const input = JSON.parse(event.body);
-		
+
 
 		if (!input.action) return ResponseWrapper.badRequest('action field is required');
 		const validActions = ['update-product', 'update-status'];
@@ -71,6 +71,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			break;
 
 		case 'update-status':
+			const statusAuth = await authenticateWithRole(event, 'admin');
+			if (!statusAuth.isValid) return statusAuth.error;
+
 			const newStatus = input.data.status;
 
 			if (!['draft', 'submitted', 'archived'].includes(newStatus)) {
