@@ -203,7 +203,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const addSymbolsGraphicsResult = AddSymbolsGraphics(input.data, input.tab, input.action);
 			if (addSymbolsGraphicsResult.error) return addSymbolsGraphicsResult.error;
 
-			if(input.data[0].entity?.toLowerCase() === 'barcodes') {
+			const entity = input.data[0].entity?.toLowerCase();
+			if(entity === 'barcodes') {
 				const isDuplicateBarcode = await db.collection<Product>('products').findOne({
 					_id: new ObjectId(input.id),
 					'symbols_graphics.data': {
@@ -215,7 +216,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					}
 				});
 				if (isDuplicateBarcode) return ResponseWrapper.conflict('Barcode description already exists, please use a different barcode description.');
-			} else {
+			} else if (entity !== 'other components') {
 				const isDuplicategraphics = await db.collection<Product>('products').findOne({
 					_id: new ObjectId(input.id),
 					'symbols_graphics.data': {
@@ -237,7 +238,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateSymbolsGraphicsResult = UpdateSymbolsGraphics(input.data as Required<SymbolsGraphics>, input.tab, input.action);
 			if (updateSymbolsGraphicsResult.error) return updateSymbolsGraphicsResult.error;
 
-			if(input.data.entity?.toLowerCase() === 'barcodes') {
+			const entity = input.data.entity?.toLowerCase();
+			if(entity === 'barcodes') {
 				const isDuplicateBarcode = await db.collection<Product>('products').findOne({
 					_id: new ObjectId(input.id),
 					'symbols_graphics.data': {
@@ -250,7 +252,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					}
 				});
 				if (isDuplicateBarcode) return ResponseWrapper.conflict('Barcode description already exists, please use a different barcode description.');
-			} else {
+			} else if (entity !== 'other components') {
 				const isDuplicategraphics = await db.collection<Product>('products').findOne({
 					_id: new ObjectId(input.id),
 					'symbols_graphics.data': {
