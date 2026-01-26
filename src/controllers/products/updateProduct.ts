@@ -70,7 +70,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}
 			break;
 
-		case 'update-status':
+		case 'update-status': {
 			const statusAuth = await authenticateWithRole(event, 'admin');
 			if (!statusAuth.isValid) return statusAuth.error;
 
@@ -88,6 +88,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 			updateData.status = newStatus;
 			break;
+		}
 
 		default:
 			return ResponseWrapper.badRequest(`Unknown action: ${input.action}`);
