@@ -6,7 +6,7 @@ import { updateAuditLog } from "../../utils/auditLog";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
 import { validateMissingFields } from "../../utils/validationUtils";
-import { authenticateRequest } from "../../utils/authUtils";
+import { authenticateWithRole } from "../../utils/authUtils";
 import { User } from "../../models/user";
 import { AdminAddUserToGroupCommand, AdminUpdateUserAttributesCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 
@@ -20,7 +20,7 @@ const cognito = new CognitoIdentityProviderClient();
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		// Ensure caller is admin
-		const auth = await authenticateRequest(event);
+		const auth = await authenticateWithRole(event, 'admin');
 		if (!auth.isValid) return auth.error;
 
 		const cognitoSub = auth.payload.sub
