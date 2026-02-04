@@ -1,5 +1,5 @@
 import { APIGatewayProxyResult } from "aws-lambda";
-import { LabelTag } from "../../../types/products/label-tags";
+import { LabelTag, LegendItem } from "../../../types/products/label-tags";
 import { ResponseWrapper } from "../../../utils/responseWrapper";
 import { validateAllObjectIds, validateMissingFields, validateObjectIds, validateTab } from "../../../utils/validationUtils";
 import { ObjectId } from "mongodb";
@@ -248,6 +248,65 @@ export function updateLabelTagTaggedImage(
 			updatedData: { id: inputData.id, tagged_image: '', annotation_state: undefined },
 			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update label tag tagged image'),
+		};
+	}
+}
+
+/**
+ * @param {object} inputData
+ * @param {string} tab
+ * @param {string} action
+ * @return {LabelTagReturn}
+ */
+export function updateLabelTagLegend(
+	inputData: { id: string; legend_items: LegendItem[] },
+	tab: string,
+	action: string,
+): Omit<LabelTagReturn, 'updatedData'> & { updatedData: { id: string; legend_items: LegendItem[] } } {
+	try {
+		const isValidatedTab = validateTab(tab, 'label-tags', action);
+		if (isValidatedTab) throw new Error(isValidatedTab.body);
+
+		const missingFieldsValidation = validateMissingFields({
+			id: inputData.id,
+		});
+		if (missingFieldsValidation) throw new Error(missingFieldsValidation.body);
+
+		if (!inputData.legend_items) {
+			throw new Error('Missing required field(s): legend_items');
+		}
+
+		if (!Array.isArray(inputData.legend_items)) {
+			throw new Error('legend_items must be an array');
+		}
+
+		const objectIdValidation = validateAllObjectIds({ id: inputData.id });
+		if (objectIdValidation) throw new Error(objectIdValidation.body);
+
+		const updateQuery = {
+			$set: {
+				'label_tags.data.$[elem].legend_items': inputData.legend_items,
+			},
+			arrayFilters: [{ 'elem._id': new ObjectId(inputData.id) }],
+		};
+
+		const updatedData = { id: inputData.id, legend_items: inputData.legend_items };
+		const actionLog = 'UPDATE';
+
+		return { updateQuery, updatedData, actionLog, error: null };
+	} catch (error) {
+		if (error instanceof Error)
+			return {
+				updateQuery: {},
+				updatedData: { id: inputData.id, legend_items: [] },
+				actionLog: '',
+				error: ResponseWrapper.badRequest(error.message),
+			};
+		return {
+			updateQuery: {},
+			updatedData: { id: inputData.id, legend_items: [] },
+			actionLog: '',
+			error: ResponseWrapper.internalServerError('Failed to update label tag legend'),
 		};
 	}
 }
