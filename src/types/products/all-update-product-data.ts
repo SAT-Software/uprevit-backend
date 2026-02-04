@@ -4,7 +4,7 @@ import { AddUpdateCustomField, DeleteCustomField, UpdateProductInfo, UpdateProdu
 import { AddProductData, DeleteProductData, ProductDataTabCompletion, UpdateProductData } from "./product-data";
 import { AddSymbolsGraphics, DeleteSymbolsGraphics, SymbolsGraphicsTabCompletion, UpdateSymbolsGraphics } from "./symbols-graphics";
 import { AddOperationalParameters, DeleteOperationalParameters, OperationalParametersTabCompletion, UpdateOperationalParameters } from "./operational-parameters";
-import { AddLabelTag, DeleteLabelTag, LabelTagsTabCompletion, UpdateLabelTag, UpdateLabelTagTaggedImage } from "./label-tags";
+import { AddLabelTag, DeleteLabelTag, LabelTagsTabCompletion, UpdateLabelTag, UpdateLabelTagLegend, UpdateLabelTagTaggedImage } from "./label-tags";
 
 export type UpdateProductDataRequest =
     | UpdateProductInfo
@@ -33,6 +33,7 @@ export type UpdateProductDataRequest =
     | OperationalParametersTabCompletion
     | AddLabelTag
     | UpdateLabelTag
+    | UpdateLabelTagLegend
     | UpdateLabelTagTaggedImage
     | DeleteLabelTag
     | LabelTagsTabCompletion;

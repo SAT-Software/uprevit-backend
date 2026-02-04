@@ -20,7 +20,7 @@ import { addLabelComponent, deleteLabelComponent, updateLabelComponent, updateLa
 import { AddSymbolsGraphics, deleteSymbolsGraphics, UpdateSymbolsGraphics, updateSymbolsGraphicsTabCompletion } from './productData/symbols-graphics';
 import { addProductData, deleteProductData, updateProductData, updateProductDataTabCompletion } from './productData/product-data';
 import { addOperationalParameters, deleteOperationalParameters, updateOperationalParameters, updateOperationalParametersTabCompletion } from './productData/operational-parameters';
-import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion, updateLabelTagTaggedImage } from './productData/label-tags';
+import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion, updateLabelTagTaggedImage, updateLabelTagLegend } from './productData/label-tags';
 import { SymbolsGraphics } from '../../types/products/symbols-graphics';
 
 const validTabs = [
@@ -388,6 +388,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (updateLabelTagTaggedImageResult.error) return updateLabelTagTaggedImageResult.error;
 
 			({ updateQuery, updatedData, actionLog } = updateLabelTagTaggedImageResult);
+
+			break;
+
+		case 'update_label_tag_legend':
+			const updateLabelTagLegendResult = updateLabelTagLegend(input.data, input.tab, input.action);
+			if (updateLabelTagLegendResult.error) return updateLabelTagLegendResult.error;
+
+			({ updateQuery, updatedData, actionLog } = updateLabelTagLegendResult);
 
 			break;
 

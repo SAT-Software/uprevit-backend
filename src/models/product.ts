@@ -100,6 +100,16 @@ export type LabelTags = {
 			image?: string;
 			tagged_image?: string;
 			annotation_state?: object;
+			legend_items?: Array<{
+				id: string;
+				shape: string;
+				strokeStyle?: string;
+				strokeColor?: string;
+				strokeWidth?: number;
+				fillColor?: string;
+				fillOpacity?: number;
+				text: string;
+			}>;
 	}>;
 	tab_completed: boolean;
 };
