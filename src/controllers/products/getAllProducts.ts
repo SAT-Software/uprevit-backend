@@ -5,6 +5,7 @@ import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
+import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -62,6 +63,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		// Build filter object
 		const filter: any = {};
+		let statusValues: string[] | null = null;
 
 		if (workspaceId) filter.workspace_id = new ObjectId(workspaceId);
 		
@@ -71,15 +73,20 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				const statusArray = JSON.parse(statusFilter);
 				if (Array.isArray(statusArray) && statusArray.length > 0) {
 					filter.status = { $in: statusArray };
+					statusValues = statusArray;
 				}
 			} catch (e) {
 				// If parsing fails, treat as single status
 				filter.status = statusFilter;
+				statusValues = [statusFilter];
 			}
 		} else {
 			// Default status filter
 			filter.status = { $in: ['draft', 'submitted'] };
+			statusValues = ['draft', 'submitted'];
 		}
+
+		const isArchiveOnlyStatus = statusValues?.length === 1 && statusValues[0] === 'archived';
 
 		// General filter parameter for text search
 		if (filterParam) {
@@ -97,39 +104,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const pipeline: any[] = [
 			{ $match: filter },
-			{
-				$lookup: {
-					from: 'audit_log',
-					let: { productIdString: { $toString: '$_id' } },
-					pipeline: [
-						{
-							$match: {
-								$expr: {
-									$and: [
-										{ $eq: ['$entity', 'product'] },
-										{ $eq: ['$entityId', '$$productIdString'] },
-										{ $in: ['$action', ['create', 'update']] },
-										{ $eq: ['$active', true] }
-									]
-								}
-							}
-						},
-						{ $sort: { actionAt: -1 } },
-						{
-							$project: {
-								entity: 1,
-								entityId: 1,
-								action: 1,
-								actionBy: 1,
-								actionAt: 1,
-								active: 1
-							}
-						},
-						{ $limit: 2 }
-					],
-					as: 'auditLogs'
-				}
-			},
+			buildLegacyAuditLookupStage(
+				isArchiveOnlyStatus
+					? { scopeType: 'product', mode: 'archive' }
+					: {
+						scopeType: 'product',
+						updateActions: ['update', 'submit', 'delete', 'move', 'link', 'unlink', 'restore'],
+					}
+			),
 			{
 				$lookup: {
 					from: 'departments',

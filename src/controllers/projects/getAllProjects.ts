@@ -5,6 +5,7 @@ import { Project } from '../../models/project';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
+import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 
 /**
  * Get all projects
@@ -71,6 +72,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		// If sorting by actionAt, use aggregation to join with audit_logs
 		if (sort === 'actionAt') {
+			const projectAuditLookupStage = isArchive
+				? buildLegacyAuditLookupStage({ scopeType: 'project', mode: 'archive' })
+				: buildLegacyAuditLookupStage({ scopeType: 'project', updateActions: ['update', 'restore'] });
+
 			// aggregation pipeline
 			const pipeline = [
 				{ $match: filter },
@@ -92,39 +97,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 						as: 'users',
 					},
 				},
-				{
-					$lookup: {
-						from: 'audit_log',
-						let: { projectIdString: { $toString: '$_id' } },
-						pipeline: [
-							{
-								$match: {
-									$expr: {
-										$and: [
-											{ $eq: ['$entity', 'project'] },
-											{ $eq: ['$entityId', '$$projectIdString'] },
-											{ $in: ['$action', ['create', 'update']] },
-											{ $eq: ['$active', true] }
-										]
-									}
-								}
-							},
-							{ $sort: { actionAt: -1 } },
-							{
-								$project: {
-									entity: 1,
-									entityId: 1,
-									action: 1,
-									actionBy: 1,
-									actionAt: 1,
-									active: 1
-								}
-							},
-							{ $limit: 2 }
-						],
-						as: 'auditLogs'
-					}
-				},
+				projectAuditLookupStage,
 			];
 
 			// Get total count for pagination

@@ -6,6 +6,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { validateAllObjectIds } from '../../utils/validationUtils';
+import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 
 /**
  * Get all versions of a product
@@ -62,39 +63,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		// Find all versions with the same product_plan_number, sorted by version descending
 		const pipeline: any[] = [
 			{ $match: matchFilter },
-			{
-				$lookup: {
-					from: 'audit_log',
-					let: { productIdString: { $toString: '$_id' } },
-					pipeline: [
-						{
-							$match: {
-								$expr: {
-									$and: [
-										{ $eq: ['$entity', 'product'] },
-										{ $eq: ['$entityId', '$$productIdString'] },
-										{ $in: ['$action', ['create', 'update']] },
-										{ $eq: ['$active', true] }
-									]
-								}
-							}
-						},
-						{ $sort: { actionAt: -1 } },
-						{
-							$project: {
-								entity: 1,
-								entityId: 1,
-								action: 1,
-								actionBy: 1,
-								actionAt: 1,
-								active: 1
-							}
-						},
-						{ $limit: 2 }
-					],
-					as: 'auditLogs'
-				}
-			},
+			buildLegacyAuditLookupStage({
+				scopeType: 'product',
+				updateActions: ['update', 'submit', 'delete', 'move', 'link', 'unlink', 'restore'],
+			}),
 			{ $sort: { version: -1 } },
 			{ $skip: skip },
 			{ $limit: limit }
