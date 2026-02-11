@@ -619,6 +619,27 @@ Resources:
         EntryPoints: [controllers/products/exportProductPDF.ts]
 
   # ──────────────────────────────────────────────────────────────────────────
+  # AUDIT LOGS V2
+  # ──────────────────────────────────────────────────────────────────────────
+
+  GetAuditLogsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/auditLogs/getAuditLogs.lambdaHandler
+      Events:
+        GetAuditLogs:
+          Type: Api
+          Properties:
+            Path: /audit-logs
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/auditLogs/getAuditLogs.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
   # BOOKMARKS
   # ──────────────────────────────────────────────────────────────────────────
 

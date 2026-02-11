@@ -8,6 +8,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateBoolean } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 
 /**
  * Archive a department
@@ -79,6 +80,23 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		};
 
 		await updateAuditLog(auditRecord);
+
+		await recordAuditEvent({
+			workspaceId: departmentRecord.workspace_id.toString(),
+			scope: { type: 'department', id: (event.pathParameters?.id).toString() },
+			entity: { type: 'department', id: (event.pathParameters?.id).toString() },
+			action: isArchived ? 'archive' : 'restore',
+			eventKey: isArchived ? 'department.archived' : 'department.restored',
+			visibility: 'admin',
+			where: { module: 'departments' },
+			auth: auth.payload,
+			before: { isArchived: departmentRecord.isArchived },
+			after: { isArchived },
+			changedPaths: ['isArchived'],
+			meta: {
+				departmentName: departmentRecord.department_name,
+			},
+		});
 
 		return ResponseWrapper.success({
 			message: `Department ${isArchived ? 'archived' : 'restored'} successfully`,

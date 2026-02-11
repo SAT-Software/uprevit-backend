@@ -8,6 +8,7 @@ import { ObjectId } from "mongodb";
 import { SourceFile } from "../../models/sourceFiles";
 import { updateAuditLog } from "../../utils/auditLog";
 import { AuditLogAction } from "../../models/auditLog";
+import { recordAuditEvent } from "../../utils/auditLogV2";
 
 /**
  * @param {APIGatewayProxyEvent} event 
@@ -66,6 +67,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				: null;
 		}
 
+		const beforeFolder = await sourceFilesCollection.findOne({ _id: folderObjectId, type: 'folder' });
+
 		const updatedFolder = await sourceFilesCollection.findOneAndUpdate(
 			{ _id: folderObjectId, type: 'folder' },
 			{ $set: updateFields },
@@ -83,6 +86,38 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			actionBy: auth.payload?.name?.toString()!,
 			actionAt: new Date(),
 			active: true,
+		});
+
+		const changedPaths = Object.keys(updateFields);
+		const hasNameChange = Object.prototype.hasOwnProperty.call(updateFields, 'name');
+		const hasProductChange = Object.prototype.hasOwnProperty.call(updateFields, 'product_id');
+
+		const eventKey = hasProductChange
+			? (updateFields.product_id ? 'source_files.folder.product_linked' : 'source_files.folder.product_unlinked')
+			: 'source_files.folder.renamed';
+
+		const action = hasProductChange ? (updateFields.product_id ? 'link' : 'unlink') : 'update';
+
+		await recordAuditEvent({
+			workspaceId: updatedFolder.workspace_id.toString(),
+			scope: { type: 'source-files', id: updatedFolder.workspace_id.toString() },
+			entity: { type: 'source_folder', id: folderId },
+			action,
+			eventKey,
+			visibility: 'all',
+			where: {
+				module: 'source-files',
+				parentId: updatedFolder.parentId?.toString() ?? undefined,
+			},
+			auth: auth.payload,
+			before: beforeFolder as unknown as Record<string, unknown>,
+			after: updatedFolder as unknown as Record<string, unknown>,
+			changedPaths,
+			meta: {
+				folderName: updatedFolder.name,
+				fromName: hasNameChange ? beforeFolder?.name : undefined,
+				toName: hasNameChange ? updatedFolder.name : undefined,
+			},
 		});
 
 		return ResponseWrapper.success({

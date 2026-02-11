@@ -7,6 +7,7 @@ import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest, authenticateWithRole } from '../../utils/authUtils';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 
 /**
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
@@ -113,6 +114,41 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const updatedProduct = await db.collection<Product>('products').findOne({
 			_id: productObjectId,
+		});
+
+		let eventKey = 'product.updated';
+		let auditAction: 'update' | 'submit' | 'archive' | 'restore' = 'update';
+		let visibility: 'all' | 'admin' = 'all';
+
+		if (input.action === 'update-status') {
+			visibility = 'admin';
+			if (input.data.status === 'submitted') {
+				eventKey = 'product.submitted';
+				auditAction = 'submit';
+			} else if (input.data.status === 'archived') {
+				eventKey = 'product.archived';
+				auditAction = 'archive';
+			} else {
+				eventKey = 'product.restored';
+				auditAction = 'restore';
+			}
+		}
+
+		await recordAuditEvent({
+			workspaceId: existingProduct.workspace_id.toString(),
+			scope: { type: 'product', id: productId },
+			entity: { type: 'product', id: productId },
+			action: auditAction,
+			eventKey,
+			visibility,
+			where: { module: 'products' },
+			auth: auth.payload,
+			before: existingProduct as unknown as Record<string, unknown>,
+			after: (updatedProduct ?? existingProduct) as unknown as Record<string, unknown>,
+			changedPaths: Object.keys(updateData),
+			meta: {
+				productName: (updatedProduct?.product_name ?? existingProduct.product_name),
+			},
 		});
 
 		return ResponseWrapper.success({

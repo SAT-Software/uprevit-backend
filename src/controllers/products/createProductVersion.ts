@@ -8,6 +8,7 @@ import { Product } from "../../models/product";
 import { deepCopyWithFreshIds } from "../../utils/deepCopy";
 import { updateAuditLog } from "../../utils/auditLog";
 import { AuditLogAction } from "../../models/auditLog";
+import { recordAuditEvent } from "../../utils/auditLogV2";
 
 
 /**
@@ -46,6 +47,33 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			actionBy: auth.payload?.name?.toString()!,
 			actionAt: new Date(),
 			active: true,
+		});
+
+		await recordAuditEvent({
+			workspaceId: revisedUpdatedProduct.workspace_id.toString(),
+			scope: { type: 'product', id: insertedProduct.insertedId.toString() },
+			entity: { type: 'product', id: insertedProduct.insertedId.toString() },
+			action: 'create',
+			eventKey: 'product.version.created',
+			visibility: 'all',
+			where: { module: 'products' },
+			auth: auth.payload,
+			before: {
+				version: currentProduct.version,
+				is_latest: currentProduct.is_latest,
+				status: currentProduct.status,
+			},
+			after: {
+				version: revisedUpdatedProduct.version,
+				is_latest: revisedUpdatedProduct.is_latest,
+				status: revisedUpdatedProduct.status,
+			},
+			changedPaths: ['version', 'is_latest', 'status'],
+			meta: {
+				productName: revisedUpdatedProduct.product_name,
+				fromVersion: currentProduct.version,
+				toVersion: revisedUpdatedProduct.version,
+			},
 		});
 
 		return ResponseWrapper.created({
