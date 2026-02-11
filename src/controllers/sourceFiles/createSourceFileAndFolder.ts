@@ -6,8 +6,6 @@ import { validateAllObjectIds, validateEnum, validateMissingFields } from "../..
 import { getDb } from "../../utils/db";
 import { SourceFile } from "../../models/sourceFiles";
 import { ObjectId } from "mongodb";
-import { updateAuditLog } from "../../utils/auditLog";
-import { AuditLogAction } from "../../models/auditLog";
 import { recordAuditEvent } from "../../utils/auditLogV2";
 
 /**
@@ -86,15 +84,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		};
 
 		await sourceFilesCollection.insertOne(newSourceFile);
-
-		await updateAuditLog({
-			entity: 'SourceFile',
-			entityId: newSourceFile._id.toString(),
-			action: AuditLogAction.CREATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		});
 
 		const isFolder = newSourceFile.type === 'folder';
 		await recordAuditEvent({

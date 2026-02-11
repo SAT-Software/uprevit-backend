@@ -7,7 +7,6 @@ import { ObjectId } from 'mongodb';
 type LabelComponentReturn = {
 	updateQuery: Record<string, unknown>;
 	updatedData: labelComponent | labelComponent[];
-	actionLog: string;
 	error: APIGatewayProxyResult | null;
 };
 
@@ -38,21 +37,18 @@ export function addLabelComponent(
 
 		const updateQuery = { $push: { 'label_components.data': { $each: componentsWithIds } } };
 		const updatedData = componentsWithIds;
-		const actionLog = 'CREATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: [],
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: [],
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to add label component'),
 		};
 	}
@@ -99,21 +95,18 @@ export function updateLabelComponent(
 			arrayFilters: [{ 'elem._id': new ObjectId(updatedLabelComponent.id) }],
 		};
 		const updatedData = updatedLabelComponent;
-		const actionLog = 'UPDATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: {} as labelComponent,
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: {} as labelComponent,
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update label component'),
 		};
 	}
@@ -154,21 +147,17 @@ export function deleteLabelComponent(
 			},
 		};
 
-		const actionLog = 'DELETE';
-
-		return { updateQuery, updatedData: deletedLabelComponent, actionLog, error: null };
+		return { updateQuery, updatedData: deletedLabelComponent, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: {} as labelComponent,
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: {} as labelComponent,
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update label component'),
 		};
 	}
@@ -194,21 +183,18 @@ export function updateLabelComponentTabCompletion(
 
 		const updateQuery = { $set: { 'label_components.tab_completed': inputData.tab_completed } };
 		const updatedData = { tab_completed: inputData.tab_completed };
-		const actionLog = 'UPDATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: { tab_completed: false },
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: { tab_completed: false },
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update label component tab completion'),
 		};
 	}

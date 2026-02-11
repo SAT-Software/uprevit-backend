@@ -1,8 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { Department } from '../../models/department';
-import { type AuditLog, AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
@@ -67,19 +65,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				},
 			},
 		);
-
-		const action = isArchived ? AuditLogAction.ARCHIVE : AuditLogAction.UNARCHIVE;
-
-		const auditRecord: AuditLog = {
-			entity: 'department',
-			entityId: (event.pathParameters?.id).toString(),
-			action: action,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		};
-
-		await updateAuditLog(auditRecord);
 
 		await recordAuditEvent({
 			workspaceId: departmentRecord.workspace_id.toString(),

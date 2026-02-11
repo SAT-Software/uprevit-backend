@@ -1,8 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { Product } from '../../models/product';
-import { AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
@@ -102,15 +100,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (result.matchedCount === 0) {
 			return ResponseWrapper.notFound('Product not found');
 		}
-
-		await updateAuditLog({
-			entity: 'product',
-			entityId: productId,
-			action: AuditLogAction.UPDATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		});
 
 		const updatedProduct = await db.collection<Product>('products').findOne({
 			_id: productObjectId,

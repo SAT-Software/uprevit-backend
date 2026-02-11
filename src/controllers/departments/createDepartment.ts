@@ -1,8 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { Department } from '../../models/department';
-import { AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
@@ -60,15 +58,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			workspace_id: workspaceObjectId,
 			users: userObjectIds,
 			isArchived: false,
-		});
-
-		await updateAuditLog({
-			entity: 'department',
-			entityId: department.insertedId.toString(),
-			action: AuditLogAction.CREATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
 		});
 
 		await recordAuditEvent({

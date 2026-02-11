@@ -7,7 +7,6 @@ import { ObjectId } from "mongodb";
 type SymbolsGraphicsReturn = {
     updateQuery: Record<string, unknown>;
     updatedData: SymbolsGraphics | SymbolsGraphics[];
-    actionLog: string;
     error: APIGatewayProxyResult | null;
 }
 
@@ -35,21 +34,18 @@ export function AddSymbolsGraphics(
         
 		const updateQuery = {$push: {'symbols_graphics.data': {$each: componentsWithIds}}}
 		const updatedData = componentsWithIds;
-		const actionLog = 'CREATE';
 
-		return { updateQuery, updatedData, actionLog, error: null }
+		return { updateQuery, updatedData, error: null }
 	} catch (error) {
 		if (error instanceof Error) return {
 			updateQuery: {},
 			updatedData: [],
-			actionLog: '',
 			error: ResponseWrapper.badRequest(error.message),
 		}
 
 		return {
 			updateQuery: {},
 			updatedData: [],
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to add symbols and graphics'),
 		}
 	}
@@ -107,13 +103,12 @@ export function UpdateSymbolsGraphics(
 		const updateQuery = {$set: updateSet, arrayFilters: [{'elem._id': new ObjectId(updatedSymbolsGraphics.id!)}]}
 
 		const updatedData = updatedSymbolsGraphics;
-		const actionLog = 'UPDATE';
 
-		return {updateQuery, updatedData, actionLog, error: null}
+		return {updateQuery, updatedData, error: null}
 	} catch (error) {
-		if(error instanceof Error) return {updateQuery:{}, updatedData: {} as SymbolsGraphics, actionLog: '', error: ResponseWrapper.badRequest(error.message)}
+		if(error instanceof Error) return {updateQuery:{}, updatedData: {} as SymbolsGraphics, error: ResponseWrapper.badRequest(error.message)}
 
-		return {updateQuery:{}, updatedData: {} as SymbolsGraphics, actionLog: '', error: ResponseWrapper.internalServerError('Failed to update symbols and graphics')}
+		return {updateQuery:{}, updatedData: {} as SymbolsGraphics, error: ResponseWrapper.internalServerError('Failed to update symbols and graphics')}
 	}
 }
 
@@ -150,21 +145,17 @@ export function deleteSymbolsGraphics(
 			},
 		};
 
-		const actionLog = 'DELETE';
-
-		return { updateQuery, updatedData: SymbolsGraphicsId, actionLog, error: null };
+		return { updateQuery, updatedData: SymbolsGraphicsId, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: { id: '' },
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: { id: '' },
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to delete symbols graphics'),
 		};
 	}
@@ -190,21 +181,18 @@ export function updateSymbolsGraphicsTabCompletion(
 
 		const updateQuery = { $set: { 'symbols_graphics.tab_completed': inputData.tab_completed } };
 		const updatedData = { tab_completed: inputData.tab_completed };
-		const actionLog = 'UPDATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: { tab_completed: false },
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: { tab_completed: false },
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update symbols graphics tab completion'),
 		};
 	}

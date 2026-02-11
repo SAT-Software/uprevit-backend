@@ -14,7 +14,6 @@ type ComplianceStandardReturn = {
 		| (ComplianceStandard & { _id: string })[]
 		| DeleteComplianceStandardData
 		| UpdateComplianceTabCompletionData;
-	actionLog: string;
 	error: APIGatewayProxyResult | null;
 };
 
@@ -56,21 +55,18 @@ export function addComplianceStandard(
 			...standard,
 			_id: standard._id.toString(),
 		}));
-		const actionLog = 'CREATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: [],
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: [],
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to add compliance standards'),
 		};
 	}
@@ -116,21 +112,18 @@ export function updateComplianceStandard(
 		};
 
 		const updatedData = updatedComplianceStandard;
-		const actionLog = 'UPDATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: {} as ComplianceStandard & { id: string },
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: {} as ComplianceStandard & { id: string },
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update compliance standards'),
 		};
 	}
@@ -170,21 +163,17 @@ export function deleteComplianceStandard(
 			},
 		};
 
-		const actionLog = 'DELETE';
-
-		return { updateQuery, updatedData: standardId, actionLog, error: null };
+		return { updateQuery, updatedData: standardId, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: { id: '' },
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: { id: '' },
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to delete compliance standard'),
 		};
 	}
@@ -210,21 +199,18 @@ export function updateComplianceTabCompletion(
 
 		const updateQuery = { $set: { 'compliance_information.tab_completed': inputData.tab_completed } };
 		const updatedData = { tab_completed: inputData.tab_completed };
-		const actionLog = 'UPDATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: { tab_completed: false },
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: { tab_completed: false },
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update compliance tab completion'),
 		};
 	}

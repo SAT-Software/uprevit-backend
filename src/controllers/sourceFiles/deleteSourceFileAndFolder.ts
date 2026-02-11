@@ -6,8 +6,6 @@ import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { Collection, ObjectId } from "mongodb";
 import { SourceFile } from "../../models/sourceFiles";
-import { updateAuditLog } from "../../utils/auditLog";
-import { AuditLogAction } from "../../models/auditLog";
 import { recordAuditEvent } from "../../utils/auditLogV2";
 
 /**
@@ -63,15 +61,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		await sourceFilesCollection.deleteMany({ _id: { $in: idsToDelete } });
-
-		await updateAuditLog({
-			entity: 'SourceFile',
-			entityId: id,
-			action: AuditLogAction.DELETE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		});
 
 		await recordAuditEvent({
 			workspaceId: fileOrFolder.workspace_id.toString(),

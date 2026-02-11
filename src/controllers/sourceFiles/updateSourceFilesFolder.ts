@@ -6,8 +6,6 @@ import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { ObjectId } from "mongodb";
 import { SourceFile } from "../../models/sourceFiles";
-import { updateAuditLog } from "../../utils/auditLog";
-import { AuditLogAction } from "../../models/auditLog";
 import { recordAuditEvent } from "../../utils/auditLogV2";
 
 /**
@@ -78,15 +76,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (!updatedFolder) {
 			return ResponseWrapper.notFound('Folder not found.');
 		}
-
-		await updateAuditLog({
-			entity: 'SourceFile',
-			entityId: folderId,
-			action: AuditLogAction.UPDATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		});
 
 		const changedPaths = Object.keys(updateFields);
 		const hasNameChange = Object.prototype.hasOwnProperty.call(updateFields, 'name');

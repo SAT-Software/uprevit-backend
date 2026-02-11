@@ -1,8 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { Product } from '../../models/product';
-import { AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateEnum, validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
@@ -131,15 +129,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		};
 
 		const product = await db.collection<Product>('products').insertOne(productData);
-
-		await updateAuditLog({
-			entity: 'product',
-			entityId: product.insertedId.toString(),
-			action: AuditLogAction.CREATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		});
 
 		await recordAuditEvent({
 			workspaceId: workspaceObjectId.toString(),
