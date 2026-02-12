@@ -77,37 +77,63 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.notFound('Folder not found.');
 		}
 
-		const changedPaths = Object.keys(updateFields);
 		const hasNameChange = Object.prototype.hasOwnProperty.call(updateFields, 'name');
 		const hasProductChange = Object.prototype.hasOwnProperty.call(updateFields, 'product_id');
 
-		const eventKey = hasProductChange
-			? (updateFields.product_id ? 'source_files.folder.product_linked' : 'source_files.folder.product_unlinked')
-			: 'source_files.folder.renamed';
+		const auditEvents: Array<{
+			action: 'update' | 'link' | 'unlink';
+			eventKey: string;
+			changedPaths: string[];
+			meta: Record<string, unknown>;
+		}> = [];
 
-		const action = hasProductChange ? (updateFields.product_id ? 'link' : 'unlink') : 'update';
+		if (hasNameChange) {
+			auditEvents.push({
+				action: 'update',
+				eventKey: 'source_files.folder.renamed',
+				changedPaths: ['name'],
+				meta: {
+					folderName: updatedFolder.name,
+					fromName: beforeFolder?.name,
+					toName: updatedFolder.name,
+				},
+			});
+		}
 
-		await recordAuditEvent({
-			workspaceId: updatedFolder.workspace_id.toString(),
-			scope: { type: 'source-files', id: updatedFolder.workspace_id.toString() },
-			entity: { type: 'source_folder', id: folderId },
-			action,
-			eventKey,
-			visibility: 'all',
-			where: {
-				module: 'source-files',
-				parentId: updatedFolder.parentId?.toString() ?? undefined,
-			},
-			auth: auth.payload,
-			before: beforeFolder as unknown as Record<string, unknown>,
-			after: updatedFolder as unknown as Record<string, unknown>,
-			changedPaths,
-			meta: {
-				folderName: updatedFolder.name,
-				fromName: hasNameChange ? beforeFolder?.name : undefined,
-				toName: hasNameChange ? updatedFolder.name : undefined,
-			},
-		});
+		if (hasProductChange) {
+			auditEvents.push({
+				action: updateFields.product_id ? 'link' : 'unlink',
+				eventKey: updateFields.product_id
+					? 'source_files.folder.product_linked'
+					: 'source_files.folder.product_unlinked',
+				changedPaths: ['product_id'],
+				meta: {
+					folderName: updatedFolder.name,
+					fromProductId: beforeFolder?.product_id?.toString() ?? null,
+					toProductId: updatedFolder.product_id?.toString() ?? null,
+				},
+			});
+		}
+
+		for (const auditEvent of auditEvents) {
+			await recordAuditEvent({
+				workspaceId: updatedFolder.workspace_id.toString(),
+				scope: { type: 'source-files', id: updatedFolder.workspace_id.toString() },
+				entity: { type: 'source_folder', id: folderId },
+				action: auditEvent.action,
+				eventKey: auditEvent.eventKey,
+				visibility: 'all',
+				where: {
+					module: 'source-files',
+					parentId: updatedFolder.parentId?.toString() ?? undefined,
+				},
+				auth: auth.payload,
+				before: beforeFolder as unknown as Record<string, unknown>,
+				after: updatedFolder as unknown as Record<string, unknown>,
+				changedPaths: auditEvent.changedPaths,
+				meta: auditEvent.meta,
+			});
+		}
 
 		return ResponseWrapper.success({
 			message: 'Source file folder updated successfully.',

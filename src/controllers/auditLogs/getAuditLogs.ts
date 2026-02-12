@@ -14,6 +14,7 @@ import { logError } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 
 const ADMIN_ONLY_SCOPES: AuditScopeType[] = ['department', 'project', 'archive'];
+const MAX_SEARCH_LENGTH = 200;
 
 const parseGroups = (groups: unknown): string[] => {
 	if (Array.isArray(groups)) return groups.filter((group): group is string => typeof group === 'string');
@@ -22,6 +23,8 @@ const parseGroups = (groups: unknown): string[] => {
 };
 
 const isAdminUser = (groups: unknown) => parseGroups(groups).includes('admin');
+
+const escapeRegex = (pattern: string): string => pattern.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
 const parseActions = (rawActions: string | undefined): AuditAction[] | null => {
 	if (!rawActions) return null;
@@ -115,8 +118,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}
 		}
 
+		if (search && search.length > MAX_SEARCH_LENGTH) {
+			return ResponseWrapper.badRequest(`search must not exceed ${MAX_SEARCH_LENGTH} characters.`);
+		}
+
 		if (search) {
-			query.summary = { $regex: search, $options: 'i' };
+			query.summary = { $regex: escapeRegex(search), $options: 'i' };
 		}
 
 		if (fromDate || toDate) {
@@ -164,8 +171,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 	} catch (error) {
 		logError('Get audit logs handler failed', error);
-		return ResponseWrapper.internalServerError(
-			`Failed to get audit logs: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		return ResponseWrapper.internalServerError('Failed to get audit logs in auditLogs/getAuditLogs handler.');
 	}
 };

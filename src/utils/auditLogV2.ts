@@ -12,6 +12,7 @@ import {
 import type { User } from '../models/user';
 import { getDb } from './db';
 import { buildAuditEventSummary } from './auditEventCatalog';
+import { logError } from './logger';
 
 let hasEnsuredAuditLogV2Indexes = false;
 const actorEmailCache = new Map<string, string | null>();
@@ -175,6 +176,7 @@ const ensureAuditLogV2Indexes = async () => {
 
 	await Promise.all([
 		collection.createIndex({ workspaceId: 1, 'scope.type': 1, 'scope.id': 1, occurredAt: -1 }),
+		collection.createIndex({ 'scope.type': 1, 'scope.id': 1, action: 1, occurredAt: -1 }),
 		collection.createIndex({ workspaceId: 1, action: 1, occurredAt: -1 }),
 		collection.createIndex({ workspaceId: 1, visibility: 1, occurredAt: -1 }),
 		collection.createIndex({ 'entity.type': 1, 'entity.id': 1, occurredAt: -1 }),
@@ -185,54 +187,64 @@ const ensureAuditLogV2Indexes = async () => {
 };
 
 export const recordAuditEvent = async (input: RecordAuditEventInput) => {
-	await ensureAuditLogV2Indexes();
+	try {
+		await ensureAuditLogV2Indexes();
 
-	const db = await getDb();
-	const collection = db.collection<AuditLogV2>(AUDIT_LOG_V2_COLLECTION);
+		const db = await getDb();
+		const collection = db.collection<AuditLogV2>(AUDIT_LOG_V2_COLLECTION);
 
-	const groups = parseGroups(input.auth['cognito:groups']);
-	const actorRole: 'admin' | 'user' = groups.includes('admin') ? 'admin' : 'user';
-	const usernameClaim = getClaimString(input.auth, ['username', 'cognito:username']);
-	const actorEmail = await resolveActorEmail({
-		db,
-		workspaceId: input.workspaceId,
-		auth: input.auth,
-	});
-	const actorName = getClaimString(input.auth, ['name']) ?? actorEmail ?? usernameClaim ?? 'Unknown User';
+		const groups = parseGroups(input.auth['cognito:groups']);
+		const actorRole: 'admin' | 'user' = groups.includes('admin') ? 'admin' : 'user';
+		const usernameClaim = getClaimString(input.auth, ['username', 'cognito:username']);
+		const actorEmail = await resolveActorEmail({
+			db,
+			workspaceId: input.workspaceId,
+			auth: input.auth,
+		});
+		const actorName = getClaimString(input.auth, ['name']) ?? actorEmail ?? usernameClaim ?? 'Unknown User';
 
-	const computedChanges = input.changes ?? buildChangesFromPaths({
-		before: input.before,
-		after: input.after,
-		paths: input.changedPaths,
-	});
+		const computedChanges = input.changes ?? buildChangesFromPaths({
+			before: input.before,
+			after: input.after,
+			paths: input.changedPaths,
+		});
 
-	const summary = buildAuditEventSummary({
-		eventKey: input.eventKey,
-		action: input.action,
-		changes: computedChanges,
-		meta: input.meta,
-		actorName,
-	});
+		const summary = buildAuditEventSummary({
+			eventKey: input.eventKey,
+			action: input.action,
+			changes: computedChanges,
+			meta: input.meta,
+			actorName,
+		});
 
-	const payload: AuditLogV2 = {
-		schemaVersion: 2,
-		workspaceId: new ObjectId(input.workspaceId),
-		scope: input.scope,
-		entity: input.entity,
-		action: input.action,
-		eventKey: input.eventKey,
-		summary,
-		actor: {
-			userId: input.auth.sub,
-			name: actorName,
-			email: actorEmail,
-			role: actorRole,
-		},
-		where: input.where,
-		changes: computedChanges,
-		visibility: input.visibility,
-		occurredAt: input.occurredAt ?? new Date(),
-	};
+		const payload: AuditLogV2 = {
+			schemaVersion: 2,
+			workspaceId: new ObjectId(input.workspaceId),
+			scope: input.scope,
+			entity: input.entity,
+			action: input.action,
+			eventKey: input.eventKey,
+			summary,
+			actor: {
+				userId: input.auth.sub,
+				name: actorName,
+				email: actorEmail,
+				role: actorRole,
+			},
+			where: input.where,
+			changes: computedChanges,
+			visibility: input.visibility,
+			occurredAt: input.occurredAt ?? new Date(),
+		};
 
-	await collection.insertOne(payload);
+		await collection.insertOne(payload);
+	} catch (error) {
+		const actor = getClaimString(input.auth, ['sub', 'email', 'username', 'cognito:username', 'name']) ?? 'unknown';
+		logError('Failed to record audit event', error, {
+			eventKey: input.eventKey,
+			workspaceId: input.workspaceId,
+			action: input.action,
+			actor,
+		});
+	}
 };

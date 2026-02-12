@@ -34,6 +34,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return validationResult;
 		}
 
+		const departmentId = event.pathParameters.id.toString();
+
 		const db = await getDb();
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
@@ -48,7 +50,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 
 		const departmentRecord: Department | null = await db.collection<Department>('departments').findOne({
-			_id: new ObjectId(event.pathParameters.id),
+			_id: new ObjectId(departmentId),
 		});
 
 		if (!departmentRecord) {
@@ -57,7 +59,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const department = await db.collection<Department>('departments').updateOne(
 			{
-				_id: new ObjectId(event.pathParameters.id),
+				_id: new ObjectId(departmentId),
 			},
 			{
 				$set: {
@@ -66,22 +68,34 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			},
 		);
 
-		await recordAuditEvent({
-			workspaceId: departmentRecord.workspace_id.toString(),
-			scope: { type: 'department', id: (event.pathParameters?.id).toString() },
-			entity: { type: 'department', id: (event.pathParameters?.id).toString() },
-			action: isArchived ? 'archive' : 'restore',
-			eventKey: isArchived ? 'department.archived' : 'department.restored',
-			visibility: 'admin',
-			where: { module: 'departments' },
-			auth: auth.payload,
-			before: { isArchived: departmentRecord.isArchived },
-			after: { isArchived },
-			changedPaths: ['isArchived'],
-			meta: {
+		const action = isArchived ? 'archive' : 'restore';
+		const eventKey = isArchived ? 'department.archived' : 'department.restored';
+
+		try {
+			await recordAuditEvent({
+				workspaceId: departmentRecord.workspace_id.toString(),
+				scope: { type: 'department', id: departmentId },
+				entity: { type: 'department', id: departmentId },
+				action,
+				eventKey,
+				visibility: 'admin',
+				where: { module: 'departments' },
+				auth: auth.payload,
+				before: { isArchived: departmentRecord.isArchived },
+				after: { isArchived },
+				changedPaths: ['isArchived'],
+				meta: {
+					departmentName: departmentRecord.department_name,
+				},
+			});
+		} catch (auditError) {
+			logError('Department archive audit event failed', auditError, {
 				departmentName: departmentRecord.department_name,
-			},
-		});
+				workspaceId: departmentRecord.workspace_id.toString(),
+				action,
+				departmentId,
+			});
+		}
 
 		return ResponseWrapper.success({
 			message: `Department ${isArchived ? 'archived' : 'restored'} successfully`,
