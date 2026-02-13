@@ -10,7 +10,7 @@ import {
 } from '../../models/auditLogV2';
 import { authenticateRequest } from '../../utils/authUtils';
 import { getDb } from '../../utils/db';
-import { logError } from '../../utils/logger';
+import { logError, logInfo } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 
 const ADMIN_ONLY_SCOPES: AuditScopeType[] = ['department', 'project', 'archive'];
@@ -62,6 +62,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const page = Number.parseInt(event.queryStringParameters?.page ?? '1', 10);
 		const limit = Number.parseInt(event.queryStringParameters?.limit ?? '20', 10);
 
+		logInfo('🔎 auditLogs/getAuditLogs request params', {
+			queryStringParameters: event.queryStringParameters ?? {},
+			parsedPage: page,
+			parsedLimit: limit,
+			requestId: event.requestContext?.requestId,
+		});
+
 		if (!workspaceId || !ObjectId.isValid(workspaceId)) {
 			return ResponseWrapper.badRequest('workspaceId query parameter must be a valid ObjectId.');
 		}
@@ -78,6 +85,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		if (!Number.isFinite(limit) || limit < 1 || limit > 100) {
 			return ResponseWrapper.badRequest('limit must be a number between 1 and 100.');
+		}
+
+		if (!Number.isFinite(page) || page < 1) {
+			return ResponseWrapper.badRequest('page must be a number greater than or equal to 1.');
 		}
 
 		const adminUser = isAdminUser(auth.payload['cognito:groups']);
@@ -145,15 +156,34 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const skip = (page - 1) * limit;
 
+		logInfo('📄 auditLogs/getAuditLogs pagination', {
+			page,
+			limit,
+			skip,
+			scopeType,
+			scopeId,
+			requestId: event.requestContext?.requestId,
+		});
+
 		const [logs, totalCount] = await Promise.all([
 			collection
 				.find(query)
-				.sort({ occurredAt: -1 })
+				.sort({ occurredAt: -1, _id: -1 })
 				.skip(skip)
 				.limit(limit)
 				.toArray(),
 			collection.countDocuments(query),
 		]);
+
+		logInfo('✅ auditLogs/getAuditLogs result', {
+			page,
+			limit,
+			totalCount,
+			returnedCount: logs.length,
+			firstLogId: logs[0]?._id?.toString(),
+			lastLogId: logs.length ? logs[logs.length - 1]?._id?.toString() : undefined,
+			requestId: event.requestContext?.requestId,
+		});
 
 		return ResponseWrapper.success({
 			message: 'Audit logs fetched successfully',
