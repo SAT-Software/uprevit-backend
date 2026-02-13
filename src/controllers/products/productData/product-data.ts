@@ -7,7 +7,6 @@ import { ObjectId } from 'mongodb';
 type ProductDataReturn = {
 	updateQuery: Record<string, unknown>;
 	updatedData: ProductData;
-	actionLog: string;
 	error: APIGatewayProxyResult | null;
 };
 
@@ -37,15 +36,13 @@ export function addProductData(
 
 		const updateQuery = { $set: { 'product_data.data': newProductDataWithId } };
 		const updatedData = newProductDataWithId;
-		const actionLog = 'CREATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error) {
 			return {
 				updateQuery: {},
 				updatedData: {},
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		}
@@ -53,7 +50,6 @@ export function addProductData(
 		return {
 			updateQuery: {},
 			updatedData: {},
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to add product data'),
 		};
 	}
@@ -81,15 +77,13 @@ export function updateProductData(
 
 		const updateQuery = { $set: { 'product_data.data': updatedProductData.workbook_data } };
 		const updatedData = updatedProductData;
-		const actionLog = 'UPDATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error) {
 			return {
 				updateQuery: {},
 				updatedData: {} as ProductData,
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		}
@@ -97,7 +91,6 @@ export function updateProductData(
 		return {
 			updateQuery: {},
 			updatedData: {} as ProductData,
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update product data'),
 		};
 	}
@@ -122,21 +115,17 @@ export function deleteProductData(
 			$set: { 'product_data.data': {} },
 		};
 
-		const actionLog = 'DELETE';
-
-		return { updateQuery, updatedData: {}, actionLog, error: null };
+		return { updateQuery, updatedData: {}, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: {},
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: {},
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to delete product data'),
 		};
 	}
@@ -164,22 +153,19 @@ export function updateProductDataTabCompletion(
 
 		const updateQuery = { $set: { 'product_data.tab_completed': inputData.tab_completed } };
 		const updatedData = { tab_completed: inputData.tab_completed };
-		const actionLog = 'UPDATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error) {
 			return {
 				updateQuery: {},
 				updatedData: { tab_completed: false },
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		}
 		return {
 			updateQuery: {},
 			updatedData: { tab_completed: false },
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update product data tab completion'),
 		};
 	}

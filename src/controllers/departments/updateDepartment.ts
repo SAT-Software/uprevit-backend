@@ -1,13 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { Department } from '../../models/department';
-import { type AuditLog, AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 
 /**
  * Update a department
@@ -84,16 +83,32 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			},
 		);
 
-		const auditRecord: AuditLog = {
-			entity: 'department',
-			entityId: (departmentRecord._id as ObjectId).toString(),
-			action: AuditLogAction.UPDATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		};
-
-		await updateAuditLog(auditRecord);
+		await recordAuditEvent({
+			workspaceId: workspaceObjectId.toString(),
+			scope: { type: 'department', id: (departmentRecord._id as ObjectId).toString() },
+			entity: { type: 'department', id: (departmentRecord._id as ObjectId).toString() },
+			action: 'update',
+			eventKey: 'department.updated',
+			visibility: 'admin',
+			where: { module: 'departments' },
+			auth: auth.payload,
+			before: {
+				department_name: departmentRecord.department_name,
+				department_description: departmentRecord.department_description,
+				manager: departmentRecord.manager,
+				users: departmentRecord.users?.map((user) => user.toString()) ?? [],
+			},
+			after: {
+				department_name: input.department_name,
+				department_description: input.department_description,
+				manager: input.manager,
+				users: input.users ?? [],
+			},
+			changedPaths: ['department_name', 'department_description', 'manager', 'users'],
+			meta: {
+				departmentName: input.department_name,
+			},
+		});
 
 		return ResponseWrapper.success({
 			message: 'Department updated successfully',

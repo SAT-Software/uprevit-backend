@@ -6,6 +6,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateEnum } from '../../utils/validationUtils';
 import { authenticateRequest } from '../../utils/authUtils';
+import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 
 /**
  * Get product data
@@ -60,39 +61,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const pipeline = [
 			{ $match: { _id: productObjectId } },
-			{
-				$lookup: {
-					from: 'audit_log',
-					let: { productIdString: { $toString: '$_id' } },
-					pipeline: [
-						{
-							$match: {
-								$expr: {
-									$and: [
-										{ $eq: ['$entity', 'product'] },
-										{ $eq: ['$entityId', '$$productIdString'] },
-										{ $in: ['$action', ['create', 'update']] },
-										{ $eq: ['$active', true] }
-									]
-								}
-							}
-						},
-						{ $sort: { actionAt: -1 } },
-						{
-							$project: {
-								entity: 1,
-								entityId: 1,
-								action: 1,
-								actionBy: 1,
-								actionAt: 1,
-								active: 1
-							}
-						},
-						{ $limit: 2 }
-					],
-					as: 'auditLogs'
-				}
-			}
+			buildLegacyAuditLookupStage({
+				scopeType: 'product',
+				updateActions: ['update', 'submit', 'delete', 'move', 'link', 'unlink', 'restore'],
+			}),
 		];
 
 		const products = await db.collection<Product>('products').aggregate(pipeline).toArray();

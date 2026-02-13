@@ -7,7 +7,6 @@ import { ObjectId } from 'mongodb';
 type OperationalParametersReturn = {
 	updateQuery: Record<string, unknown>;
 	updatedData: OperationalParameters;
-	actionLog: string;
 	error: APIGatewayProxyResult | null;
 };
 
@@ -37,15 +36,13 @@ export function addOperationalParameters(
 
 		const updateQuery = { $set: { 'operational_parameters.data': newOperationalParametersWithId } };
 		const updatedData = newOperationalParametersWithId;
-		const actionLog = 'CREATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error) {
 			return {
 				updateQuery: {},
 				updatedData: {},
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		}
@@ -53,7 +50,6 @@ export function addOperationalParameters(
 		return {
 			updateQuery: {},
 			updatedData: {},
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to add operational parameters'),
 		};
 	}
@@ -81,15 +77,13 @@ export function updateOperationalParameters(
 
 		const updateQuery = { $set: { 'operational_parameters.data': updatedOperationalParameters.workbook_data } };
 		const updatedData = updatedOperationalParameters;
-		const actionLog = 'UPDATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error) {
 			return {
 				updateQuery: {},
 				updatedData: {},
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		}
@@ -97,7 +91,6 @@ export function updateOperationalParameters(
 		return {
 			updateQuery: {},
 			updatedData: {},
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update operational parameters'),
 		};
 	}
@@ -122,21 +115,17 @@ export function deleteOperationalParameters(
 			$set: { 'operational_parameters.data': {} },
 		};
 
-		const actionLog = 'DELETE';
-
-		return { updateQuery, updatedData: {}, actionLog, error: null };
+		return { updateQuery, updatedData: {}, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: {},
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: {},
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to delete operational parameters'),
 		};
 	}
@@ -164,22 +153,19 @@ export function updateOperationalParametersTabCompletion(
 
 		const updateQuery = { $set: { 'operational_parameters.tab_completed': inputData.tab_completed } };
 		const updatedData = { tab_completed: inputData.tab_completed };
-		const actionLog = 'UPDATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error) {
 			return {
 				updateQuery: {},
 				updatedData: { tab_completed: false },
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		}
 		return {
 			updateQuery: {},
 			updatedData: { tab_completed: false },
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update operational parameters tab completion'),
 		};
 	}

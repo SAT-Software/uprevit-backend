@@ -1,13 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { Project } from '../../models/project';
-import { type AuditLog, AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 
 /**
  * Update a project
@@ -106,16 +105,34 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}
 		});
 
-		const auditRecord: AuditLog = {
-			entity: 'project',
-			entityId: input._id!.toString(),
-			action: AuditLogAction.UPDATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		};
-
-		await updateAuditLog(auditRecord);
+		await recordAuditEvent({
+			workspaceId: workspaceObjectId.toString(),
+			scope: { type: 'project', id: input._id!.toString() },
+			entity: { type: 'project', id: input._id!.toString() },
+			action: 'update',
+			eventKey: 'project.updated',
+			visibility: 'admin',
+			where: { module: 'projects' },
+			auth: auth.payload,
+			before: {
+				project_name: projectRecord.project_name,
+				project_number: projectRecord.project_number,
+				project_description: projectRecord.project_description,
+				project_manager: projectRecord.project_manager,
+				users: projectRecord.users?.map((user) => user.toString()) ?? [],
+			},
+			after: {
+				project_name: input.project_name,
+				project_number: input.project_number,
+				project_description: input.project_description,
+				project_manager: input.project_manager,
+				users: (input.users as unknown as string[]) ?? [],
+			},
+			changedPaths: ['project_name', 'project_number', 'project_description', 'project_manager', 'users'],
+			meta: {
+				projectName: input.project_name,
+			},
+		});
 
 		return ResponseWrapper.success({
 			message: 'Project updated successfully',

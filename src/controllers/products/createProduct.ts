@@ -1,13 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { Product } from '../../models/product';
-import { AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateEnum, validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
 import { authenticateRequest } from '../../utils/authUtils';
 import { logError } from '../../utils/logger';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 
 /**
  * Create a product
@@ -131,13 +130,26 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const product = await db.collection<Product>('products').insertOne(productData);
 
-		await updateAuditLog({
-			entity: 'product',
-			entityId: product.insertedId.toString(),
-			action: AuditLogAction.CREATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
+		await recordAuditEvent({
+			workspaceId: workspaceObjectId.toString(),
+			scope: { type: 'product', id: product.insertedId.toString() },
+			entity: { type: 'product', id: product.insertedId.toString() },
+			action: 'create',
+			eventKey: 'product.created',
+			visibility: 'all',
+			where: { module: 'products' },
+			auth: auth.payload,
+			after: {
+				product_plan_number: input.product_plan_number,
+				product_name: input.product_name,
+				product_description: input.product_description,
+				status: input.status,
+				version: input.version,
+			},
+			changedPaths: ['product_plan_number', 'product_name', 'product_description', 'status', 'version'],
+			meta: {
+				productName: input.product_name,
+			},
 		});
 
 		return ResponseWrapper.created({

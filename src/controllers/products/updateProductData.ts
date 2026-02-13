@@ -4,9 +4,7 @@ import { validateAllObjectIds, validateMissingFields } from '../../utils/validat
 import { getDb } from '../../utils/db';
 import { Product } from '../../models/product';
 import { ObjectId } from 'mongodb';
-import { AuditLog } from '../../models/auditLog';
 import { authenticateRequest } from '../../utils/authUtils';
-import { updateAuditLog } from '../../utils/auditLog';
 import {
 	addCustomField,
 	deleteCustomField,
@@ -22,6 +20,7 @@ import { addProductData, deleteProductData, updateProductData, updateProductData
 import { addOperationalParameters, deleteOperationalParameters, updateOperationalParameters, updateOperationalParametersTabCompletion } from './productData/operational-parameters';
 import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion, updateLabelTagTaggedImage, updateLabelTagLegend } from './productData/label-tags';
 import { SymbolsGraphics } from '../../types/products/symbols-graphics';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 
 const validTabs = [
 	'product-information',
@@ -32,6 +31,181 @@ const validTabs = [
 	'operational-parameters',
 	'label-tags',
 ];
+
+type ProductDataAuditMeta = {
+	eventKey: string;
+	action: 'create' | 'update' | 'delete';
+	changedPaths: string[];
+};
+
+const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
+	update_product_information: {
+		eventKey: 'product.product_information.updated',
+		action: 'update',
+		changedPaths: [
+			'product_name',
+			'product_plan_number',
+			'product_description',
+			'target_date',
+			'actual_completion_date',
+			'product_information.data.market_geography',
+			'product_information.data.country_of_origin',
+			'product_information.data.oem_contract_manufacturer',
+			'product_information.data.commercial_clinical',
+			'product_information.data.manufacturing_location',
+		],
+	},
+	add_custom_field: {
+		eventKey: 'product.product_information.custom_field.added',
+		action: 'create',
+		changedPaths: ['product_information.custom_fields'],
+	},
+	update_custom_field: {
+		eventKey: 'product.product_information.custom_field.updated',
+		action: 'update',
+		changedPaths: ['product_information.custom_fields'],
+	},
+	delete_custom_field: {
+		eventKey: 'product.product_information.custom_field.deleted',
+		action: 'delete',
+		changedPaths: ['product_information.custom_fields'],
+	},
+	update_product_information_completion: {
+		eventKey: 'product.product_information.completion.updated',
+		action: 'update',
+		changedPaths: ['product_information.tab_completed'],
+	},
+	add_compliance_standard: {
+		eventKey: 'product.compliance_item.added',
+		action: 'create',
+		changedPaths: ['compliance_information.data'],
+	},
+	update_compliance_standard: {
+		eventKey: 'product.compliance_item.updated',
+		action: 'update',
+		changedPaths: ['compliance_information.data'],
+	},
+	delete_compliance_standard: {
+		eventKey: 'product.compliance_item.deleted',
+		action: 'delete',
+		changedPaths: ['compliance_information.data'],
+	},
+	update_compliance_tab_completion: {
+		eventKey: 'product.compliance_information.completion.updated',
+		action: 'update',
+		changedPaths: ['compliance_information.tab_completed'],
+	},
+	add_label_component: {
+		eventKey: 'product.label_component.added',
+		action: 'create',
+		changedPaths: ['label_components.data'],
+	},
+	update_label_component: {
+		eventKey: 'product.label_component.updated',
+		action: 'update',
+		changedPaths: ['label_components.data'],
+	},
+	delete_label_component: {
+		eventKey: 'product.label_component.deleted',
+		action: 'delete',
+		changedPaths: ['label_components.data'],
+	},
+	update_label_component_tab_completion: {
+		eventKey: 'product.label_components.completion.updated',
+		action: 'update',
+		changedPaths: ['label_components.tab_completed'],
+	},
+	add_symbols_graphics: {
+		eventKey: 'product.symbol_graphic.added',
+		action: 'create',
+		changedPaths: ['symbols_graphics.data'],
+	},
+	update_symbols_graphics: {
+		eventKey: 'product.symbol_graphic.updated',
+		action: 'update',
+		changedPaths: ['symbols_graphics.data'],
+	},
+	delete_symbols_graphics: {
+		eventKey: 'product.symbol_graphic.deleted',
+		action: 'delete',
+		changedPaths: ['symbols_graphics.data'],
+	},
+	update_symbols_graphics_tab_completion: {
+		eventKey: 'product.symbol_graphics.completion.updated',
+		action: 'update',
+		changedPaths: ['symbols_graphics.tab_completed'],
+	},
+	add_product_data: {
+		eventKey: 'product.product_specification.added',
+		action: 'create',
+		changedPaths: ['product_data.data.workbook_data'],
+	},
+	update_product_data: {
+		eventKey: 'product.product_specification.updated',
+		action: 'update',
+		changedPaths: ['product_data.data.workbook_data'],
+	},
+	delete_product_data: {
+		eventKey: 'product.product_specification.deleted',
+		action: 'delete',
+		changedPaths: ['product_data.data'],
+	},
+	update_product_data_tab_completion: {
+		eventKey: 'product.product_specifications.completion.updated',
+		action: 'update',
+		changedPaths: ['product_data.tab_completed'],
+	},
+	add_operational_parameters: {
+		eventKey: 'product.operational_parameter.added',
+		action: 'create',
+		changedPaths: ['operational_parameters.data.workbook_data'],
+	},
+	update_operational_parameters: {
+		eventKey: 'product.operational_parameter.updated',
+		action: 'update',
+		changedPaths: ['operational_parameters.data.workbook_data'],
+	},
+	delete_operational_parameters: {
+		eventKey: 'product.operational_parameter.deleted',
+		action: 'delete',
+		changedPaths: ['operational_parameters.data'],
+	},
+	update_operational_parameters_tab_completion: {
+		eventKey: 'product.operational_parameters.completion.updated',
+		action: 'update',
+		changedPaths: ['operational_parameters.tab_completed'],
+	},
+	add_label_tags: {
+		eventKey: 'product.label_tag.added',
+		action: 'create',
+		changedPaths: ['label_tags.data'],
+	},
+	update_label_tags: {
+		eventKey: 'product.label_tag.updated',
+		action: 'update',
+		changedPaths: ['label_tags.data'],
+	},
+	delete_label_tags: {
+		eventKey: 'product.label_tag.deleted',
+		action: 'delete',
+		changedPaths: ['label_tags.data'],
+	},
+	update_label_tag_tagged_image: {
+		eventKey: 'product.label_tag.tagged_image.updated',
+		action: 'update',
+		changedPaths: ['label_tags.data'],
+	},
+	update_label_tag_legend: {
+		eventKey: 'product.label_tag.legend.updated',
+		action: 'update',
+		changedPaths: ['label_tags.data'],
+	},
+	update_label_tags_tab_completion: {
+		eventKey: 'product.label_tags.completion.updated',
+		action: 'update',
+		changedPaths: ['label_tags.tab_completed'],
+	},
+};
 
 
 /**
@@ -75,14 +249,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		let updateQuery = {};
 		let updatedData = {};
-		let actionLog = '';
 
 		switch (input.action) {
 		case 'update_product_information':
 			const result = updateProductInformation(input.data, input.tab, input.action);
 			if (result.error) return result.error;
 
-			({ updateQuery, updatedData, actionLog } = result);
+			({ updateQuery, updatedData } = result);
 
 			break;
 
@@ -90,7 +263,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const addCustomFieldResult = addCustomField(input.data, input.tab, input.action);
 			if (addCustomFieldResult.error) return addCustomFieldResult.error;
 
-			({ updateQuery, updatedData, actionLog } = addCustomFieldResult);
+			({ updateQuery, updatedData } = addCustomFieldResult);
 
 			break;
 
@@ -98,7 +271,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateCustomFieldResult = updateCustomField(input.data, input.tab, input.action);
 			if (updateCustomFieldResult.error) return updateCustomFieldResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateCustomFieldResult);
+			({ updateQuery, updatedData } = updateCustomFieldResult);
 
 			break;
 
@@ -106,7 +279,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const deleteCustomFieldResult = deleteCustomField(input.data, input.tab, input.action);
 			if (deleteCustomFieldResult.error) return deleteCustomFieldResult.error;
 
-			({ updateQuery, updatedData, actionLog } = deleteCustomFieldResult);
+			({ updateQuery, updatedData } = deleteCustomFieldResult);
 
 			break;
 
@@ -114,7 +287,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateTabCompletionResult = updateProductInfoTabCompletion(input.data, input.tab, input.action);
 			if (updateTabCompletionResult.error) return updateTabCompletionResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateTabCompletionResult);
+			({ updateQuery, updatedData } = updateTabCompletionResult);
 
 			break;
 
@@ -122,7 +295,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const addComplianceStandardResult = addComplianceStandard(input.data, input.tab, input.action);
 			if (addComplianceStandardResult.error) return addComplianceStandardResult.error;
 
-			({ updateQuery, updatedData, actionLog } = addComplianceStandardResult);
+			({ updateQuery, updatedData } = addComplianceStandardResult);
 
 			break;
 
@@ -130,7 +303,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateComplianceStandardResult = updateComplianceStandard(input.data, input.tab, input.action);
 			if (updateComplianceStandardResult.error) return updateComplianceStandardResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateComplianceStandardResult);
+			({ updateQuery, updatedData } = updateComplianceStandardResult);
 
 			break;
 
@@ -138,7 +311,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const deleteComplianceStandardResult = deleteComplianceStandard(input.data, input.tab, input.action);
 			if (deleteComplianceStandardResult.error) return deleteComplianceStandardResult.error;
 
-			({ updateQuery, actionLog } = deleteComplianceStandardResult);
+			({ updateQuery } = deleteComplianceStandardResult);
 			updatedData = input.data;
 
 			break;
@@ -147,7 +320,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateComplianceTabCompletionResult = updateComplianceTabCompletion(input.data, input.tab, input.action);
 			if (updateComplianceTabCompletionResult.error) return updateComplianceTabCompletionResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateComplianceTabCompletionResult);
+			({ updateQuery, updatedData } = updateComplianceTabCompletionResult);
 
 			break;
 
@@ -161,7 +334,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			});
 			if (isDuplicateAddLabelComponent) return ResponseWrapper.conflict('Component number already exists, please use a different component number.');
 
-			({ updateQuery, updatedData, actionLog } = addLabelComponentResult);
+			({ updateQuery, updatedData } = addLabelComponentResult);
 
 			break;
 
@@ -180,7 +353,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			});
 			if (isDuplicateUpdateLabelComponent) return ResponseWrapper.conflict('Component number already exists, please use a different component number.');
 
-			({ updateQuery, updatedData, actionLog } = updateLabelComponentResult);
+			({ updateQuery, updatedData } = updateLabelComponentResult);
 
 			break;
 
@@ -188,7 +361,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const deleteLabelComponentResult = deleteLabelComponent(input.data, input.tab, input.action);
 			if (deleteLabelComponentResult.error) return deleteLabelComponentResult.error;
 
-			({ updateQuery, updatedData, actionLog } = deleteLabelComponentResult);
+			({ updateQuery, updatedData } = deleteLabelComponentResult);
 
 			break;
 
@@ -196,7 +369,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateLabelComponentTabCompletionResult = updateLabelComponentTabCompletion(input.data, input.tab, input.action);
 			if (updateLabelComponentTabCompletionResult.error) return updateLabelComponentTabCompletionResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateLabelComponentTabCompletionResult);
+			({ updateQuery, updatedData } = updateLabelComponentTabCompletionResult);
 
 			break;
 		case 'add_symbols_graphics': {
@@ -229,7 +402,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				if (isDuplicategraphics) return ResponseWrapper.conflict('Graphics description already exists, please use a different graphics description.');
 			}
 
-			({ updateQuery, updatedData, actionLog } = addSymbolsGraphicsResult);
+			({ updateQuery, updatedData } = addSymbolsGraphicsResult);
 
 			break;
 		}
@@ -266,7 +439,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				if (isDuplicategraphics) return ResponseWrapper.conflict('Graphics description already exists, please use a different graphics description.');
 			}
 
-			({ updateQuery, updatedData, actionLog } = updateSymbolsGraphicsResult);
+			({ updateQuery, updatedData } = updateSymbolsGraphicsResult);
 
 			break;
 		}
@@ -275,7 +448,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const deleteSymbolsGraphicsResult = deleteSymbolsGraphics(input.data, input.tab, input.action);
 			if (deleteSymbolsGraphicsResult.error) return deleteSymbolsGraphicsResult.error;
 
-			({ updateQuery, updatedData, actionLog } = deleteSymbolsGraphicsResult);
+			({ updateQuery, updatedData } = deleteSymbolsGraphicsResult);
 
 			break;
 
@@ -283,7 +456,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateSymbolsGraphicsTabCompletionResult = updateSymbolsGraphicsTabCompletion(input.data, input.tab, input.action);
 			if (updateSymbolsGraphicsTabCompletionResult.error) return updateSymbolsGraphicsTabCompletionResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateSymbolsGraphicsTabCompletionResult);
+			({ updateQuery, updatedData } = updateSymbolsGraphicsTabCompletionResult);
 
 			break;
 
@@ -291,7 +464,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const addProductDataResult = addProductData(input.data, input.tab, input.action);
 			if (addProductDataResult.error) return addProductDataResult.error;
 
-			({ updateQuery, updatedData, actionLog } = addProductDataResult);
+			({ updateQuery, updatedData } = addProductDataResult);
 
 			break;
 
@@ -299,7 +472,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateProductDataResult = updateProductData(input.data, input.tab, input.action);
 			if (updateProductDataResult.error) return updateProductDataResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateProductDataResult);
+			({ updateQuery, updatedData } = updateProductDataResult);
 
 			break;
 
@@ -307,7 +480,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const deleteProductDataResult = deleteProductData(input.tab, input.action);
 			if (deleteProductDataResult.error) return deleteProductDataResult.error;
 
-			({ updateQuery, updatedData, actionLog } = deleteProductDataResult);
+			({ updateQuery, updatedData } = deleteProductDataResult);
 
 			break;
 
@@ -315,7 +488,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateProductDataTabCompletionResult = updateProductDataTabCompletion(input.data, input.tab, input.action);
 			if (updateProductDataTabCompletionResult.error) return updateProductDataTabCompletionResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateProductDataTabCompletionResult);
+			({ updateQuery, updatedData } = updateProductDataTabCompletionResult);
 
 			break;
 
@@ -323,7 +496,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const addOperationalParametersResult = addOperationalParameters(input.data, input.tab, input.action);
 			if (addOperationalParametersResult.error) return addOperationalParametersResult.error;
 
-			({ updateQuery, updatedData, actionLog } = addOperationalParametersResult);
+			({ updateQuery, updatedData } = addOperationalParametersResult);
 
 			break;
 
@@ -331,7 +504,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateOperationalParametersResult = updateOperationalParameters(input.data, input.tab, input.action);
 			if (updateOperationalParametersResult.error) return updateOperationalParametersResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateOperationalParametersResult);
+			({ updateQuery, updatedData } = updateOperationalParametersResult);
 
 			break;
 
@@ -339,7 +512,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const deleteOperationalParametersResult = deleteOperationalParameters(input.tab, input.action);
 			if (deleteOperationalParametersResult.error) return deleteOperationalParametersResult.error;
 
-			({ updateQuery, updatedData, actionLog } = deleteOperationalParametersResult);
+			({ updateQuery, updatedData } = deleteOperationalParametersResult);
 
 			break;
 
@@ -347,7 +520,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateOperationalParametersTabCompletionResult = updateOperationalParametersTabCompletion(input.data, input.tab, input.action);
 			if (updateOperationalParametersTabCompletionResult.error) return updateOperationalParametersTabCompletionResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateOperationalParametersTabCompletionResult);
+			({ updateQuery, updatedData } = updateOperationalParametersTabCompletionResult);
 
 			break;
 
@@ -355,7 +528,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const addLabelTagResult = addLabelTag(input.data, input.tab, input.action);
 			if (addLabelTagResult.error) return addLabelTagResult.error;
 
-			({ updateQuery, updatedData, actionLog } = addLabelTagResult);
+			({ updateQuery, updatedData } = addLabelTagResult);
 
 			break;
 
@@ -363,7 +536,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateLabelTagResult = updateLabelTag(input.data, input.tab, input.action);
 			if (updateLabelTagResult.error) return updateLabelTagResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateLabelTagResult);
+			({ updateQuery, updatedData } = updateLabelTagResult);
 
 			break;
 
@@ -371,7 +544,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const deleteLabelTagResult = deleteLabelTag(input.data, input.tab, input.action);
 			if (deleteLabelTagResult.error) return deleteLabelTagResult.error;
 
-			({ updateQuery, updatedData, actionLog } = deleteLabelTagResult);
+			({ updateQuery, updatedData } = deleteLabelTagResult);
 
 			break;
 
@@ -379,7 +552,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateLabelTagsTabCompletionResult = updateLabelTagsTabCompletion(input.data, input.tab, input.action);
 			if (updateLabelTagsTabCompletionResult.error) return updateLabelTagsTabCompletionResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateLabelTagsTabCompletionResult);
+			({ updateQuery, updatedData } = updateLabelTagsTabCompletionResult);
 
 			break;
 
@@ -387,7 +560,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateLabelTagTaggedImageResult = updateLabelTagTaggedImage(input.data, input.tab, input.action);
 			if (updateLabelTagTaggedImageResult.error) return updateLabelTagTaggedImageResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateLabelTagTaggedImageResult);
+			({ updateQuery, updatedData } = updateLabelTagTaggedImageResult);
 
 			break;
 
@@ -395,22 +568,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const updateLabelTagLegendResult = updateLabelTagLegend(input.data, input.tab, input.action);
 			if (updateLabelTagLegendResult.error) return updateLabelTagLegendResult.error;
 
-			({ updateQuery, updatedData, actionLog } = updateLabelTagLegendResult);
+			({ updateQuery, updatedData } = updateLabelTagLegendResult);
 
 			break;
 
 		default:
 			return ResponseWrapper.badRequest('Invalid action');
 		}
-
-		const auditLog: AuditLog = {
-			entity: 'Product',
-			entityId: input.id,
-			action: actionLog as AuditLog['action'],
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		};
 
 		const options: { arrayFilters?: any[] } = {};
 		if ('arrayFilters' in updateQuery) {
@@ -427,7 +591,36 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			);
 		}
 
-		await updateAuditLog(auditLog);
+		const updatedProduct = await db.collection<Product>('products').findOne({ _id: new ObjectId(input.id) });
+		const auditMeta = PRODUCT_DATA_ACTION_AUDIT_META[input.action];
+
+		if (updatedProduct && auditMeta) {
+			const payloadMeta: Record<string, unknown> = {
+				productName: updatedProduct.product_name,
+				tab: input.tab,
+			};
+
+			if (typeof input.data === 'object' && input.data) {
+				if ('tab_completed' in (input.data as Record<string, unknown>)) {
+					payloadMeta.tabCompleted = (input.data as Record<string, unknown>).tab_completed;
+				}
+			}
+
+			await recordAuditEvent({
+				workspaceId: updatedProduct.workspace_id.toString(),
+				scope: { type: 'product', id: input.id },
+				entity: { type: 'product', id: input.id },
+				action: auditMeta.action,
+				eventKey: auditMeta.eventKey,
+				visibility: 'all',
+				where: { module: 'products', tab: input.tab },
+				auth: auth.payload,
+				before: product as unknown as Record<string, unknown>,
+				after: updatedProduct as unknown as Record<string, unknown>,
+				changedPaths: auditMeta.changedPaths,
+				meta: payloadMeta,
+			});
+		}
 
 		return ResponseWrapper.success({
 			message: 'Product updated successfully',

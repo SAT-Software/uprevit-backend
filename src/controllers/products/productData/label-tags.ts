@@ -7,7 +7,6 @@ import { ObjectId } from "mongodb";
 type LabelTagReturn = {
     updateQuery: Record<string, unknown>;
     updatedData: LabelTag | LabelTag[];
-    actionLog: string;
     error: APIGatewayProxyResult | null;
 }
 
@@ -37,21 +36,18 @@ export function addLabelTag(
 
 		const updateQuery = { $push: { 'label_tags.data': { $each: componentsWithIds } } }
 		const updatedData = componentsWithIds;
-		const actionLog = 'CREATE';
 
-		return { updateQuery, updatedData, actionLog, error: null }
+		return { updateQuery, updatedData, error: null }
 	} catch (error) {
 		if (error instanceof Error) return {
 			updateQuery: {},
 			updatedData: [],
-			actionLog: '',
 			error: ResponseWrapper.badRequest(error.message),
 		}
 
 		return {
 			updateQuery: {},
 			updatedData: [],
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to add label tag'),
 		}
 	}
@@ -91,13 +87,12 @@ export function updateLabelTag(
 		}, arrayFilters: [{'elem._id': new ObjectId(updatedLabelTag.id!)}]}
 
 		const updatedData = updatedLabelTag;
-		const actionLog = 'UPDATE';
 
-		return {updateQuery, updatedData, actionLog, error: null}
+		return {updateQuery, updatedData, error: null}
 	} catch (error) {
-		if(error instanceof Error) return {updateQuery:{}, updatedData: {} as LabelTag, actionLog: '', error: ResponseWrapper.badRequest(error.message)}
+		if(error instanceof Error) return {updateQuery:{}, updatedData: {} as LabelTag, error: ResponseWrapper.badRequest(error.message)}
 
-		return {updateQuery:{}, updatedData: {} as LabelTag, actionLog: '', error: ResponseWrapper.internalServerError('Failed to update label tag')}
+		return {updateQuery:{}, updatedData: {} as LabelTag, error: ResponseWrapper.internalServerError('Failed to update label tag')}
 	}
 }
 
@@ -134,21 +129,17 @@ export function deleteLabelTag(
 			},
 		};
 
-		const actionLog = 'DELETE';
-
-		return { updateQuery, updatedData: labelTagId, actionLog, error: null };
+		return { updateQuery, updatedData: labelTagId, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: { id: labelTagId.id },
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: { id: labelTagId.id },
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to delete label tag'),
 		};
 	}
@@ -174,21 +165,18 @@ export function updateLabelTagsTabCompletion(
 
 		const updateQuery = { $set: { 'label_tags.tab_completed': inputData.tab_completed } };
 		const updatedData = { tab_completed: inputData.tab_completed };
-		const actionLog = 'UPDATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: { tab_completed: false },
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: { tab_completed: false },
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update label tags tab completion'),
 		};
 	}
@@ -232,21 +220,18 @@ export function updateLabelTagTaggedImage(
 		};
 
 		const updatedData = { id: inputData.id, tagged_image: inputData.tagged_image, annotation_state: inputData.annotation_state };
-		const actionLog = 'UPDATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: { id: inputData.id, tagged_image: '', annotation_state: undefined },
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: { id: inputData.id, tagged_image: '', annotation_state: undefined },
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update label tag tagged image'),
 		};
 	}
@@ -291,21 +276,18 @@ export function updateLabelTagLegend(
 		};
 
 		const updatedData = { id: inputData.id, legend_items: inputData.legend_items };
-		const actionLog = 'UPDATE';
 
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
 				updatedData: { id: inputData.id, legend_items: [] },
-				actionLog: '',
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
 			updatedData: { id: inputData.id, legend_items: [] },
-			actionLog: '',
 			error: ResponseWrapper.internalServerError('Failed to update label tag legend'),
 		};
 	}

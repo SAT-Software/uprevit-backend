@@ -5,6 +5,7 @@ import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
+import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 
 /**
  * Get a project
@@ -51,39 +52,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					as: 'users',
 				},
 			},
-			{
-				$lookup: {
-					from: 'audit_log',
-					let: { projectIdString: { $toString: '$_id' } },
-					pipeline: [
-						{
-							$match: {
-								$expr: {
-									$and: [
-										{ $eq: ['$entity', 'project'] },
-										{ $eq: ['$entityId', '$$projectIdString'] },
-										{ $in: ['$action', ['create', 'update']] },
-										{ $eq: ['$active', true] }
-									]
-								}
-							}
-						},
-						{ $sort: { actionAt: -1 } },
-						{
-							$project: {
-								entity: 1,
-								entityId: 1,
-								action: 1,
-								actionBy: 1,
-								actionAt: 1,
-								active: 1
-							}
-						},
-						{ $limit: 2 }
-					],
-					as: 'auditLogs'
-				}
-			}
+			buildLegacyAuditLookupStage({
+				scopeType: 'project',
+				updateActions: ['update', 'restore'],
+			})
 		]).toArray();
 
 		const project = projectData[0];

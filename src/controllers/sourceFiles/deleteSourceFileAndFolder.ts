@@ -6,8 +6,7 @@ import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { Collection, ObjectId } from "mongodb";
 import { SourceFile } from "../../models/sourceFiles";
-import { updateAuditLog } from "../../utils/auditLog";
-import { AuditLogAction } from "../../models/auditLog";
+import { recordAuditEvent } from "../../utils/auditLogV2";
 
 /**
  * Recursively finds all descendant node IDs for a given parent folder.
@@ -63,13 +62,28 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		await sourceFilesCollection.deleteMany({ _id: { $in: idsToDelete } });
 
-		await updateAuditLog({
-			entity: 'SourceFile',
-			entityId: id,
-			action: AuditLogAction.DELETE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
+		await recordAuditEvent({
+			workspaceId: fileOrFolder.workspace_id.toString(),
+			scope: { type: 'source-files', id: fileOrFolder.workspace_id.toString() },
+			entity: { type: fileOrFolder.type === 'folder' ? 'source_folder' : 'source_file', id },
+			action: 'delete',
+			eventKey: fileOrFolder.type === 'folder' ? 'source_files.folder.deleted' : 'source_files.file.deleted',
+			visibility: 'all',
+			where: {
+				module: 'source-files',
+				parentId: fileOrFolder.parentId?.toString() ?? undefined,
+			},
+			auth: auth.payload,
+			before: {
+				name: fileOrFolder.name,
+				type: fileOrFolder.type,
+				url: fileOrFolder.url,
+				product_id: fileOrFolder.product_id?.toString() ?? null,
+			},
+			changedPaths: ['name', 'type', 'url', 'product_id'],
+			meta: fileOrFolder.type === 'folder'
+				? { folderName: fileOrFolder.name }
+				: { fileName: fileOrFolder.name },
 		});
 
 		return ResponseWrapper.success({

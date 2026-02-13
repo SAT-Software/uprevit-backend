@@ -1,12 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { Product } from '../../models/product';
-import { AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest, authenticateWithRole } from '../../utils/authUtils';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 
 /**
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
@@ -102,17 +101,43 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.notFound('Product not found');
 		}
 
-		await updateAuditLog({
-			entity: 'product',
-			entityId: productId,
-			action: AuditLogAction.UPDATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		});
-
 		const updatedProduct = await db.collection<Product>('products').findOne({
 			_id: productObjectId,
+		});
+
+		let eventKey = 'product.updated';
+		let auditAction: 'update' | 'submit' | 'archive' | 'restore' = 'update';
+		let visibility: 'all' | 'admin' = 'all';
+
+		if (input.action === 'update-status') {
+			visibility = 'admin';
+			if (input.data.status === 'submitted') {
+				eventKey = 'product.submitted';
+				auditAction = 'submit';
+			} else if (input.data.status === 'archived') {
+				eventKey = 'product.archived';
+				auditAction = 'archive';
+			} else {
+				eventKey = 'product.restored';
+				auditAction = 'restore';
+			}
+		}
+
+		await recordAuditEvent({
+			workspaceId: existingProduct.workspace_id.toString(),
+			scope: { type: 'product', id: productId },
+			entity: { type: 'product', id: productId },
+			action: auditAction,
+			eventKey,
+			visibility,
+			where: { module: 'products' },
+			auth: auth.payload,
+			before: existingProduct as unknown as Record<string, unknown>,
+			after: (updatedProduct ?? existingProduct) as unknown as Record<string, unknown>,
+			changedPaths: Object.keys(updateData),
+			meta: {
+				productName: (updatedProduct?.product_name ?? existingProduct.product_name),
+			},
 		});
 
 		return ResponseWrapper.success({

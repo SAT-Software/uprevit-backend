@@ -6,8 +6,7 @@ import { validateAllObjectIds, validateEnum, validateMissingFields } from "../..
 import { getDb } from "../../utils/db";
 import { SourceFile } from "../../models/sourceFiles";
 import { ObjectId } from "mongodb";
-import { updateAuditLog } from "../../utils/auditLog";
-import { AuditLogAction } from "../../models/auditLog";
+import { recordAuditEvent } from "../../utils/auditLogV2";
 
 /**
  * @param {APIGatewayProxyEvent} event
@@ -86,13 +85,29 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		await sourceFilesCollection.insertOne(newSourceFile);
 
-		await updateAuditLog({
-			entity: 'SourceFile',
-			entityId: newSourceFile._id.toString(),
-			action: AuditLogAction.CREATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
+		const isFolder = newSourceFile.type === 'folder';
+		await recordAuditEvent({
+			workspaceId: workspaceId.toString(),
+			scope: { type: 'source-files', id: workspaceId.toString() },
+			entity: { type: isFolder ? 'source_folder' : 'source_file', id: newSourceFile._id.toString() },
+			action: 'create',
+			eventKey: isFolder ? 'source_files.folder.created' : 'source_files.file.uploaded',
+			visibility: 'all',
+			where: {
+				module: 'source-files',
+				parentId: parentId?.toString() ?? undefined,
+			},
+			auth: auth.payload,
+			after: {
+				name: newSourceFile.name,
+				type: newSourceFile.type,
+				url: newSourceFile.url,
+				product_id: newSourceFile.product_id?.toString() ?? null,
+			},
+			changedPaths: ['name', 'type', 'url', 'product_id'],
+			meta: isFolder
+				? { folderName: newSourceFile.name }
+				: { fileName: newSourceFile.name },
 		});
 
 		return ResponseWrapper.created({

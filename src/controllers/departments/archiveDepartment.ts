@@ -1,13 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { Department } from '../../models/department';
-import { type AuditLog, AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateBoolean } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 
 /**
  * Archive a department
@@ -35,6 +34,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return validationResult;
 		}
 
+		const departmentId = event.pathParameters.id.toString();
+
 		const db = await getDb();
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
@@ -49,7 +50,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 
 		const departmentRecord: Department | null = await db.collection<Department>('departments').findOne({
-			_id: new ObjectId(event.pathParameters.id),
+			_id: new ObjectId(departmentId),
 		});
 
 		if (!departmentRecord) {
@@ -58,7 +59,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const department = await db.collection<Department>('departments').updateOne(
 			{
-				_id: new ObjectId(event.pathParameters.id),
+				_id: new ObjectId(departmentId),
 			},
 			{
 				$set: {
@@ -67,18 +68,34 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			},
 		);
 
-		const action = isArchived ? AuditLogAction.ARCHIVE : AuditLogAction.UNARCHIVE;
+		const action = isArchived ? 'archive' : 'restore';
+		const eventKey = isArchived ? 'department.archived' : 'department.restored';
 
-		const auditRecord: AuditLog = {
-			entity: 'department',
-			entityId: (event.pathParameters?.id).toString(),
-			action: action,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		};
-
-		await updateAuditLog(auditRecord);
+		try {
+			await recordAuditEvent({
+				workspaceId: departmentRecord.workspace_id.toString(),
+				scope: { type: 'department', id: departmentId },
+				entity: { type: 'department', id: departmentId },
+				action,
+				eventKey,
+				visibility: 'admin',
+				where: { module: 'departments' },
+				auth: auth.payload,
+				before: { isArchived: departmentRecord.isArchived },
+				after: { isArchived },
+				changedPaths: ['isArchived'],
+				meta: {
+					departmentName: departmentRecord.department_name,
+				},
+			});
+		} catch (auditError) {
+			logError('Department archive audit event failed', auditError, {
+				departmentName: departmentRecord.department_name,
+				workspaceId: departmentRecord.workspace_id.toString(),
+				action,
+				departmentId,
+			});
+		}
 
 		return ResponseWrapper.success({
 			message: `Department ${isArchived ? 'archived' : 'restored'} successfully`,

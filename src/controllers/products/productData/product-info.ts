@@ -23,7 +23,6 @@ export function updateProductInformation(
 ): {
     updateQuery: Record<string, unknown>;
     updatedData: UpdateProductInformationData;
-    actionLog: string;
     error: APIGatewayProxyResult | null;
 } {
 	try {
@@ -62,12 +61,11 @@ export function updateProductInformation(
 	
 		const updateQuery = { $set: updateSet };
 		const updatedData = inputData;
-		const actionLog = 'UPDATE';
 	
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
-		if (error instanceof Error) return { updateQuery: {}, updatedData: {} as UpdateProductInformationData, actionLog: '', error: ResponseWrapper.badRequest(error.message) };
-		return { updateQuery: {}, updatedData: {} as UpdateProductInformationData, actionLog: '', error: ResponseWrapper.internalServerError('Failed to update product information') };
+		if (error instanceof Error) return { updateQuery: {}, updatedData: {} as UpdateProductInformationData, error: ResponseWrapper.badRequest(error.message) };
+		return { updateQuery: {}, updatedData: {} as UpdateProductInformationData, error: ResponseWrapper.internalServerError('Failed to update product information') };
 	}
 }
 
@@ -85,7 +83,6 @@ export function addCustomField(
 ): {
     updateQuery: Record<string, unknown>;
     updatedData: { customFields: CustomFieldInput[] };
-    actionLog: string;
     error: APIGatewayProxyResult | null;
 } {
 	try {
@@ -107,13 +104,12 @@ export function addCustomField(
 	
 		const updateQuery = { $push: { 'product_information.custom_fields': { $each: newCustomFields } } };
 		const updatedData = { customFields: newCustomFields };
-		const actionLog = 'CREATE';
 	
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
-		if (error instanceof Error) return { updateQuery: {}, updatedData: { customFields: [] }, actionLog: '', error: ResponseWrapper.badRequest(error.message) };
+		if (error instanceof Error) return { updateQuery: {}, updatedData: { customFields: [] }, error: ResponseWrapper.badRequest(error.message) };
 
-		return { updateQuery: {}, updatedData: { customFields: [] }, actionLog: '', error: ResponseWrapper.internalServerError('Failed to add custom field') };
+		return { updateQuery: {}, updatedData: { customFields: [] }, error: ResponseWrapper.internalServerError('Failed to add custom field') };
 	}
 }
 
@@ -131,7 +127,6 @@ export function updateCustomField(
 ): {
     updateQuery: Record<string, unknown>;
     updatedData: { customFields: CustomFieldInput[] };
-    actionLog: string;
     error: APIGatewayProxyResult | null;
 } {
 	try {
@@ -147,13 +142,12 @@ export function updateCustomField(
 	
 		const updateQuery = { $set: { 'product_information.custom_fields': validatedCustomFields } };
 		const updatedData = { customFields: inputData };
-		const actionLog = 'UPDATE';
 	
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
-		if (error instanceof Error) return { updateQuery: {}, updatedData: { customFields: [] }, actionLog: '', error: ResponseWrapper.badRequest(error.message) };
+		if (error instanceof Error) return { updateQuery: {}, updatedData: { customFields: [] }, error: ResponseWrapper.badRequest(error.message) };
 
-		return { updateQuery: {}, updatedData: { customFields: [] }, actionLog: '', error: ResponseWrapper.internalServerError('Failed to update custom field') };
+		return { updateQuery: {}, updatedData: { customFields: [] }, error: ResponseWrapper.internalServerError('Failed to update custom field') };
 	}
 }
 
@@ -171,7 +165,6 @@ export function deleteCustomField(
 ): {
     updateQuery: Record<string, unknown>;
     updatedData: { id: string };
-    actionLog: string;
     error: APIGatewayProxyResult | null;
 } {
 	try {
@@ -179,17 +172,16 @@ export function deleteCustomField(
 		if (isValidTabDeleteCustomField) throw new Error(isValidTabDeleteCustomField.body);
 	
 		const validatedFieldId = validateAllObjectIds({ id: inputData.id });
-		if (validatedFieldId) return { updateQuery: {}, updatedData: { id: '' }, actionLog: '', error: validatedFieldId };
+		if (validatedFieldId) return { updateQuery: {}, updatedData: { id: '' }, error: validatedFieldId };
 	
 		const updateQuery = { $pull: { 'product_information.custom_fields': { _id: new ObjectId(inputData.id) } } };
 		const updatedData = { id: inputData.id };
-		const actionLog = 'DELETE';
 	
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
-		if (error instanceof Error) return { updateQuery: {}, updatedData: { id: '' }, actionLog: '', error: ResponseWrapper.badRequest(error.message) };
+		if (error instanceof Error) return { updateQuery: {}, updatedData: { id: '' }, error: ResponseWrapper.badRequest(error.message) };
 
-		return { updateQuery: {}, updatedData: { id: '' }, actionLog: '', error: ResponseWrapper.internalServerError('Failed to delete custom field') };
+		return { updateQuery: {}, updatedData: { id: '' }, error: ResponseWrapper.internalServerError('Failed to delete custom field') };
 	}
 }
 
@@ -207,7 +199,6 @@ export function updateProductInfoTabCompletion(
 ): {
     updateQuery: Record<string, unknown>;
     updatedData: { tab_completed: boolean };
-    actionLog: string;
     error: APIGatewayProxyResult | null;
 } {
 	try {
@@ -218,12 +209,11 @@ export function updateProductInfoTabCompletion(
 	
 		const updateQuery = { $set: { 'product_information.tab_completed': inputData.tab_completed } };
 		const updatedData = { tab_completed: inputData.tab_completed };
-		const actionLog = 'UPDATE';
 	
-		return { updateQuery, updatedData, actionLog, error: null };
+		return { updateQuery, updatedData, error: null };
 	} catch (error) {
-		if (error instanceof Error) return { updateQuery: {}, updatedData: { tab_completed: false }, actionLog: '', error: ResponseWrapper.badRequest(error.message) };
+		if (error instanceof Error) return { updateQuery: {}, updatedData: { tab_completed: false }, error: ResponseWrapper.badRequest(error.message) };
 		
-		return { updateQuery: {}, updatedData: { tab_completed: false }, actionLog: '', error: ResponseWrapper.internalServerError('Failed to update product information tab completion') };
+		return { updateQuery: {}, updatedData: { tab_completed: false }, error: ResponseWrapper.internalServerError('Failed to update product information tab completion') };
 	}
 }

@@ -1,13 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { Department } from '../../models/department';
-import { AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 
 /**
  * Create a department
@@ -19,7 +18,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 	try {
 		const auth = await authenticateWithRole(event, 'admin');
 		if(!auth.isValid) return auth.error;
-
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
 
@@ -62,13 +60,24 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			isArchived: false,
 		});
 
-		await updateAuditLog({
-			entity: 'department',
-			entityId: department.insertedId.toString(),
-			action: AuditLogAction.CREATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
+		await recordAuditEvent({
+			workspaceId: workspaceObjectId.toString(),
+			scope: { type: 'department', id: department.insertedId.toString() },
+			entity: { type: 'department', id: department.insertedId.toString() },
+			action: 'create',
+			eventKey: 'department.created',
+			visibility: 'admin',
+			where: { module: 'departments' },
+			auth: auth.payload,
+			after: {
+				department_name: input.department_name,
+				department_description: input.department_description,
+				manager: input.manager,
+			},
+			changedPaths: ['department_name', 'department_description', 'manager'],
+			meta: {
+				departmentName: input.department_name,
+			},
 		});
 
 		return ResponseWrapper.created({

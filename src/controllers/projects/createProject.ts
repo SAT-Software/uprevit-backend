@@ -1,13 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { Project } from '../../models/project';
-import { AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 
 /**
  * Create a project
@@ -83,13 +82,25 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			image: input.image,
 		});
 
-		await updateAuditLog({
-			entity: 'project',
-			entityId: project.insertedId.toString(),
-			action: AuditLogAction.CREATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
+		await recordAuditEvent({
+			workspaceId: workspaceObjectId.toString(),
+			scope: { type: 'project', id: project.insertedId.toString() },
+			entity: { type: 'project', id: project.insertedId.toString() },
+			action: 'create',
+			eventKey: 'project.created',
+			visibility: 'admin',
+			where: { module: 'projects' },
+			auth: auth.payload,
+			after: {
+				project_name: input.project_name,
+				project_number: input.project_number,
+				project_description: input.project_description,
+				project_manager: input.project_manager,
+			},
+			changedPaths: ['project_name', 'project_number', 'project_description', 'project_manager'],
+			meta: {
+				projectName: input.project_name,
+			},
 		});
 
 		return ResponseWrapper.created({
