@@ -49,6 +49,8 @@ Globals:
         DB_NAME: !Ref DbName
         USER_POOL_ID: !Ref UserPoolId
         CLIENT_ID: !Ref ClientId
+        UPLOADS_BUCKET: uprevit-storage-dev-and-test 
+        AWS_REGION: us-east-1
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
@@ -978,6 +980,34 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/reports/reportsExportExcel.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # S3 STORAGE
+  # ──────────────────────────────────────────────────────────────────────────
+
+  PresignUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/s3Storage/presignUpload.lambdaHandler
+      Timeout: 300
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub "arn:aws:s3:::uprevit-storage-dev-and-test/uploads/*"
+      Events:
+        PresignUpload:
+          Type: Api
+          Properties:
+            Path: /s3-storage/presign-upload
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/s3Storage/presignUpload.ts]
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
