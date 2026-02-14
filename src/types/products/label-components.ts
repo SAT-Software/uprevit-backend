@@ -1,6 +1,7 @@
 export interface labelComponent {
 	id?: string;
 	image?: string | null;
+	key?: string;
 	dimensions?: string;
 	label_type?: string[];
 	component_number?: string;

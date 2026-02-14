@@ -1,4 +1,4 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import crypto from "node:crypto";
 
@@ -10,7 +10,7 @@ if (!bucket) throw new Error("Missing required environment variable: UPLOADS_BUC
 
 export const client = new S3Client({ region });
 
-export const createPresignedUrlWithClient = async (filename: string, contentType: string) => {
+export const createPresignedUrl = async (filename: string, contentType: string) => {
 	const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
 	const key = `uploads/${crypto.randomUUID()}-${safeFilename}`;
 
@@ -23,4 +23,15 @@ export const createPresignedUrlWithClient = async (filename: string, contentType
 	const uploadUrl = await getSignedUrl(client, command, { expiresIn: 3600 });
 
 	return {uploadUrl, key};
+};
+
+export const createPresignedGetUrl = async (key: string) => {
+	const command = new GetObjectCommand({
+		Bucket: bucket,
+		Key: key,
+	});
+
+	const url = await getSignedUrl(client, command, { expiresIn: 3600 });
+
+	return url;
 };

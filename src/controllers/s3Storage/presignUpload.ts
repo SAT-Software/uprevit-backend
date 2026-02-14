@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { authenticateRequest } from "../../utils/authUtils";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { validateMissingFields } from "../../utils/validationUtils";
-import { createPresignedUrlWithClient } from "../../utils/s3-storage";
+import { createPresignedUrl } from "../../utils/s3-storage";
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
@@ -19,7 +19,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 		if (missingFieldsResult) return missingFieldsResult;
 
-		const { uploadUrl, key } = await createPresignedUrlWithClient(input.fileName, input.contentType);
+		const { uploadUrl, key } = await createPresignedUrl(input.fileName, input.contentType);
 
 		return ResponseWrapper.created({ message: "Presigned URL generated successfully.", uploadUrl, key, expiresIn: 3600 });
 	} catch (error) {

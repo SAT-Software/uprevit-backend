@@ -7,6 +7,28 @@ import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateEnum } from '../../utils/validationUtils';
 import { authenticateRequest } from '../../utils/authUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
+import { createPresignedGetUrl } from '../../utils/s3-storage';
+
+const enrichLabelComponentsWithSignedUrls = async (
+	labelComponents: LabelComponents['data'],
+): Promise<LabelComponents['data']> => {
+	return Promise.all(
+		labelComponents.map(async (labelComponent) => {
+			if (!labelComponent.key) return labelComponent;
+
+			try {
+				const signedImageUrl = await createPresignedGetUrl(labelComponent.key);
+				return {
+					...labelComponent,
+					image: signedImageUrl,
+				};
+			} catch (error) {
+				logError('Failed to generate presigned view URL for label component image', error);
+				return labelComponent;
+			}
+		}),
+	);
+};
 
 /**
  * Get product data
@@ -75,6 +97,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const auditLogs = product.auditLogs || [];
+		const shouldEnrichLabelComponents = tab === 'all-tabs' || tab === 'label-components';
+		const labelComponentsData = shouldEnrichLabelComponents
+			? await enrichLabelComponentsWithSignedUrls(product.label_components.data)
+			: product.label_components.data;
 
 		// Create product_data object once - reused across all tabs
 		const productData: ProductData = {
@@ -111,7 +137,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				},
 				label_components: {
 					product_data: productData,
-					data: product.label_components.data,
+					data: labelComponentsData,
 					tab_completed: product.label_components.tab_completed,
 				},
 				symbols_graphics: {
@@ -174,7 +200,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		case 'label-components':
 			tabData = {
 				product_data: productData,
-				data: product.label_components.data,
+				data: labelComponentsData,
 				tab_completed: product.label_components.tab_completed,
 			};
 			break;

@@ -57,6 +57,7 @@ export type LabelComponents = {
 	data: Array<{
 			_id: ObjectId;
 			image?: string | null;
+			key?: string;
 			dimensions?: string;
 			label_type?: string[];
 			component_number: string;
