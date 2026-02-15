@@ -8,8 +8,14 @@ const bucket = process.env.UPLOADS_BUCKET;
 if (!region) throw new Error("Missing required environment variable: AWS_REGION");
 if (!bucket) throw new Error("Missing required environment variable: UPLOADS_BUCKET");
 
-const VIEW_URL_EXPIRES_IN_SECONDS = Number(process.env.S3_VIEW_URL_EXPIRES_IN_SECONDS ?? 43200);
-const SIGNING_CONCURRENCY = Number(process.env.S3_SIGNING_CONCURRENCY ?? 25);
+const parsePositiveInteger = (value: string | undefined, fallback: number): number => {
+	const parsed = Number.parseInt(value ?? "", 10);
+	if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+	return parsed;
+};
+
+const VIEW_URL_EXPIRES_IN_SECONDS = parsePositiveInteger(process.env.S3_VIEW_URL_EXPIRES_IN_SECONDS, 43200);
+const SIGNING_CONCURRENCY = parsePositiveInteger(process.env.S3_SIGNING_CONCURRENCY, 25);
 
 export const client = new S3Client({ region });
 
@@ -50,8 +56,8 @@ export const deleteObjectByKey = async (key: string) => {
 	);
 };
 
-const normalizeKey = (key?: string | null): string | null => {
-	if (!key) return null;
+const normalizeKey = (key: unknown): string | null => {
+	if (typeof key !== "string") return null;
 	const trimmed = key.trim();
 	return trimmed.length > 0 ? trimmed : null;
 };

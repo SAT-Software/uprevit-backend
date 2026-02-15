@@ -293,8 +293,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 	} catch (err) {
 		if (err instanceof Error && err.message.includes('Missing required environment variable')) {
 			logError('S3 configuration issue while signing product asset URLs', err);
+		} else {
+			logError('Get product data handler failed', err);
 		}
-		logError('Get product data handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get product data');
 	}
 };

@@ -222,7 +222,7 @@ const getOptionalString = (value: unknown): string | undefined => {
 const getS3KeyTransition = (
 	product: Product,
 	input: UpdateProductDataRequest,
-): { oldKey?: string; newKey?: string } => {
+): { oldKey?: string; newKey?: string | null; extraOldKeys?: string[] } => {
 	const data = getObjectData(input.data);
 	if (!data) return {};
 
@@ -259,6 +259,33 @@ const getS3KeyTransition = (
 		return {
 			oldKey: getOptionalString(existing?.tagged_image_key),
 			newKey: getOptionalString(data.tagged_image_key),
+		};
+	}
+	case 'delete_label_component': {
+		if (!dataId) return {};
+		const existing = product.label_components.data.find((item) => item._id.toString() === dataId);
+		return {
+			oldKey: getOptionalString(existing?.key),
+			newKey: null,
+		};
+	}
+	case 'delete_symbols_graphics': {
+		if (!dataId) return {};
+		const existing = product.symbols_graphics.data.find((item) => item._id.toString() === dataId);
+		return {
+			oldKey: getOptionalString(existing?.key),
+			newKey: null,
+		};
+	}
+	case 'delete_label_tags': {
+		if (!dataId) return {};
+		const existing = product.label_tags.data.find((item) => item._id.toString() === dataId);
+		const key = getOptionalString(existing?.key);
+		const taggedImageKey = getOptionalString(existing?.tagged_image_key);
+		return {
+			oldKey: key ?? taggedImageKey,
+			newKey: null,
+			extraOldKeys: [key, taggedImageKey].filter((item): item is string => Boolean(item)),
 		};
 	}
 	default:
@@ -655,15 +682,24 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const updatedProduct = await db.collection<Product>('products').findOne({ _id: new ObjectId(input.id) });
 		const auditMeta = PRODUCT_DATA_ACTION_AUDIT_META[input.action];
 
-		if (
-			s3KeyTransition.oldKey &&
-			s3KeyTransition.newKey !== undefined &&
-			s3KeyTransition.newKey !== s3KeyTransition.oldKey
-		) {
-			try {
-				await deleteObjectByKey(s3KeyTransition.oldKey);
-			} catch (error) {
-				logError('Failed to delete previous S3 object while replacing key', error);
+		const shouldCleanupOldObject =
+			Boolean(s3KeyTransition.oldKey) &&
+			(s3KeyTransition.newKey === null ||
+				(s3KeyTransition.newKey !== undefined && s3KeyTransition.newKey !== s3KeyTransition.oldKey));
+
+		if (shouldCleanupOldObject) {
+			const keysToDelete = [
+				s3KeyTransition.oldKey,
+				...(s3KeyTransition.extraOldKeys ?? []),
+			].filter((key): key is string => Boolean(key));
+			const uniqueKeysToDelete = [...new Set(keysToDelete)];
+
+			for (const key of uniqueKeysToDelete) {
+				try {
+					await deleteObjectByKey(key);
+				} catch (error) {
+					logError('Failed to delete previous S3 object while replacing key', error);
+				}
 			}
 		}
 
