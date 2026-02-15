@@ -5,6 +5,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { ObjectId } from 'mongodb';
+import { enrichUsersWithProfileAvatarUrls } from '../../utils/mediaAssetUrls';
 
 /**
  * Get all users by workspace
@@ -28,10 +29,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const db = await getDb();
 
 		const users: User[] = await db.collection<User>('users').find({ workspaceId: new ObjectId(workspaceId) }).toArray();
+		const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(users);
 
 		return ResponseWrapper.success({
 			message: 'Users retrieved successfully',
-			data: users,
+			data: usersWithSignedAvatars,
 		});
 
 	} catch (err) {

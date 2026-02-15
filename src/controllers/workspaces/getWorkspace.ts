@@ -5,6 +5,7 @@ import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
+import { enrichWorkspaceWithLogoUrl } from '../../utils/mediaAssetUrls';
 
 /**
  * API endpoint to get a workspace by id
@@ -32,9 +33,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.notFound('Workspace not found');
 		}
 
+		const workspaceWithSignedLogo = await enrichWorkspaceWithLogoUrl(workspace);
+
 		return ResponseWrapper.success({
 			message: 'Workspace retrieved successfully',
-			workspace: workspace,
+			workspace: workspaceWithSignedLogo,
 		});
 		
 	} catch (err) {
