@@ -84,6 +84,9 @@ export function updateLabelTag(
 			'label_tags.data.$[elem].description': updatedLabelTag.description,
 			'label_tags.data.$[elem].type': updatedLabelTag.type,
 			'label_tags.data.$[elem].image': updatedLabelTag.image,
+			...(updatedLabelTag.key !== undefined && {
+				'label_tags.data.$[elem].key': updatedLabelTag.key,
+			}),
 		}, arrayFilters: [{'elem._id': new ObjectId(updatedLabelTag.id!)}]}
 
 		const updatedData = updatedLabelTag;
@@ -189,26 +192,33 @@ export function updateLabelTagsTabCompletion(
  * @return {LabelTagReturn}
  */
 export function updateLabelTagTaggedImage(
-	inputData: { id: string; tagged_image: string; annotation_state?: object },
+	inputData: { id: string; tagged_image?: string; tagged_image_key?: string; annotation_state?: object },
 	tab: string,
 	action: string,
-): Omit<LabelTagReturn, 'updatedData'> & { updatedData: { id: string; tagged_image: string; annotation_state?: object } } {
+): Omit<LabelTagReturn, 'updatedData'> & { updatedData: { id: string; tagged_image?: string; tagged_image_key?: string; annotation_state?: object } } {
 	try {
 		const isValidatedTab = validateTab(tab, 'label-tags', action);
 		if (isValidatedTab) throw new Error(isValidatedTab.body);
 
-		const missingFieldsValidation = validateMissingFields({
-			id: inputData.id,
-			tagged_image: inputData.tagged_image,
-		});
+		const missingFieldsValidation = validateMissingFields({ id: inputData.id });
 		if (missingFieldsValidation) throw new Error(missingFieldsValidation.body);
+
+		if (!inputData.tagged_image && !inputData.tagged_image_key) {
+			throw new Error('At least one of tagged_image or tagged_image_key is required.');
+		}
 
 		const objectIdValidation = validateAllObjectIds({ id: inputData.id });
 		if (objectIdValidation) throw new Error(objectIdValidation.body);
 
-		const setFields: Record<string, unknown> = {
-			'label_tags.data.$[elem].tagged_image': inputData.tagged_image,
-		};
+		const setFields: Record<string, unknown> = {};
+
+		if (inputData.tagged_image !== undefined) {
+			setFields['label_tags.data.$[elem].tagged_image'] = inputData.tagged_image;
+		}
+
+		if (inputData.tagged_image_key !== undefined) {
+			setFields['label_tags.data.$[elem].tagged_image_key'] = inputData.tagged_image_key;
+		}
 
 		if (inputData.annotation_state !== undefined) {
 			setFields['label_tags.data.$[elem].annotation_state'] = inputData.annotation_state;
@@ -219,19 +229,24 @@ export function updateLabelTagTaggedImage(
 			arrayFilters: [{ 'elem._id': new ObjectId(inputData.id) }],
 		};
 
-		const updatedData = { id: inputData.id, tagged_image: inputData.tagged_image, annotation_state: inputData.annotation_state };
+		const updatedData = {
+			id: inputData.id,
+			tagged_image: inputData.tagged_image,
+			tagged_image_key: inputData.tagged_image_key,
+			annotation_state: inputData.annotation_state,
+		};
 
 		return { updateQuery, updatedData, error: null };
 	} catch (error) {
 		if (error instanceof Error)
 			return {
 				updateQuery: {},
-				updatedData: { id: inputData.id, tagged_image: '', annotation_state: undefined },
+				updatedData: { id: inputData.id, tagged_image: '', tagged_image_key: '', annotation_state: undefined },
 				error: ResponseWrapper.badRequest(error.message),
 			};
 		return {
 			updateQuery: {},
-			updatedData: { id: inputData.id, tagged_image: '', annotation_state: undefined },
+			updatedData: { id: inputData.id, tagged_image: '', tagged_image_key: '', annotation_state: undefined },
 			error: ResponseWrapper.internalServerError('Failed to update label tag tagged image'),
 		};
 	}

@@ -20,6 +20,10 @@ Parameters:
   ClientId:
     Type: String
     Description: "The Cognito App Client ID for token validation"
+  UploadsBucket:
+    Type: String
+    Description: "S3 bucket name for uploaded files"
+    Default: "uprevit-storage-dev-and-test"
 
 # ──────────────────────────────────────────────────────────────────────────
 # TOP-LEVEL METADATA  – YAML anchor for the build recipe
@@ -49,6 +53,7 @@ Globals:
         DB_NAME: !Ref DbName
         USER_POOL_ID: !Ref UserPoolId
         CLIENT_ID: !Ref ClientId
+        UPLOADS_BUCKET: !Ref UploadsBucket
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
@@ -521,6 +526,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/updateProductData.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:DeleteObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         UpdateProductData:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -538,6 +549,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/getProductData.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetProductData:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -859,6 +876,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/sourceFiles/getSourceFilesByParent.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetSourceFilesByParent:
           Type: Api
@@ -876,6 +899,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/sourceFiles/getCurrentFolderById.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetCurrentFolderById:
           Type: Api
@@ -893,6 +922,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/sourceFiles/deleteSourceFileAndFolder.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:DeleteObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         DeleteSourceFileAndFolder:
           Type: Api
@@ -978,6 +1013,34 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/reports/reportsExportExcel.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # S3 STORAGE
+  # ──────────────────────────────────────────────────────────────────────────
+
+  PresignUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/s3Storage/presignUpload.lambdaHandler
+      Timeout: 300
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        PresignUpload:
+          Type: Api
+          Properties:
+            Path: /s3-storage/presign-upload
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/s3Storage/presignUpload.ts]
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group

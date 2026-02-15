@@ -6,6 +6,7 @@ import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { ObjectId } from "mongodb";
 import { SourceFile } from "../../models/sourceFiles";
+import { enrichItemsWithSignedUrls } from "../../utils/s3-storage";
 
 /**
  * @param {APIGatewayProxyEvent} event 
@@ -42,9 +43,18 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			});
 		}
 
+		const sourceFilesAndFoldersWithSignedUrls = await enrichItemsWithSignedUrls({
+			items: sourceFilesAndFolders,
+			getKey: (item) => (item.type === 'file' ? item.key : undefined),
+			setSignedUrl: (item, signedUrl) => ({
+				...item,
+				url: signedUrl,
+			}),
+		});
+
 		return ResponseWrapper.success({
 			message: 'Source files and folders fetched successfully.',
-			result: sourceFilesAndFolders
+			result: sourceFilesAndFoldersWithSignedUrls
 		})
         
 	} catch (error) {

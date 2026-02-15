@@ -7,6 +7,7 @@ import { validateAllObjectIds } from "../../utils/validationUtils";
 import { Collection, ObjectId } from "mongodb";
 import { SourceFile } from "../../models/sourceFiles";
 import { recordAuditEvent } from "../../utils/auditLogV2";
+import { deleteObjectByKey } from "../../utils/s3-storage";
 
 /**
  * Recursively finds all descendant node IDs for a given parent folder.
@@ -58,6 +59,21 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			idsToDelete = await findDescendantIds(sourceFilesCollection, fileObjectId);
 		} else {
 			idsToDelete = [fileObjectId];
+		}
+
+		const filesToDelete = await sourceFilesCollection
+			.find({ _id: { $in: idsToDelete }, type: 'file' })
+			.toArray();
+		const keysToDelete = filesToDelete
+			.map((item) => (typeof item.key === 'string' ? item.key.trim() : ''))
+			.filter((key) => key.length > 0);
+
+		for (const key of [...new Set(keysToDelete)]) {
+			try {
+				await deleteObjectByKey(key);
+			} catch (error) {
+				logError('Failed to delete source file object from S3', error);
+			}
 		}
 
 		await sourceFilesCollection.deleteMany({ _id: { $in: idsToDelete } });

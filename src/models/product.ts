@@ -57,6 +57,7 @@ export type LabelComponents = {
 	data: Array<{
 			_id: ObjectId;
 			image?: string | null;
+			key?: string;
 			dimensions?: string;
 			label_type?: string[];
 			component_number: string;
@@ -71,6 +72,7 @@ export type SymbolsGraphics = {
 	data: Array<{
 			_id: ObjectId;
 			image: string;
+			key?: string;
 			text: string;
 			description?: string;
 			text_present?: boolean;
@@ -98,7 +100,9 @@ export type LabelTags = {
 			description?: string;
 			type?: string;
 			image?: string;
+			key?: string;
 			tagged_image?: string;
+			tagged_image_key?: string;
 			annotation_state?: object;
 			legend_items?: Array<{
 				id: string;

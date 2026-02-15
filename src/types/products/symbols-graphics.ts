@@ -9,6 +9,7 @@ export type SymbolsGraphicsEntity = typeof SYMBOLS_GRAPHICS_ENTITIES[number];
 export interface SymbolsGraphics {
     id?: string,
     image?: string,
+    key?: string,
     text?: string,
     description?: string,
     text_present?: boolean,

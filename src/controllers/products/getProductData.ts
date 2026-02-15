@@ -7,6 +7,55 @@ import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateEnum } from '../../utils/validationUtils';
 import { authenticateRequest } from '../../utils/authUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
+import { enrichItemsWithSignedUrls } from '../../utils/s3-storage';
+
+const enrichLabelComponentsWithSignedUrls = async (
+	labelComponents: LabelComponents['data'],
+): Promise<LabelComponents['data']> => {
+	return enrichItemsWithSignedUrls({
+		items: labelComponents,
+		getKey: (item) => item.key,
+		setSignedUrl: (item, signedUrl) => ({
+			...item,
+			image: signedUrl,
+		}),
+	});
+};
+
+const enrichSymbolsGraphicsWithSignedUrls = async (
+	symbolsGraphics: SymbolsGraphics['data'],
+): Promise<SymbolsGraphics['data']> => {
+	return enrichItemsWithSignedUrls({
+		items: symbolsGraphics,
+		getKey: (item) => item.key,
+		setSignedUrl: (item, signedUrl) => ({
+			...item,
+			image: signedUrl,
+		}),
+	});
+};
+
+const enrichLabelTagsWithSignedUrls = async (
+	labelTags: LabelTags['data'],
+): Promise<LabelTags['data']> => {
+	const withImageUrls = await enrichItemsWithSignedUrls({
+		items: labelTags,
+		getKey: (item) => item.key,
+		setSignedUrl: (item, signedUrl) => ({
+			...item,
+			image: signedUrl,
+		}),
+	});
+
+	return enrichItemsWithSignedUrls({
+		items: withImageUrls,
+		getKey: (item) => item.tagged_image_key,
+		setSignedUrl: (item, signedUrl) => ({
+			...item,
+			tagged_image: signedUrl,
+		}),
+	});
+};
 
 /**
  * Get product data
@@ -75,6 +124,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const auditLogs = product.auditLogs || [];
+		const shouldEnrichLabelComponents = tab === 'all-tabs' || tab === 'label-components';
+		const shouldEnrichSymbolsGraphics = tab === 'all-tabs' || tab === 'symbols-graphics';
+		const shouldEnrichLabelTags = tab === 'all-tabs' || tab === 'label-tags';
+
+		const labelComponentsData = shouldEnrichLabelComponents
+			? await enrichLabelComponentsWithSignedUrls(product.label_components.data)
+			: product.label_components.data;
+		const symbolsGraphicsData = shouldEnrichSymbolsGraphics
+			? await enrichSymbolsGraphicsWithSignedUrls(product.symbols_graphics.data)
+			: product.symbols_graphics.data;
+		const labelTagsData = shouldEnrichLabelTags
+			? await enrichLabelTagsWithSignedUrls(product.label_tags.data)
+			: product.label_tags.data;
 
 		// Create product_data object once - reused across all tabs
 		const productData: ProductData = {
@@ -111,12 +173,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				},
 				label_components: {
 					product_data: productData,
-					data: product.label_components.data,
+					data: labelComponentsData,
 					tab_completed: product.label_components.tab_completed,
 				},
 				symbols_graphics: {
 					product_data: productData,
-					data: product.symbols_graphics.data,
+					data: symbolsGraphicsData,
 					tab_completed: product.symbols_graphics.tab_completed,
 				},
 				product_data: {
@@ -137,7 +199,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				},
 				label_tags: {
 					product_data: productData,
-					data: product.label_tags.data,
+					data: labelTagsData,
 					tab_completed: product.label_tags.tab_completed,
 				},
 			};
@@ -174,7 +236,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		case 'label-components':
 			tabData = {
 				product_data: productData,
-				data: product.label_components.data,
+				data: labelComponentsData,
 				tab_completed: product.label_components.tab_completed,
 			};
 			break;
@@ -182,7 +244,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		case 'symbols-graphics':
 			tabData = {
 				product_data: productData,
-				data: product.symbols_graphics.data,
+				data: symbolsGraphicsData,
 				tab_completed: product.symbols_graphics.tab_completed,
 			};
 			break;
@@ -212,7 +274,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		case 'label-tags':
 			tabData = {
 				product_data: productData,
-				data: product.label_tags.data,
+				data: labelTagsData,
 				tab_completed: product.label_tags.tab_completed,
 			};
 			break;
@@ -229,7 +291,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			},
 		});
 	} catch (err) {
-		logError('Get product data handler failed', err);
+		if (err instanceof Error && err.message.includes('Missing required environment variable')) {
+			logError('S3 configuration issue while signing product asset URLs', err);
+		} else {
+			logError('Get product data handler failed', err);
+		}
 		return ResponseWrapper.internalServerError('Failed to get product data');
 	}
 };
