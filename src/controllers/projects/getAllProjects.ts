@@ -6,7 +6,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
-import { enrichUsersWithProfileAvatarUrls } from '../../utils/mediaAssetUrls';
+import { enrichProjectsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 
 type ProjectUser = {
 	_id: ObjectId;
@@ -136,12 +136,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				}),
 			);
 
+			const projectsWithSignedUrls = await enrichProjectsWithImageUrls(projectsWithSignedAvatars);
+
 			const totalCount = countResult.length > 0 ? countResult[0].total : 0;
 			const totalPages = Math.ceil(totalCount / limit);
 
 			return ResponseWrapper.success({message: 'Projects fetched successfully',
 				result: {
-					projects: projectsWithSignedAvatars,
+					projects: projectsWithSignedUrls,
 					pagination: {
 						currentPage: page,
 						totalPages,
@@ -169,12 +171,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				.limit(limit)
 				.toArray();
 
+			const projectsWithSignedUrls = await enrichProjectsWithImageUrls(projects);
+
 			const totalPages = Math.ceil(totalCount / limit);
 
 
 			return ResponseWrapper.success({message: 'Projects fetched successfully',
 				result: {
-					projects,
+					projects: projectsWithSignedUrls,
 					pagination: {
 						currentPage: page,
 						totalPages,

@@ -6,7 +6,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
-import { enrichUsersWithProfileAvatarUrls } from '../../utils/mediaAssetUrls';
+import { enrichProjectsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 
 type ProjectUser = {
 	_id: ObjectId;
@@ -83,12 +83,16 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			? await enrichUsersWithProfileAvatarUrls(project.users)
 			: project.users;
 
-		return ResponseWrapper.success({
-			message: 'Project retrieved successfully',
-			project: {
+		const [projectWithSignedImage] = await enrichProjectsWithImageUrls([
+			{
 				...project,
 				users: usersWithSignedAvatars,
 			},
+		]);
+
+		return ResponseWrapper.success({
+			message: 'Project retrieved successfully',
+			project: projectWithSignedImage,
 		});
 	} catch (err) {
 		logError('Get project handler failed', err);

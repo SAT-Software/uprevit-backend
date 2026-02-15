@@ -6,7 +6,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
-import { enrichUsersWithProfileAvatarUrls } from '../../utils/mediaAssetUrls';
+import { enrichDepartmentsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 
 type DepartmentUser = {
 	_id: ObjectId;
@@ -119,12 +119,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}),
 		);
 
+		const departmentsWithSignedUrls = await enrichDepartmentsWithImageUrls(departmentsWithSignedAvatars);
+
 		const totalPages = Math.ceil(totalCount / limit);
 
 		return ResponseWrapper.success({
 			message: 'Departments fetched successfully',
 			result: {
-				departments: departmentsWithSignedAvatars,
+				departments: departmentsWithSignedUrls,
 				pagination: {
 					currentPage: page,
 					totalPages,

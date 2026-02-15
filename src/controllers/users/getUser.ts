@@ -4,7 +4,7 @@ import { User } from '../../models/user';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { enrichUsersWithProfileAvatarUrls } from '../../utils/mediaAssetUrls';
+import { enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 
 /**
  * Get a user

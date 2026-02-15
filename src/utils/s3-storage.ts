@@ -120,3 +120,131 @@ export const enrichItemsWithSignedUrls = async <T>({
 		return setSignedUrl(item, signedUrl);
 	});
 };
+
+type UserAvatarShape = {
+	profileAvatar?: string;
+	profileAvatarKey?: string;
+};
+
+type WorkspaceLogoShape = {
+	logo?: string;
+	logoKey?: string;
+};
+
+type ProjectImageShape = {
+	image?: string;
+	imageKey?: string;
+};
+
+type DepartmentImageShape = {
+	image?: string;
+	imageKey?: string;
+};
+
+const extractS3AssetKey = (value: unknown): string | undefined => {
+	if (typeof value !== "string") return undefined;
+	const trimmed = value.trim();
+	if (!trimmed) return undefined;
+	if (!trimmed.startsWith("uploads/")) return undefined;
+	return trimmed;
+};
+
+export const enrichUsersWithProfileAvatarUrls = async <T extends UserAvatarShape>(
+	users: T[],
+): Promise<T[]> => {
+	if (!users.length) return users;
+
+	const usersWithKeys = users.map((user) => {
+		const profileAvatarKey = extractS3AssetKey(user.profileAvatar);
+		if (!profileAvatarKey) return user;
+
+		return {
+			...user,
+			profileAvatarKey,
+		};
+	});
+
+	return enrichItemsWithSignedUrls({
+		items: usersWithKeys,
+		getKey: (item) => item.profileAvatarKey,
+		setSignedUrl: (item, signedUrl) => ({
+			...item,
+			profileAvatar: signedUrl,
+		}),
+	});
+};
+
+export const enrichWorkspaceWithLogoUrl = async <T extends WorkspaceLogoShape>(
+	workspace: T | null,
+): Promise<T | null> => {
+	if (!workspace) return workspace;
+
+	const logoKey = extractS3AssetKey(workspace.logo);
+	if (!logoKey) return workspace;
+
+	const [workspaceWithSignedLogo] = await enrichItemsWithSignedUrls({
+		items: [
+			{
+				...workspace,
+				logoKey,
+			},
+		],
+		getKey: (item) => item.logoKey,
+		setSignedUrl: (item, signedUrl) => ({
+			...item,
+			logo: signedUrl,
+		}),
+	});
+
+	return workspaceWithSignedLogo ?? workspace;
+};
+
+export const enrichProjectsWithImageUrls = async <T extends ProjectImageShape>(
+	projects: T[],
+): Promise<T[]> => {
+	if (!projects.length) return projects;
+
+	const projectsWithKeys = projects.map((project) => {
+		const imageKey = extractS3AssetKey(project.image);
+		if (!imageKey) return project;
+
+		return {
+			...project,
+			imageKey,
+		};
+	});
+
+	return enrichItemsWithSignedUrls({
+		items: projectsWithKeys,
+		getKey: (item) => item.imageKey,
+		setSignedUrl: (item, signedUrl) => ({
+			...item,
+			image: signedUrl,
+		}),
+	});
+};
+
+export const enrichDepartmentsWithImageUrls = async <T extends DepartmentImageShape>(
+	departments: T[],
+): Promise<T[]> => {
+	if (!departments.length) return departments;
+
+	const departmentsWithKeys = departments.map((department) => {
+		const imageKey = extractS3AssetKey(department.image);
+		if (!imageKey) return department;
+
+		return {
+			...department,
+			imageKey,
+		};
+	});
+
+	return enrichItemsWithSignedUrls({
+		items: departmentsWithKeys,
+		getKey: (item) => item.imageKey,
+		setSignedUrl: (item, signedUrl) => ({
+			...item,
+			image: signedUrl,
+		}),
+	});
+};

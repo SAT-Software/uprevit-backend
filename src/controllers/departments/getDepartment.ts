@@ -6,7 +6,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
-import { enrichUsersWithProfileAvatarUrls } from '../../utils/mediaAssetUrls';
+import { enrichDepartmentsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 
 type DepartmentUser = {
 	_id: ObjectId;
@@ -82,12 +82,16 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			? await enrichUsersWithProfileAvatarUrls(department.users)
 			: department.users;
 
-		return ResponseWrapper.success({
-			message: 'Department retrieved successfully',
-			department: {
+		const [departmentWithSignedImage] = await enrichDepartmentsWithImageUrls([
+			{
 				...department,
 				users: usersWithSignedAvatars,
 			},
+		]);
+
+		return ResponseWrapper.success({
+			message: 'Department retrieved successfully',
+			department: departmentWithSignedImage,
 		});
 		
 	} catch (err) {

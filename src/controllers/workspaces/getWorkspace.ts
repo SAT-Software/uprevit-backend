@@ -5,7 +5,7 @@ import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
-import { enrichWorkspaceWithLogoUrl } from '../../utils/mediaAssetUrls';
+import { enrichWorkspaceWithLogoUrl } from '../../utils/s3-storage';
 
 /**
  * API endpoint to get a workspace by id

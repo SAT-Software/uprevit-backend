@@ -5,7 +5,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { ObjectId } from 'mongodb';
-import { enrichUsersWithProfileAvatarUrls } from '../../utils/mediaAssetUrls';
+import { enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 
 /**
  * Get all users by workspace
