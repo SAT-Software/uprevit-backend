@@ -25,9 +25,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			workspace_id: input.workspace_id,
 			name: input.name,
 			type: input.type,
-			...(input.type === 'file' && { url: input.url })
 		});
 		if (missingFieldsResult) return missingFieldsResult;
+
+		if (input.type === 'file' && !input.url && !input.key) {
+			return ResponseWrapper.badRequest("At least one of 'url' or 'key' is required for source files.");
+		}
 
 		const isValidEnum = validateEnum(['file', 'folder'], input.type)
 		if(isValidEnum) return isValidEnum
@@ -80,7 +83,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			type: input.type,
 			parentId: parentId,
 			...(input.type === 'folder' && productId && { product_id: productId }),
-			...(input.type === 'file' && {url: input.url})
+			...(input.type === 'file' && {
+				...(input.url && { url: input.url }),
+				...(input.key && { key: input.key }),
+			}),
 		};
 
 		await sourceFilesCollection.insertOne(newSourceFile);
@@ -102,9 +108,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				name: newSourceFile.name,
 				type: newSourceFile.type,
 				url: newSourceFile.url,
+				key: newSourceFile.key,
 				product_id: newSourceFile.product_id?.toString() ?? null,
 			},
-			changedPaths: ['name', 'type', 'url', 'product_id'],
+			changedPaths: ['name', 'type', 'url', 'key', 'product_id'],
 			meta: isFolder
 				? { folderName: newSourceFile.name }
 				: { fileName: newSourceFile.name },

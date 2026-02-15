@@ -6,6 +6,7 @@ import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { ObjectId } from "mongodb";
 import { SourceFile } from "../../models/sourceFiles";
+import { createPresignedGetUrl } from "../../utils/s3-storage";
 
 /**
  * @param {APIGatewayProxyEvent} event 
@@ -34,6 +35,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		};
 
 		const sourceFileOrFolder = await sourceFilesCollection.findOne(query);
+
+		if (sourceFileOrFolder?.type === 'file' && sourceFileOrFolder.key) {
+			try {
+				sourceFileOrFolder.url = await createPresignedGetUrl(sourceFileOrFolder.key);
+			} catch (error) {
+				logError('Failed to generate signed URL for source file', error);
+			}
+		}
 
 
 		return ResponseWrapper.success({

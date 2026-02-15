@@ -21,6 +21,8 @@ import { addOperationalParameters, deleteOperationalParameters, updateOperationa
 import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion, updateLabelTagTaggedImage, updateLabelTagLegend } from './productData/label-tags';
 import { SymbolsGraphics } from '../../types/products/symbols-graphics';
 import { recordAuditEvent } from '../../utils/auditLogV2';
+import { deleteObjectByKey } from '../../utils/s3-storage';
+import { logError } from '../../utils/logger';
 
 const validTabs = [
 	'product-information',
@@ -207,6 +209,63 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
 	},
 };
 
+const getObjectData = (value: unknown): Record<string, unknown> | null => {
+	if (!value || Array.isArray(value) || typeof value !== 'object') return null;
+	return value as Record<string, unknown>;
+};
+
+const getOptionalString = (value: unknown): string | undefined => {
+	if (typeof value !== 'string') return undefined;
+	return value.trim();
+};
+
+const getS3KeyTransition = (
+	product: Product,
+	input: UpdateProductDataRequest,
+): { oldKey?: string; newKey?: string } => {
+	const data = getObjectData(input.data);
+	if (!data) return {};
+
+	const dataId = getOptionalString(data.id);
+
+	switch (input.action) {
+	case 'update_label_component': {
+		if (!dataId) return {};
+		const existing = product.label_components.data.find((item) => item._id.toString() === dataId);
+		return {
+			oldKey: getOptionalString(existing?.key),
+			newKey: getOptionalString(data.key),
+		};
+	}
+	case 'update_symbols_graphics': {
+		if (!dataId) return {};
+		const existing = product.symbols_graphics.data.find((item) => item._id.toString() === dataId);
+		return {
+			oldKey: getOptionalString(existing?.key),
+			newKey: getOptionalString(data.key),
+		};
+	}
+	case 'update_label_tags': {
+		if (!dataId) return {};
+		const existing = product.label_tags.data.find((item) => item._id.toString() === dataId);
+		return {
+			oldKey: getOptionalString(existing?.key),
+			newKey: getOptionalString(data.key),
+		};
+	}
+	case 'update_label_tag_tagged_image': {
+		if (!dataId) return {};
+		const existing = product.label_tags.data.find((item) => item._id.toString() === dataId);
+		return {
+			oldKey: getOptionalString(existing?.tagged_image_key),
+			newKey: getOptionalString(data.tagged_image_key),
+		};
+	}
+	default:
+		return {};
+	}
+};
+
 
 /**
  * Update product data (generic PATCH endpoint)
@@ -246,6 +305,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const product = await db.collection<Product>('products').findOne({ _id: new ObjectId(input.id) });
 
 		if (!product) return ResponseWrapper.notFound('Product not found, please check the provided product id.');
+
+		const s3KeyTransition = getS3KeyTransition(product, input);
 
 		let updateQuery = {};
 		let updatedData = {};
@@ -593,6 +654,18 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const updatedProduct = await db.collection<Product>('products').findOne({ _id: new ObjectId(input.id) });
 		const auditMeta = PRODUCT_DATA_ACTION_AUDIT_META[input.action];
+
+		if (
+			s3KeyTransition.oldKey &&
+			s3KeyTransition.newKey !== undefined &&
+			s3KeyTransition.newKey !== s3KeyTransition.oldKey
+		) {
+			try {
+				await deleteObjectByKey(s3KeyTransition.oldKey);
+			} catch (error) {
+				logError('Failed to delete previous S3 object while replacing key', error);
+			}
+		}
 
 		if (updatedProduct && auditMeta) {
 			const payloadMeta: Record<string, unknown> = {

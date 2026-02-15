@@ -96,6 +96,10 @@ export function UpdateSymbolsGraphics(
 			'symbols_graphics.data.$[elem].entity': updatedSymbolsGraphics.entity,
 		};
 
+		if (updatedSymbolsGraphics.key !== undefined) {
+			updateSet['symbols_graphics.data.$[elem].key'] = updatedSymbolsGraphics.key;
+		}
+
 		if (typeof updatedSymbolsGraphics.count === 'number') {
 			updateSet['symbols_graphics.data.$[elem].count'] = updatedSymbolsGraphics.count;
 		}

@@ -523,6 +523,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/updateProductData.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:DeleteObject
+              Resource: !Sub "arn:aws:s3:::uprevit-storage-dev-and-test/uploads/*"
       Events:
         UpdateProductData:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -867,6 +873,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/sourceFiles/getSourceFilesByParent.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::uprevit-storage-dev-and-test/uploads/*"
       Events:
         GetSourceFilesByParent:
           Type: Api
@@ -884,6 +896,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/sourceFiles/getCurrentFolderById.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::uprevit-storage-dev-and-test/uploads/*"
       Events:
         GetCurrentFolderById:
           Type: Api

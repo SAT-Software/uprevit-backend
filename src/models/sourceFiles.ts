@@ -9,4 +9,5 @@ export interface SourceFile {
     parentId: ObjectId | null
     product_id?: ObjectId | null
     url?: string
+    key?: string
 }
