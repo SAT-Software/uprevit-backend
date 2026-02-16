@@ -8,6 +8,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
+import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 /**
  * Update a workspace
@@ -84,7 +85,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					companyName: input.companyName,
 					companyId: input.companyId,
 					description: input.description,
-					logo: input.logo,
+					logo: normalizePersistedAssetReference(input.logo, workspaceRecord.logo ?? ''),
 					plan: input.plan,
 					planId: input.planId,
 					planStart: input.planStart,

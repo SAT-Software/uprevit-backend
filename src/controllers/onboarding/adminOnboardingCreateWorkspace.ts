@@ -9,6 +9,7 @@ import { validateMissingFields } from "../../utils/validationUtils";
 import { authenticateWithRole } from "../../utils/authUtils";
 import { User } from "../../models/user";
 import { AdminAddUserToGroupCommand, AdminUpdateUserAttributesCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
+import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 const cognito = new CognitoIdentityProviderClient();
 
@@ -48,7 +49,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			companyName: input.companyName,
 			companyId: input.companyId,
 			description: input.description || '',
-			logo: input.logo || '',
+			logo: normalizePersistedAssetReference(input.logo, ''),
 			plan: input.plan || '',
 			planName: input.planName || '',
 			planId: input.planId || '',

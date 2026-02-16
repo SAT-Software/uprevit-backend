@@ -7,6 +7,7 @@ import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateMissingFields } from '../../utils/validationUtils';
+import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 /**
  * Update a user
@@ -47,7 +48,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}, {
 			$set: {
 				name: input.name,
-				profileAvatar: input.profileAvatar,
+				profileAvatar: normalizePersistedAssetReference(input.profileAvatar, userRecord.profileAvatar ?? ''),
 				email: input.email,
 				designation: input.designation || '',
 				phone: input.phone,

@@ -7,6 +7,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
 import { logError } from '../../utils/logger';
+import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 
 /**
@@ -49,7 +50,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			companyName: input.companyName,
 			companyId: input.companyId,
 			description: input.description || '',
-			logo: input.logo || '',
+			logo: normalizePersistedAssetReference(input.logo, ''),
 			plan: input.plan || '',
 			planName: input.planName || '',
 			planId: input.planId || '',

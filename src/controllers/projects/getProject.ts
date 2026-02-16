@@ -13,7 +13,6 @@ type ProjectUser = {
 	name: string;
 	email: string;
 	profileAvatar?: string;
-	profileAvatarKey?: string;
 };
 
 type ProjectWithUsers = Omit<Project, 'users'> & {

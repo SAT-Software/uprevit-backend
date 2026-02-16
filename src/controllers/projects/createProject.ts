@@ -7,6 +7,7 @@ import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
 import { recordAuditEvent } from '../../utils/auditLogV2';
+import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 /**
  * Create a project
@@ -58,6 +59,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const departmentObjectId = new ObjectId(input.department_id);
 		const adminObjectId = new ObjectId(input.admin_id);
 		const userObjectIds = input.users ? input.users.map((userId: string) => new ObjectId(userId)) : [];
+		const normalizedProjectImage = normalizePersistedAssetReference(input.image, '');
 
 		// Check if project_number already exists
 		const existingProject = await db.collection<Project>('projects').findOne({
@@ -79,7 +81,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			admin_id: adminObjectId,
 			users: userObjectIds,
 			isArchived: false,
-			image: input.image,
+			image: normalizedProjectImage,
 		});
 
 		await recordAuditEvent({

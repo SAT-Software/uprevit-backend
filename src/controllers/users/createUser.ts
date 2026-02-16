@@ -5,6 +5,7 @@ import { AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
+import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 /**
  * Create a user
@@ -30,7 +31,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		
 		const user = await db.collection<User>('users').insertOne({
 			name: input.name,
-			profileAvatar: input.profileAvatar,
+			profileAvatar: normalizePersistedAssetReference(input.profileAvatar, ''),
 			designation: input.designation,
 			email: input.email,
 			phone: input.phone,

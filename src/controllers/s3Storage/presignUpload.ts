@@ -9,7 +9,6 @@ const PRODUCT_ASSET_CONTENT_TYPES = new Set([
 	"image/jpeg",
 	"image/webp",
 	"image/gif",
-	"image/svg+xml",
 ]);
 
 const SOURCE_FILE_EXTRA_CONTENT_TYPES = new Set([

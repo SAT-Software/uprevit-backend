@@ -13,7 +13,6 @@ type DepartmentUser = {
 	name: string;
 	email: string;
 	profileAvatar?: string;
-	profileAvatarKey?: string;
 };
 
 type DepartmentWithUsers = Omit<Department, 'users'> & {
