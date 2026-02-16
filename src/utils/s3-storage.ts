@@ -120,3 +120,133 @@ export const enrichItemsWithSignedUrls = async <T>({
 		return setSignedUrl(item, signedUrl);
 	});
 };
+
+type UserAvatarShape = {
+	profileAvatar?: string;
+};
+
+type WorkspaceLogoShape = {
+	logo?: string;
+};
+
+type ProjectImageShape = {
+	image?: string;
+};
+
+type DepartmentImageShape = {
+	image?: string;
+};
+
+const extractS3AssetKey = (value: unknown): string | undefined => {
+	if (typeof value !== "string") return undefined;
+	const trimmed = value.trim();
+	if (!trimmed) return undefined;
+	if (!trimmed.startsWith("uploads/")) return undefined;
+	return trimmed;
+};
+
+const decodeUriSafe = (value: string): string => {
+	try {
+		return decodeURIComponent(value);
+	} catch {
+		return value;
+	}
+};
+
+const extractUploadsKeyFromText = (value: string): string | undefined => {
+	const decodedValue = decodeUriSafe(value.trim());
+	const normalizedValue = decodedValue.replace(/\\/g, "/");
+	const uploadsIndex = normalizedValue.indexOf("uploads/");
+	if (uploadsIndex === -1) return undefined;
+
+	const keyCandidate = normalizedValue
+		.slice(uploadsIndex)
+		.split("?")[0]
+		.split("#")[0]
+		.trim();
+
+	if (!keyCandidate.startsWith("uploads/")) return undefined;
+	return keyCandidate.length > "uploads/".length ? keyCandidate : undefined;
+};
+
+export const normalizePersistedAssetReference = (
+	value: unknown,
+	fallback = "",
+): string => {
+	if (typeof value !== "string") return fallback;
+
+	const trimmed = value.trim();
+	if (!trimmed) return "";
+
+	const directKey = extractS3AssetKey(trimmed);
+	if (directKey) return directKey;
+
+	try {
+		const parsedUrl = new URL(trimmed);
+		const keyFromPath = extractUploadsKeyFromText(parsedUrl.pathname);
+		if (keyFromPath) return keyFromPath;
+	} catch {
+		// Not a valid URL; continue with raw value parsing.
+	}
+
+	const keyFromRawText = extractUploadsKeyFromText(trimmed);
+	if (keyFromRawText) return keyFromRawText;
+
+	return trimmed;
+};
+
+export const enrichUsersWithProfileAvatarUrls = async <T extends UserAvatarShape>(
+	users: T[],
+): Promise<T[]> => {
+	return enrichItemsWithSignedUrls({
+		items: users,
+		getKey: (item) => extractS3AssetKey(item.profileAvatar),
+		setSignedUrl: (item, signedUrl) => ({
+			...item,
+			profileAvatar: signedUrl,
+		}),
+	});
+};
+
+export const enrichWorkspaceWithLogoUrl = async <T extends WorkspaceLogoShape>(
+	workspace: T | null,
+): Promise<T | null> => {
+	if (!workspace) return workspace;
+
+	const [workspaceWithSignedLogo] = await enrichItemsWithSignedUrls({
+		items: [workspace],
+		getKey: (item) => extractS3AssetKey(item.logo),
+		setSignedUrl: (item, signedUrl) => ({
+			...item,
+			logo: signedUrl,
+		}),
+	});
+
+	return workspaceWithSignedLogo ?? workspace;
+};
+
+export const enrichProjectsWithImageUrls = async <T extends ProjectImageShape>(
+	projects: T[],
+): Promise<T[]> => {
+	return enrichItemsWithSignedUrls({
+		items: projects,
+		getKey: (item) => extractS3AssetKey(item.image),
+		setSignedUrl: (item, signedUrl) => ({
+			...item,
+			image: signedUrl,
+		}),
+	});
+};
+
+export const enrichDepartmentsWithImageUrls = async <T extends DepartmentImageShape>(
+	departments: T[],
+): Promise<T[]> => {
+	return enrichItemsWithSignedUrls({
+		items: departments,
+		getKey: (item) => extractS3AssetKey(item.image),
+		setSignedUrl: (item, signedUrl) => ({
+			...item,
+			image: signedUrl,
+		}),
+	});
+};

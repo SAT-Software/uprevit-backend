@@ -6,6 +6,20 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
+import { enrichProjectsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
+
+type ProjectUser = {
+	_id: ObjectId;
+	name: string;
+	email: string;
+	profileAvatar?: string;
+};
+
+type ProjectWithUsers = Omit<Project, 'users'> & {
+	users?: ProjectUser[];
+	auditLogs?: unknown[];
+	actionAt?: Date;
+};
 
 /**
  * Get a project
@@ -27,7 +41,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const db = await getDb();
 
-		const projectData = await db.collection<Project>('projects').aggregate([
+		const projectData = await db.collection<Project>('projects').aggregate<ProjectWithUsers>([
 			{
 				$match: {
 					_id: new ObjectId(event.pathParameters.id),
@@ -64,9 +78,20 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.notFound('Project not found');
 		}
 
+		const usersWithSignedAvatars = project.users?.length
+			? await enrichUsersWithProfileAvatarUrls(project.users)
+			: project.users;
+
+		const [projectWithSignedImage] = await enrichProjectsWithImageUrls([
+			{
+				...project,
+				users: usersWithSignedAvatars,
+			},
+		]);
+
 		return ResponseWrapper.success({
 			message: 'Project retrieved successfully',
-			project: project,
+			project: projectWithSignedImage,
 		});
 	} catch (err) {
 		logError('Get project handler failed', err);

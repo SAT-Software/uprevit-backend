@@ -7,6 +7,7 @@ import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
 import { recordAuditEvent } from '../../utils/auditLogV2';
+import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 /**
  * Create a department
@@ -48,11 +49,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const adminObjectId = new ObjectId(input.admin_id);
 		const workspaceObjectId = new ObjectId(input.workspace_id);
 		const userObjectIds = input.users ? input.users.map((userId: string) => new ObjectId(userId)) : [];
+		const normalizedDepartmentImage = normalizePersistedAssetReference(input.image, '');
 
 		const department = await db.collection<Department>('departments').insertOne({
 			department_name: input.department_name,
 			department_description: input.department_description,
-			image: input.image,
+			image: normalizedDepartmentImage,
 			manager: input.manager,
 			admin_id: adminObjectId,
 			workspace_id: workspaceObjectId,

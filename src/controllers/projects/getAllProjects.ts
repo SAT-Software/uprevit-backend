@@ -6,6 +6,20 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
+import { enrichProjectsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
+
+type ProjectUser = {
+	_id: ObjectId;
+	name: string;
+	email: string;
+	profileAvatar?: string;
+};
+
+type ProjectWithUsers = Omit<Project, 'users'> & {
+	users?: ProjectUser[];
+	auditLogs?: unknown[];
+	actionAt?: Date;
+};
 
 /**
  * Get all projects
@@ -104,16 +118,31 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const countPipeline = [{ $match: filter }, { $count: 'total' }];
 
 			const [projects, countResult] = await Promise.all([
-				db.collection<Project>('projects').aggregate(pipeline).toArray(),
+				db.collection<Project>('projects').aggregate<ProjectWithUsers>(pipeline).toArray(),
 				db.collection<Project>('projects').aggregate(countPipeline).toArray(),
 			]);
+
+			const projectsWithSignedAvatars = await Promise.all(
+				projects.map(async (project) => {
+					if (!project.users?.length) return project;
+
+					const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(project.users);
+
+					return {
+						...project,
+						users: usersWithSignedAvatars,
+					};
+				}),
+			);
+
+			const projectsWithSignedUrls = await enrichProjectsWithImageUrls(projectsWithSignedAvatars);
 
 			const totalCount = countResult.length > 0 ? countResult[0].total : 0;
 			const totalPages = Math.ceil(totalCount / limit);
 
 			return ResponseWrapper.success({message: 'Projects fetched successfully',
 				result: {
-					projects,
+					projects: projectsWithSignedUrls,
 					pagination: {
 						currentPage: page,
 						totalPages,
@@ -141,12 +170,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				.limit(limit)
 				.toArray();
 
+			const projectsWithSignedUrls = await enrichProjectsWithImageUrls(projects);
+
 			const totalPages = Math.ceil(totalCount / limit);
 
 
 			return ResponseWrapper.success({message: 'Projects fetched successfully',
 				result: {
-					projects,
+					projects: projectsWithSignedUrls,
 					pagination: {
 						currentPage: page,
 						totalPages,

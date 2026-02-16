@@ -6,6 +6,20 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
+import { enrichDepartmentsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
+
+type DepartmentUser = {
+	_id: ObjectId;
+	name: string;
+	email: string;
+	profileAvatar?: string;
+};
+
+type DepartmentWithUsers = Omit<Department, 'users'> & {
+	users?: DepartmentUser[];
+	auditLogs?: unknown[];
+	actionAt?: Date;
+};
 
 /**
  * Get all departments
@@ -62,7 +76,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const departments = await db
 			.collection<Department>('departments')
-			.aggregate([
+			.aggregate<DepartmentWithUsers>([
 				{ $match: filter },
 				{ $sort: sortObj },
 				{ $skip: skip },
@@ -91,12 +105,27 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			])
 			.toArray();
 
+		const departmentsWithSignedAvatars = await Promise.all(
+			departments.map(async (department) => {
+				if (!department.users?.length) return department;
+
+				const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(department.users);
+
+				return {
+					...department,
+					users: usersWithSignedAvatars,
+				};
+			}),
+		);
+
+		const departmentsWithSignedUrls = await enrichDepartmentsWithImageUrls(departmentsWithSignedAvatars);
+
 		const totalPages = Math.ceil(totalCount / limit);
 
 		return ResponseWrapper.success({
 			message: 'Departments fetched successfully',
 			result: {
-				departments,
+				departments: departmentsWithSignedUrls,
 				pagination: {
 					currentPage: page,
 					totalPages,

@@ -7,6 +7,7 @@ import { logError } from '../../utils/logger';
 import { validateMissingFields } from "../../utils/validationUtils";
 import { updateAuditLog } from "../../utils/auditLog";
 import { AuditLogAction } from "../../models/auditLog";
+import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 /**
  * @param {APIGatewayProxyEvent} event
@@ -32,7 +33,15 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 		// 2. Update user profile in MongoDB
 		const updateResult = await db.collection("users").updateOne(
 			{ _id: new ObjectId(input.user_id as string) },
-			{ $set: { name: input.name, profileAvatar: input.profileAvatar || '', designation: input.designation || '', location: input.location || '', status: 'active' } }
+			{
+				$set: {
+					name: input.name,
+					profileAvatar: normalizePersistedAssetReference(input.profileAvatar, ''),
+					designation: input.designation || '',
+					location: input.location || '',
+					status: 'active',
+				},
+			}
 		);
 
 		if (updateResult.modifiedCount === 0) {

@@ -7,6 +7,7 @@ import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
 import { recordAuditEvent } from '../../utils/auditLogV2';
+import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 /**
  * Update a project
@@ -88,6 +89,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const departmentObjectId = new ObjectId(input.department_id);
 		const adminObjectId = new ObjectId(input.admin_id);
 		const userObjectIds = input.users ? (input.users as unknown as string[]).map((userId: string) => new ObjectId(userId)) : [];
+		const normalizedProjectImage = normalizePersistedAssetReference(input.image, projectRecord.image ?? '');
 
 		const project = await db.collection<Project>('projects').updateOne({
 			_id: new ObjectId(input._id),
@@ -101,7 +103,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				project_manager: input.project_manager,
 				admin_id: adminObjectId,
 				users: userObjectIds,
-				image: input.image,
+				image: normalizedProjectImage,
 			}
 		});
 

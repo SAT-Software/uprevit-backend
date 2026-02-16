@@ -6,6 +6,20 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
+import { enrichDepartmentsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
+
+type DepartmentUser = {
+	_id: ObjectId;
+	name: string;
+	email: string;
+	profileAvatar?: string;
+};
+
+type DepartmentWithUsers = Omit<Department, 'users'> & {
+	users?: DepartmentUser[];
+	auditLogs?: unknown[];
+	actionAt?: Date;
+};
 
 /**
  * Get a department
@@ -26,7 +40,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 		const db = await getDb();
 		
-		const departmentData = await db.collection<Department>('departments').aggregate([
+		const departmentData = await db.collection<Department>('departments').aggregate<DepartmentWithUsers>([
 			{
 				$match: {
 					_id: new ObjectId(event.pathParameters.id),
@@ -63,9 +77,20 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Department not found');
 		}
 
+		const usersWithSignedAvatars = department.users?.length
+			? await enrichUsersWithProfileAvatarUrls(department.users)
+			: department.users;
+
+		const [departmentWithSignedImage] = await enrichDepartmentsWithImageUrls([
+			{
+				...department,
+				users: usersWithSignedAvatars,
+			},
+		]);
+
 		return ResponseWrapper.success({
 			message: 'Department retrieved successfully',
-			department: department,
+			department: departmentWithSignedImage,
 		});
 		
 	} catch (err) {
