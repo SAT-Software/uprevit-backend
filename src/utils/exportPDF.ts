@@ -12,11 +12,16 @@ const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const SECTION_TITLE_SPACING = 20;
 const TABLE_HEADER_HEIGHT = 20;
 const TABLE_ROW_HEIGHT = 25;
-const TABLE_IMAGE_ROW_HEIGHT = 95;
 const TABLE_BOTTOM_SPACING = 20;
 const TOP_HEADER_HEIGHT = 26;
 const BOTTOM_PADDING = 20;
 const IMAGE_PADDING = 6;
+const HEADER_FONT_SIZE = 10;
+const HEADER_LINE_OFFSET = 4;
+const IMAGE_ROW_SIDE_PADDING = 10;
+const MIN_IMAGE_ROW_HEIGHT = 48;
+const AVAILABLE_PAGE_CONTENT_HEIGHT = PAGE_HEIGHT - MARGIN * 2 - TOP_HEADER_HEIGHT - BOTTOM_PADDING;
+const MAX_IMAGE_ROW_HEIGHT = Math.floor(AVAILABLE_PAGE_CONTENT_HEIGHT * 0.65);
 
 const HEADER_BG_COLOR = rgb(0.788, 0.855, 0.973);
 const HEADER_TEXT_COLOR = rgb(0, 0, 0);
@@ -38,6 +43,7 @@ type TableCell = {
 type TableRow = {
 	cells: TableCell[];
 	isImageRow?: boolean;
+	imageUrl?: string;
 };
 
 type EmbeddedAsset = {
@@ -188,31 +194,17 @@ const loadSignedUrlMap = async (productData: Product): Promise<Map<string, strin
 	}
 };
 
-const appendDataAndImageRows = (
-	rows: TableRow[],
-	dataCells: string[],
-	imageCells: { colIndex: number; imageUrl?: string }[],
-) => {
-	const imageColumnIndexes = new Set<number>(imageCells.map((item) => item.colIndex));
+const appendDataAndImageRows = (rows: TableRow[], dataCells: string[], imageUrl?: string) => {
 	rows.push({
-		cells: dataCells.map((cell, index) => ({
-			text: imageColumnIndexes.has(index) ? "" : cell,
-		})),
+		cells: dataCells.map((cell) => ({ text: cell })),
 	});
 
-	if (!imageCells.some((item) => Boolean(item.imageUrl))) return;
-
-	const imageByIndex = new Map<number, string>();
-	imageCells.forEach((item) => {
-		if (item.imageUrl) imageByIndex.set(item.colIndex, item.imageUrl);
-	});
+	if (!imageUrl) return;
 
 	rows.push({
 		isImageRow: true,
-		cells: dataCells.map((_, index) => ({
-			imageUrl: imageByIndex.get(index),
-			text: "",
-		})),
+		imageUrl,
+		cells: [],
 	});
 };
 
@@ -316,18 +308,12 @@ export async function generateProductPDFExport(productData: Product) {
 				labelComponentsRows,
 				[
 					toCleanString(item.component_number),
-					"",
 					toCleanString(item.component_description),
 					Array.isArray(item.label_type) ? item.label_type.join(", ") : "",
 					toCleanString(item.dimensions),
 					toCleanString(item.component_type),
 				],
-				[
-					{
-						colIndex: 1,
-						imageUrl: resolveImageUrl(item.image, item.key, signedUrlMap),
-					},
-				],
+				resolveImageUrl(item.image, item.key, signedUrlMap),
 			);
 		});
 
@@ -337,16 +323,10 @@ export async function generateProductPDFExport(productData: Product) {
 				symbolsRows,
 				[
 					toCleanString(item.text),
-					"",
 					item.text_present === undefined ? "" : item.text_present ? "Yes" : "No",
 					Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "",
 				],
-				[
-					{
-						colIndex: 1,
-						imageUrl: resolveImageUrl(item.image, item.key, signedUrlMap),
-					},
-				],
+				resolveImageUrl(item.image, item.key, signedUrlMap),
 			);
 		});
 
@@ -356,16 +336,10 @@ export async function generateProductPDFExport(productData: Product) {
 				schematicsRows,
 				[
 					toCleanString(item.text),
-					"",
 					Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "",
 					toCleanString(item.description),
 				],
-				[
-					{
-						colIndex: 1,
-						imageUrl: resolveImageUrl(item.image, item.key, signedUrlMap),
-					},
-				],
+				resolveImageUrl(item.image, item.key, signedUrlMap),
 			);
 		});
 
@@ -375,17 +349,11 @@ export async function generateProductPDFExport(productData: Product) {
 				barcodesRows,
 				[
 					toCleanString(item.text),
-					"",
 					Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "",
 					toCleanString(item.count ?? 1),
 					toCleanString(item.description),
 				],
-				[
-					{
-						colIndex: 1,
-						imageUrl: resolveImageUrl(item.image, item.key, signedUrlMap),
-					},
-				],
+				resolveImageUrl(item.image, item.key, signedUrlMap),
 			);
 		});
 
@@ -395,16 +363,10 @@ export async function generateProductPDFExport(productData: Product) {
 				otherComponentsRows,
 				[
 					toCleanString(item.text),
-					"",
 					Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "",
 					toCleanString(item.description),
 				],
-				[
-					{
-						colIndex: 1,
-						imageUrl: resolveImageUrl(item.image, item.key, signedUrlMap),
-					},
-				],
+				resolveImageUrl(item.image, item.key, signedUrlMap),
 			);
 		});
 
@@ -416,14 +378,8 @@ export async function generateProductPDFExport(productData: Product) {
 					toCleanString(item.name),
 					toCleanString(item.description),
 					toCleanString(item.type),
-					"",
 				],
-				[
-					{
-						colIndex: 3,
-						imageUrl: getPreferredLabelTagImageUrl(item, signedUrlMap),
-					},
-				],
+				getPreferredLabelTagImageUrl(item, signedUrlMap),
 			);
 		});
 
@@ -479,7 +435,7 @@ export async function generateProductPDFExport(productData: Product) {
 			...otherComponentsRows,
 			...labelTagsRows,
 		];
-		const allImageUrls = allRows.flatMap((row) => row.cells.map((cell) => cell.imageUrl || "")).filter(Boolean);
+		const allImageUrls = allRows.map((row) => row.imageUrl || "").filter(Boolean);
 		const embeddedAssetMap = await preloadEmbeddedAssets(pdfDoc, allImageUrls);
 
 		const pages: PDFPage[] = [];
@@ -531,24 +487,45 @@ export async function generateProductPDFExport(productData: Product) {
 			});
 		};
 
-		const drawImageInCell = (asset: EmbeddedAsset, x: number, rowTopY: number, cellWidth: number, rowHeight: number) => {
+		const getImageRowHeight = (row: TableRow): number => {
+			if (!row.isImageRow || !row.imageUrl) return TABLE_ROW_HEIGHT;
+			const asset = embeddedAssetMap.get(row.imageUrl);
+			if (!asset?.image) return MIN_IMAGE_ROW_HEIGHT;
+
+			const availableWidth = Math.max(CONTENT_WIDTH - IMAGE_ROW_SIDE_PADDING * 2 - IMAGE_PADDING * 2, 1);
+			const scaledHeight = (asset.image.height * availableWidth) / Math.max(asset.image.width, 1);
+			const fullHeight = Math.ceil(scaledHeight + IMAGE_PADDING * 2);
+			return Math.max(MIN_IMAGE_ROW_HEIGHT, Math.min(MAX_IMAGE_ROW_HEIGHT, fullHeight));
+		};
+
+		const drawImageInRow = (asset: EmbeddedAsset, rowTopY: number, rowHeight: number) => {
+			const rowX = MARGIN;
+			const rowBottomY = rowTopY - rowHeight;
+			const contentX = rowX + IMAGE_ROW_SIDE_PADDING;
+			const contentWidth = CONTENT_WIDTH - IMAGE_ROW_SIDE_PADDING * 2;
+
 			if (!asset.image) {
-				drawTextInCell(asset.placeholderText || "Image unavailable", x, rowTopY, cellWidth, rowHeight, false, PLACEHOLDER_TEXT_COLOR);
+				drawTextInCell(
+					asset.placeholderText || "Image unavailable",
+					contentX,
+					rowTopY,
+					contentWidth,
+					rowHeight,
+					false,
+					PLACEHOLDER_TEXT_COLOR,
+				);
 				return;
 			}
 
-			const availableWidth = Math.max(cellWidth - IMAGE_PADDING * 2, 1);
+			const availableWidth = Math.max(contentWidth - IMAGE_PADDING * 2, 1);
 			const availableHeight = Math.max(rowHeight - IMAGE_PADDING * 2, 1);
-			const scale = Math.min(
-				availableWidth / asset.image.width,
-				availableHeight / asset.image.height,
-				1,
-			);
+			const widthScale = availableWidth / Math.max(asset.image.width, 1);
+			const heightScale = availableHeight / Math.max(asset.image.height, 1);
+			const scale = Math.min(widthScale, heightScale);
 			const drawWidth = asset.image.width * scale;
 			const drawHeight = asset.image.height * scale;
-			const drawX = x + (cellWidth - drawWidth) / 2;
-			const rowBottom = rowTopY - rowHeight;
-			const drawY = rowBottom + (rowHeight - drawHeight) / 2;
+			const drawX = contentX + (contentWidth - drawWidth) / 2;
+			const drawY = rowBottomY + (rowHeight - drawHeight) / 2;
 
 			page.drawImage(asset.image, {
 				x: drawX,
@@ -620,55 +597,66 @@ export async function generateProductPDFExport(productData: Product) {
 			drawHeader();
 
 			let dataRowCount = 0;
-			rows.forEach((row) => {
-				const rowHeight = row.isImageRow ? TABLE_IMAGE_ROW_HEIGHT : TABLE_ROW_HEIGHT;
+			for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+				const row = rows[rowIndex];
+				const rowHeight = row.isImageRow ? getImageRowHeight(row) : TABLE_ROW_HEIGHT;
 
-				if (y < MARGIN + BOTTOM_PADDING + rowHeight) {
+				const nextRow = rows[rowIndex + 1];
+				const isDataRowWithImageBelow = !row.isImageRow && Boolean(nextRow?.isImageRow);
+				const pairedImageHeight = isDataRowWithImageBelow ? getImageRowHeight(nextRow) : 0;
+				const requiredHeight = rowHeight + pairedImageHeight;
+
+				if (y < MARGIN + BOTTOM_PADDING + requiredHeight) {
 					addNewPage();
 					drawHeader();
 				}
 
-				if (!row.isImageRow && dataRowCount % 2 === 1) {
+				if (row.isImageRow) {
 					page.drawRectangle({
 						x: MARGIN,
 						y: y - rowHeight,
 						width: CONTENT_WIDTH,
 						height: rowHeight,
-						color: rgb(0.96, 0.96, 0.96),
-					});
-				}
-
-				const normalizedCells = normalizeTableRow(row, headers.length);
-				let currentX = MARGIN;
-
-				normalizedCells.forEach((cell, colIndex) => {
-					const cellWidth = colWidths[colIndex];
-					page.drawRectangle({
-						x: currentX,
-						y: y - rowHeight,
-						width: cellWidth,
-						height: rowHeight,
 						borderColor: BORDER_COLOR,
 						borderWidth: 0.5,
 					});
 
-					if (row.isImageRow) {
-						if (cell.imageUrl) {
-							const asset = embeddedAssetMap.get(cell.imageUrl) || {
-								placeholderText: "Image unavailable",
-							};
-							drawImageInCell(asset, currentX, y, cellWidth, rowHeight);
-						}
-					} else {
-						drawTextInCell(cell.text || "", currentX, y, cellWidth, rowHeight);
+					const asset = row.imageUrl
+						? embeddedAssetMap.get(row.imageUrl) || { placeholderText: "Image unavailable" }
+						: { placeholderText: "Image unavailable" };
+					drawImageInRow(asset, y, rowHeight);
+				} else {
+					if (dataRowCount % 2 === 1) {
+						page.drawRectangle({
+							x: MARGIN,
+							y: y - rowHeight,
+							width: CONTENT_WIDTH,
+							height: rowHeight,
+							color: rgb(0.96, 0.96, 0.96),
+						});
 					}
 
-					currentX += cellWidth;
-				});
+					const normalizedCells = normalizeTableRow(row, headers.length);
+					let currentX = MARGIN;
+					normalizedCells.forEach((cell, colIndex) => {
+						const cellWidth = colWidths[colIndex];
+						page.drawRectangle({
+							x: currentX,
+							y: y - rowHeight,
+							width: cellWidth,
+							height: rowHeight,
+							borderColor: BORDER_COLOR,
+							borderWidth: 0.5,
+						});
+
+						drawTextInCell(cell.text || "", currentX, y, cellWidth, rowHeight);
+						currentX += cellWidth;
+					});
+					dataRowCount += 1;
+				}
 
 				y -= rowHeight;
-				if (!row.isImageRow) dataRowCount += 1;
-			});
+			}
 
 			y -= TABLE_BOTTOM_SPACING;
 		};
@@ -696,12 +684,11 @@ export async function generateProductPDFExport(productData: Product) {
 		drawTable(
 			"Label Components",
 			[
-				{ label: "Component #", widthPct: 0.1 },
-				{ label: "Image", widthPct: 0.18 },
-				{ label: "Description", widthPct: 0.28 },
-				{ label: "Label Type", widthPct: 0.16 },
+				{ label: "Component #", widthPct: 0.14 },
+				{ label: "Description", widthPct: 0.38 },
+				{ label: "Label Type", widthPct: 0.18 },
 				{ label: "Dimensions", widthPct: 0.14 },
-				{ label: "Component Type", widthPct: 0.14 },
+				{ label: "Component Type", widthPct: 0.16 },
 			],
 			labelComponentsRows,
 			true,
@@ -710,10 +697,9 @@ export async function generateProductPDFExport(productData: Product) {
 		drawTable(
 			"Symbols",
 			[
-				{ label: "Name", widthPct: 0.25 },
-				{ label: "Image", widthPct: 0.25 },
-				{ label: "Text Present", widthPct: 0.25 },
-				{ label: "Label Presence", widthPct: 0.25 },
+				{ label: "Name", widthPct: 0.34 },
+				{ label: "Text Present", widthPct: 0.22 },
+				{ label: "Label Presence", widthPct: 0.44 },
 			],
 			symbolsRows,
 			true,
@@ -722,10 +708,9 @@ export async function generateProductPDFExport(productData: Product) {
 		drawTable(
 			"Schematics",
 			[
-				{ label: "Name", widthPct: 0.2 },
-				{ label: "Image", widthPct: 0.2 },
-				{ label: "Label Presence", widthPct: 0.25 },
-				{ label: "Description", widthPct: 0.35 },
+				{ label: "Name", widthPct: 0.22 },
+				{ label: "Label Presence", widthPct: 0.28 },
+				{ label: "Description", widthPct: 0.5 },
 			],
 			schematicsRows,
 			true,
@@ -734,11 +719,10 @@ export async function generateProductPDFExport(productData: Product) {
 		drawTable(
 			"Barcodes",
 			[
-				{ label: "Type", widthPct: 0.18 },
-				{ label: "Image", widthPct: 0.18 },
-				{ label: "Label Presence", widthPct: 0.22 },
-				{ label: "Count", widthPct: 0.1 },
-				{ label: "Description", widthPct: 0.32 },
+				{ label: "Type", widthPct: 0.24 },
+				{ label: "Label Presence", widthPct: 0.24 },
+				{ label: "Count", widthPct: 0.12 },
+				{ label: "Description", widthPct: 0.4 },
 			],
 			barcodesRows,
 			true,
@@ -747,10 +731,9 @@ export async function generateProductPDFExport(productData: Product) {
 		drawTable(
 			"Other Components",
 			[
-				{ label: "Name", widthPct: 0.2 },
-				{ label: "Image", widthPct: 0.2 },
-				{ label: "Label Presence", widthPct: 0.25 },
-				{ label: "Description", widthPct: 0.35 },
+				{ label: "Name", widthPct: 0.24 },
+				{ label: "Label Presence", widthPct: 0.26 },
+				{ label: "Description", widthPct: 0.5 },
 			],
 			otherComponentsRows,
 			true,
@@ -767,10 +750,9 @@ export async function generateProductPDFExport(productData: Product) {
 		drawTable(
 			"Label Tags",
 			[
-				{ label: "Name", widthPct: 0.18 },
-				{ label: "Description", widthPct: 0.34 },
-				{ label: "Type", widthPct: 0.18 },
-				{ label: "Tagged Image", widthPct: 0.3 },
+				{ label: "Name", widthPct: 0.22 },
+				{ label: "Description", widthPct: 0.52 },
+				{ label: "Type", widthPct: 0.26 },
 			],
 			labelTagsRows,
 			true,
@@ -779,14 +761,16 @@ export async function generateProductPDFExport(productData: Product) {
 		const totalPages = pages.length;
 		pages.forEach((p, index) => {
 			const pageNumberText = `${index + 1} of ${totalPages}`;
-			const topMetaY = PAGE_HEIGHT - MARGIN + 5;
-			const pageNumberWidth = fontRegular.widthOfTextAtSize(pageNumberText, 10);
+			const headerLineY = PAGE_HEIGHT - MARGIN - HEADER_LINE_OFFSET;
+			const headerBandHeight = PAGE_HEIGHT - headerLineY;
+			const topMetaY = headerLineY + (headerBandHeight - HEADER_FONT_SIZE) / 2;
+			const pageNumberWidth = fontRegular.widthOfTextAtSize(pageNumberText, HEADER_FONT_SIZE);
 			const maxProductNameWidth = Math.max(120, PAGE_WIDTH - MARGIN * 2 - pageNumberWidth - 20);
 
 			let headerProductName = productName;
 			while (
 				headerProductName.length > 3 &&
-				fontRegular.widthOfTextAtSize(`${headerProductName}...`, 10) > maxProductNameWidth
+				fontRegular.widthOfTextAtSize(`${headerProductName}...`, HEADER_FONT_SIZE) > maxProductNameWidth
 			) {
 				headerProductName = headerProductName.slice(0, -1);
 			}
@@ -795,7 +779,7 @@ export async function generateProductPDFExport(productData: Product) {
 			p.drawText(headerProductName, {
 				x: MARGIN,
 				y: topMetaY,
-				size: 10,
+				size: HEADER_FONT_SIZE,
 				font: fontRegular,
 				color: TOP_META_TEXT_COLOR,
 			});
@@ -803,14 +787,14 @@ export async function generateProductPDFExport(productData: Product) {
 			p.drawText(pageNumberText, {
 				x: PAGE_WIDTH - MARGIN - pageNumberWidth,
 				y: topMetaY,
-				size: 10,
+				size: HEADER_FONT_SIZE,
 				font: fontRegular,
 				color: TOP_META_TEXT_COLOR,
 			});
 
 			p.drawLine({
-				start: { x: MARGIN, y: PAGE_HEIGHT - MARGIN },
-				end: { x: PAGE_WIDTH - MARGIN, y: PAGE_HEIGHT - MARGIN },
+				start: { x: MARGIN, y: headerLineY },
+				end: { x: PAGE_WIDTH - MARGIN, y: headerLineY },
 				thickness: 0.5,
 				color: rgb(0.85, 0.85, 0.85),
 			});
