@@ -51,10 +51,9 @@ Phase 2 — Infra (SQS + Worker + IAM + Retry Policy)
   - Add any new envs needed for local testing defaults
 ---
 Phase 3 — Enqueue + Status + Download APIs (Product only)
-- Repurpose/Modify src/controllers/products/exportProductPDF.ts
-  - Change from direct file response to enqueue job flow for PDF
-- Repurpose/Modify src/controllers/products/exportProductExcel.ts
-  - Change from direct file response to enqueue job flow for Excel
+- Create src/controllers/products/enqueueProductExport.ts
+  - Single enqueue endpoint for both formats via request body format field
+  - format accepted values: pdf, excel
 - Create src/controllers/products/getProductExportJob.ts
   - GET /products/exports/jobs/{jobId}
   - Owner-only access; return job status/detail
@@ -65,12 +64,19 @@ Phase 3 — Enqueue + Status + Download APIs (Product only)
   - GET /products/exports/jobs/{jobId}/download
   - Only when completed; return signed URL/redirect
 - Modify template.yaml
-  - Route mappings:
-    - POST /products/{productId}/exports/pdf
-    - POST /products/{productId}/exports/excel
+  - Remove old sync export Lambda routes/functions:
+    - GET /products/{productId}/export/pdf
+    - GET /products/{productId}/export/excel
+  - Add consolidated enqueue function/route:
+    - POST /products/{productId}/exports
+  - Add status/download routes:
     - GET /products/exports/jobs
     - GET /products/exports/jobs/{jobId}
     - GET /products/exports/jobs/{jobId}/download
+- Add utility files
+  - src/utils/exportQueue.ts
+  - src/utils/authenticatedUser.ts
+  - src/utils/exportJobSerializers.ts
 - Security checks in these controllers
   - Validate product exists
   - Validate requester is allowed (resolve user by auth.payload.sub -> user/workspace and match product workspace)
@@ -107,10 +113,10 @@ Phase 4 — Worker + Export Engine Hardening (Timeout/Memory + Retries)
 ---
 Phase 5 — Frontend API Migration + Polling UX + Notifications
 - Modify hooks/product/useExportProductPDF.ts
-  - Switch to enqueue POST /api/products/{productId}/exports/pdf
+  - Switch to enqueue POST /api/products/{productId}/exports with format: pdf
   - Return { jobId, status }, not blob download
 - Modify hooks/product/useExportProductExcel.ts
-  - Switch to enqueue POST /api/products/{productId}/exports/excel
+  - Switch to enqueue POST /api/products/{productId}/exports with format: excel
 - Create hooks/product/useGetProductExportJobs.ts
   - Poll list endpoint; refetchInterval when jobs in queued/processing
 - Create hooks/product/useGetProductExportJob.ts
@@ -163,3 +169,8 @@ Phase 6 — Validation Checklist (before coding reports later)
   - Completed/failed toasts appear once
   - Download button works only for completed jobs
 ---
+
+Implementation progress
+- Phase 1 complete
+- Phase 2 complete
+- Phase 3 complete
