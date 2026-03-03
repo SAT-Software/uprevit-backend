@@ -606,6 +606,15 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/exportProductExcel.lambdaHandler
+      Environment:
+        Variables:
+          EXPORT_JOB_QUEUE_URL: !Ref ProductExportJobQueue
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !GetAtt ProductExportJobQueue.Arn
       Events:
         ExportProductExcel:
           Type: Api
@@ -623,6 +632,15 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/exportProductPDF.lambdaHandler
+      Environment:
+        Variables:
+          EXPORT_JOB_QUEUE_URL: !Ref ProductExportJobQueue
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !GetAtt ProductExportJobQueue.Arn
       Events:
         ExportProductPDF:
           Type: Api
@@ -634,6 +652,63 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/exportProductPDF.ts]
+
+  ProductExportJobDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-product-export-job-dlq"
+      MessageRetentionPeriod: 1209600
+
+  ProductExportJobQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-product-export-job-queue"
+      VisibilityTimeout: 960
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ProductExportJobDLQ.Arn
+        maxReceiveCount: 4
+
+  ProcessProductExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/exports/processExportJob.lambdaHandler
+      Timeout: 900
+      MemorySize: 3072
+      Environment:
+        Variables:
+          EXPORTS_PREFIX: exports
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:ReceiveMessage
+                - sqs:DeleteMessage
+                - sqs:GetQueueAttributes
+                - sqs:ChangeMessageVisibility
+              Resource: !GetAtt ProductExportJobQueue.Arn
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/exports/*"
+      Events:
+        ProductExportQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ProductExportJobQueue.Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/exports/processExportJob.ts]
 
   # ──────────────────────────────────────────────────────────────────────────
   # AUDIT LOGS V2
