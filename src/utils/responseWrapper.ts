@@ -38,6 +38,15 @@ export class ResponseWrapper {
 	}
 
 	/**
+	 * Creates a 202 Accepted response
+	 * @param {ResponseData} data - The response data to include in the body
+	 * @return {APIGatewayProxyResult} APIGatewayProxyResult with 202 status code
+	 */
+	static accepted(data: ResponseData = {}): APIGatewayProxyResult {
+		return this.success(data, StatusCodes.ACCEPTED);
+	}
+
+	/**
 	 * Creates a 400 Bad Request response
 	 * @param {string} message - Error message describing the bad request
 	 * @param {ResponseData} additionalData - Additional data to include in the response
