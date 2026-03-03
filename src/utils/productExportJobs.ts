@@ -6,6 +6,7 @@ import {
 	type ExportJobFormat,
 	EXPORT_JOB_STATUSES,
 	type ExportJobStatus,
+	type ExportJobTarget,
 } from '../models/exportJob';
 import { getDb } from './db';
 
@@ -234,27 +235,41 @@ export const markProductExportJobFailed = async ({
 export const getProductExportJobByIdForUser = async ({
 	jobId,
 	requestedBySub,
+	target,
 }: {
 	jobId: ObjectId;
 	requestedBySub: string;
+	target?: ExportJobTarget;
 }): Promise<ExportJobDocument | null> => {
 	const collection = await getCollection();
 
-	return collection.findOne({
+	const query: {
+		_id: ObjectId;
+		requestedBySub: string;
+		target?: ExportJobTarget;
+	} = {
 		_id: jobId,
 		requestedBySub,
-	});
+	};
+
+	if (target) {
+		query.target = target;
+	}
+
+	return collection.findOne(query);
 };
 
 export const listProductExportJobsForUser = async ({
 	requestedBySub,
 	workspaceId,
+	target,
 	statuses,
 	page,
 	limit,
 }: {
 	requestedBySub: string;
 	workspaceId?: ObjectId;
+	target?: ExportJobTarget;
 	statuses?: ExportJobStatus[];
 	page?: number;
 	limit?: number;
@@ -275,6 +290,7 @@ export const listProductExportJobsForUser = async ({
 	const query: {
 		requestedBySub: string;
 		workspaceId?: ObjectId;
+		target?: ExportJobTarget;
 		status?: { $in: ExportJobStatus[] };
 	} = {
 		requestedBySub,
@@ -282,6 +298,10 @@ export const listProductExportJobsForUser = async ({
 
 	if (workspaceId) {
 		query.workspaceId = workspaceId;
+	}
+
+	if (target) {
+		query.target = target;
 	}
 
 	if (statuses?.length) {

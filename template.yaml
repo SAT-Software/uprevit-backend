@@ -601,11 +601,11 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/getAllProductVersions.ts]
 
-  ExportProductExcelFunction:
+  EnqueueProductExportFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
-      Handler: controllers/products/exportProductExcel.lambdaHandler
+      Handler: controllers/products/enqueueProductExport.lambdaHandler
       Environment:
         Variables:
           EXPORT_JOB_QUEUE_URL: !Ref ProductExportJobQueue
@@ -616,42 +616,73 @@ Resources:
                 - sqs:SendMessage
               Resource: !GetAtt ProductExportJobQueue.Arn
       Events:
-        ExportProductExcel:
+        EnqueueProductExport:
           Type: Api
           Properties:
-            Path: /products/{productId}/export/excel
-            Method: get
+            Path: /products/{productId}/exports
+            Method: post
     Metadata:
       <<: *EsbuildBase
       BuildProperties:
         <<: *EsbuildProps
-        EntryPoints: [controllers/products/exportProductExcel.ts]
+        EntryPoints: [controllers/products/enqueueProductExport.ts]
 
-  ExportProductPDFFunction:
+  GetProductExportJobsFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
-      Handler: controllers/products/exportProductPDF.lambdaHandler
-      Environment:
-        Variables:
-          EXPORT_JOB_QUEUE_URL: !Ref ProductExportJobQueue
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - sqs:SendMessage
-              Resource: !GetAtt ProductExportJobQueue.Arn
+      Handler: controllers/products/getProductExportJobs.lambdaHandler
       Events:
-        ExportProductPDF:
+        GetProductExportJobs:
           Type: Api
           Properties:
-            Path: /products/{productId}/export/pdf
+            Path: /products/exports/jobs
             Method: get
     Metadata:
       <<: *EsbuildBase
       BuildProperties:
         <<: *EsbuildProps
-        EntryPoints: [controllers/products/exportProductPDF.ts]
+        EntryPoints: [controllers/products/getProductExportJobs.ts]
+
+  GetProductExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getProductExportJob.lambdaHandler
+      Events:
+        GetProductExportJob:
+          Type: Api
+          Properties:
+            Path: /products/exports/jobs/{jobId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getProductExportJob.ts]
+
+  DownloadProductExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/downloadProductExportJob.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/exports/*"
+      Events:
+        DownloadProductExportJob:
+          Type: Api
+          Properties:
+            Path: /products/exports/jobs/{jobId}/download
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/downloadProductExportJob.ts]
 
   ProductExportJobDLQ:
     Type: AWS::SQS::Queue
