@@ -5,7 +5,7 @@ import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
 import { logError } from '../../utils/logger';
 import { getProductExportJobByIdForUser } from '../../utils/productExportJobs';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { createPresignedGetUrl } from '../../utils/s3-storage';
+import { createExportPresignedGetUrl } from '../../utils/s3-storage';
 import { validateAllObjectIds } from '../../utils/validationUtils';
 
 /**
@@ -54,7 +54,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Export file has expired');
 		}
 
-		const downloadUrl = await createPresignedGetUrl(job.s3Key);
+		const downloadUrl = await createExportPresignedGetUrl(job.s3Key);
 
 		return ResponseWrapper.success({
 			message: 'Export download URL generated successfully',

@@ -20,6 +20,7 @@ const HEADER_FONT_SIZE = 10;
 const HEADER_LINE_OFFSET = 4;
 const IMAGE_ROW_SIDE_PADDING = 10;
 const MIN_IMAGE_ROW_HEIGHT = 48;
+const IMAGE_EMBED_CONCURRENCY = 5;
 const AVAILABLE_PAGE_CONTENT_HEIGHT = PAGE_HEIGHT - MARGIN * 2 - TOP_HEADER_HEIGHT - BOTTOM_PADDING;
 const MAX_IMAGE_ROW_HEIGHT = Math.floor(AVAILABLE_PAGE_CONTENT_HEIGHT * 0.65);
 
@@ -226,7 +227,7 @@ const embedImageAsset = async (
 	pdfDoc: PDFDocument,
 	url: string,
 ): Promise<EmbeddedAsset> => {
-	if (isLikelyWebpUrl(url)) return { placeholderText: "WEBP not supported" };
+	if (isLikelyWebpUrl(url)) return { placeholderText: "Image format not supported" };
 
 	try {
 		const response = await fetch(url);
@@ -235,7 +236,7 @@ const embedImageAsset = async (
 		const bytes = new Uint8Array(await response.arrayBuffer());
 		const format = getImageFormat(bytes, response.headers.get("content-type"), url);
 
-		if (format === "webp") return { placeholderText: "WEBP not supported" };
+		if (format === "webp") return { placeholderText: "Image format not supported" };
 		if (format === "png") return { image: await pdfDoc.embedPng(bytes) };
 		if (format === "jpg") return { image: await pdfDoc.embedJpg(bytes) };
 
@@ -250,9 +251,16 @@ const preloadEmbeddedAssets = async (
 	urls: string[],
 ): Promise<Map<string, EmbeddedAsset>> => {
 	const uniqueUrls = [...new Set(urls.filter(Boolean))];
-	const entries = await Promise.all(
-		uniqueUrls.map(async (url) => [url, await embedImageAsset(pdfDoc, url)] as const),
-	);
+	const entries: Array<readonly [string, EmbeddedAsset]> = [];
+
+	for (let i = 0; i < uniqueUrls.length; i += IMAGE_EMBED_CONCURRENCY) {
+		const chunk = uniqueUrls.slice(i, i + IMAGE_EMBED_CONCURRENCY);
+		const chunkEntries = await Promise.all(
+			chunk.map(async (url) => [url, await embedImageAsset(pdfDoc, url)] as const),
+		);
+		entries.push(...chunkEntries);
+	}
+
 	return new Map(entries);
 };
 

@@ -3,10 +3,12 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import crypto from "node:crypto";
 
 const region = process.env.AWS_REGION;
-const bucket = process.env.UPLOADS_BUCKET;
+const uploadsBucket = process.env.UPLOADS_BUCKET;
+const exportsBucket = process.env.EXPORTS_BUCKET;
 
 if (!region) throw new Error("Missing required environment variable: AWS_REGION");
-if (!bucket) throw new Error("Missing required environment variable: UPLOADS_BUCKET");
+if (!uploadsBucket) throw new Error("Missing required environment variable: UPLOADS_BUCKET");
+if (!exportsBucket) throw new Error("Missing required environment variable: EXPORTS_BUCKET");
 
 const parsePositiveInteger = (value: string | undefined, fallback: number): number => {
 	const parsed = Number.parseInt(value ?? "", 10);
@@ -24,7 +26,7 @@ export const createPresignedUrl = async (filename: string, contentType: string) 
 	const key = `uploads/${crypto.randomUUID()}-${safeFilename}`;
 
 	const command = new PutObjectCommand({
-		Bucket: bucket,
+		Bucket: uploadsBucket,
 		Key: key,
 		ContentType: contentType,
 	});
@@ -36,7 +38,7 @@ export const createPresignedUrl = async (filename: string, contentType: string) 
 
 export const createPresignedGetUrl = async (key: string) => {
 	const command = new GetObjectCommand({
-		Bucket: bucket,
+		Bucket: uploadsBucket,
 		Key: key,
 	});
 
@@ -50,10 +52,38 @@ export const deleteObjectByKey = async (key: string) => {
 
 	await client.send(
 		new DeleteObjectCommand({
-			Bucket: bucket,
+			Bucket: uploadsBucket,
 			Key: key,
 		}),
 	);
+};
+
+type UploadObjectInput = {
+	key: string;
+	body: Uint8Array | Buffer;
+	contentType: string;
+};
+
+export const uploadExportObjectByKey = async ({ key, body, contentType }: UploadObjectInput): Promise<void> => {
+	await client.send(
+		new PutObjectCommand({
+			Bucket: exportsBucket,
+			Key: key,
+			Body: body,
+			ContentType: contentType,
+		}),
+	);
+};
+
+export const createExportPresignedGetUrl = async (key: string): Promise<string> => {
+	const command = new GetObjectCommand({
+		Bucket: exportsBucket,
+		Key: key,
+	});
+
+	const url = await getSignedUrl(client, command, { expiresIn: VIEW_URL_EXPIRES_IN_SECONDS });
+
+	return url;
 };
 
 const normalizeKey = (key: unknown): string | null => {

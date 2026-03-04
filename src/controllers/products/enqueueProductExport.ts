@@ -18,30 +18,29 @@ import { validateAllObjectIds } from '../../utils/validationUtils';
 import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
 
 /**
- * Queues a product export job for asynchronous processing.
+ * Queues a product export job from request body format.
  * @param {APIGatewayProxyEvent} event - API Gateway request event
- * @param {ExportJobFormat} format - Export format (`pdf` or `excel`)
  * @return {Promise<APIGatewayProxyResult>} Accepted response with job id
  */
-export const enqueueProductExport = async (
-	event: APIGatewayProxyEvent,
-	format: ExportJobFormat,
-): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+	if (!event.body) {
+		return ResponseWrapper.badRequest('Request body is required');
+	}
+
+	const body = JSON.parse(event.body);
+
+	if (typeof body.format !== 'string' || !EXPORT_JOB_FORMATS.includes(body.format as ExportJobFormat)) {
+		return ResponseWrapper.badRequest(`Request body must include 'format' and must be one of: ${EXPORT_JOB_FORMATS.join(', ')}`);
+	}
+
+	const format = body.format as ExportJobFormat;
+
 	try {
 		const auth = await authenticateRequest(event);
 		if (!auth.isValid) return auth.error;
 
-		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
-	
-		const body = JSON.parse(event.body);
-
-		if (typeof body.format !== 'string' || !EXPORT_JOB_FORMATS.includes(body.format as ExportJobFormat)) {
-			return ResponseWrapper.badRequest(`Request body must include 'format' and must be one of: ${EXPORT_JOB_FORMATS.join(', ')}`);
-		}
-
 		const productId = event.pathParameters?.productId;
 		if (!productId) return ResponseWrapper.badRequest("Product id - 'productId' is required in path parameters");
-
 
 		const validationError = validateAllObjectIds({ productId });
 		if (validationError) return validationError;

@@ -24,6 +24,10 @@ Parameters:
     Type: String
     Description: "S3 bucket name for uploaded files"
     Default: "uprevit-storage-dev-and-test"
+  ExportsBucket:
+    Type: String
+    Description: "S3 bucket name for generated export files"
+    Default: "uprevit-exports-dev-and-test"
 
 # ──────────────────────────────────────────────────────────────────────────
 # TOP-LEVEL METADATA  – YAML anchor for the build recipe
@@ -54,6 +58,7 @@ Globals:
         USER_POOL_ID: !Ref UserPoolId
         CLIENT_ID: !Ref ClientId
         UPLOADS_BUCKET: !Ref UploadsBucket
+        EXPORTS_BUCKET: !Ref ExportsBucket
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
@@ -671,7 +676,7 @@ Resources:
             - Effect: Allow
               Action:
                 - s3:GetObject
-              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/exports/*"
+              Resource: !Sub "arn:aws:s3:::${ExportsBucket}/*"
       Events:
         DownloadProductExportJob:
           Type: Api
@@ -709,6 +714,7 @@ Resources:
       Environment:
         Variables:
           EXPORTS_PREFIX: exports
+          EXPORT_JOB_MAX_RECEIVE_COUNT: 4
       Policies:
         - Statement:
             - Effect: Allow
@@ -726,7 +732,7 @@ Resources:
               Action:
                 - s3:PutObject
                 - s3:GetObject
-              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/exports/*"
+              Resource: !Sub "arn:aws:s3:::${ExportsBucket}/*"
       Events:
         ProductExportQueueEvent:
           Type: SQS

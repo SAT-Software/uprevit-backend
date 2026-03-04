@@ -49,6 +49,11 @@ Phase 2 — Infra (SQS + Worker + IAM + Retry Policy)
   - Add dependency: @aws-sdk/client-sqs
 - Optional (if used in local runs) Modify env.json
   - Add any new envs needed for local testing defaults
+- Use separate exports bucket
+  - Add dedicated `ExportsBucket` parameter (distinct from `UploadsBucket`)
+  - Set `EXPORTS_BUCKET` env var for functions
+  - Worker writes exports to `ExportsBucket`
+  - Download endpoint signs URLs from `ExportsBucket`
 ---
 Phase 3 — Enqueue + Status + Download APIs (Product only)
 - Create src/controllers/products/enqueueProductExport.ts
@@ -97,8 +102,8 @@ Phase 4 — Worker + Export Engine Hardening (Timeout/Memory + Retries)
   - Worker orchestration helpers (format switch, retryability classification, filename generation)
 - Modify src/utils/s3-storage.ts
   - Add helper(s):
-  - upload buffer to exports prefix
-  - generate signed download URL for export object
+  - upload buffer to exports bucket
+  - generate signed download URL for export object from exports bucket
 - Modify src/utils/exportPDF.ts
   - Replace WebP placeholder text from WEBP not supported -> Image format not supported
   - Keep export running (do not fail whole job)
@@ -174,3 +179,4 @@ Implementation progress
 - Phase 1 complete
 - Phase 2 complete
 - Phase 3 complete
+- Phase 4 in progress
