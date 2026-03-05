@@ -28,6 +28,10 @@ Parameters:
     Type: String
     Description: "S3 bucket name for generated export files"
     Default: "uprevit-exports-dev-and-test"
+  ExportJobQueueUrl:
+    Type: String
+    Description: "Optional explicit SQS queue URL override for local/dev"
+    Default: ""
 
 # ──────────────────────────────────────────────────────────────────────────
 # TOP-LEVEL METADATA  – YAML anchor for the build recipe
@@ -65,6 +69,10 @@ Globals:
 
   Api:
     TracingEnabled: true
+
+Conditions:
+  HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]
+
 Resources:
   HelloWorldFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -613,7 +621,7 @@ Resources:
       Handler: controllers/products/enqueueProductExport.lambdaHandler
       Environment:
         Variables:
-          EXPORT_JOB_QUEUE_URL: !Ref ProductExportJobQueue
+          EXPORT_JOB_QUEUE_URL: !If [HasExportJobQueueUrl, !Ref ExportJobQueueUrl, !Ref ProductExportJobQueue]
       Policies:
         - Statement:
             - Effect: Allow

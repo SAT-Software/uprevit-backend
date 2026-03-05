@@ -75,10 +75,22 @@ export const uploadExportObjectByKey = async ({ key, body, contentType }: Upload
 	);
 };
 
-export const createExportPresignedGetUrl = async (key: string): Promise<string> => {
+const buildAttachmentDisposition = (fileName: string): string => {
+	const sanitized = fileName.replace(/[\r\n"]/g, "_").trim();
+	const safeFileName = sanitized || "export";
+	const encoded = encodeURIComponent(safeFileName);
+
+	return `attachment; filename="${safeFileName}"; filename*=UTF-8''${encoded}`;
+};
+
+export const createExportPresignedGetUrl = async (
+	key: string,
+	fileName?: string,
+): Promise<string> => {
 	const command = new GetObjectCommand({
 		Bucket: exportsBucket,
 		Key: key,
+		...(fileName ? { ResponseContentDisposition: buildAttachmentDisposition(fileName) } : {}),
 	});
 
 	const url = await getSignedUrl(client, command, { expiresIn: VIEW_URL_EXPIRES_IN_SECONDS });

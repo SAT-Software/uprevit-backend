@@ -1,6 +1,7 @@
 {
-  "scripts": {
-    "start:local": "sam build --cached && AWS_PROFILE=uprevit-amit sam local start-api --parameter-overrides 'MongoDbUri=mongodb+srv://uprevit-testing:sat272011-uprevit@uprevit-test.bh21hmu.mongodb.net/?retryWrites=true&w=majority&appName=Uprevit-test DbName=uprevit-test UserPoolId=us-east-1_mpuQjaoL2 ClientId=7vvr577cmdnbbo1qjv8e0m40nd'",
+	"scripts": {
+		"start:local": "AWS_PROFILE=uprevit-amit sam local start-api -t ../template.yaml --env-vars ../env.json --parameter-overrides 'MongoDbUri=mongodb+srv://uprevit-testing:sat272011-uprevit@uprevit-test.bh21hmu.mongodb.net/?retryWrites=true&w=majority&appName=Uprevit-test DbName=uprevit-test UserPoolId=us-east-1_mpuQjaoL2 ClientId=7vvr577cmdnbbo1qjv8e0m40nd UploadsBucket=uprevit-storage-dev-and-test ExportsBucket=exports-storage-dev-and-test ExportJobQueueUrl=https://sqs.us-east-1.amazonaws.com/940900040930/product-export-job-queue'",
+		"start:local:build": "sam build -t ../template.yaml --cached --parallel && AWS_PROFILE=uprevit-amit sam local start-api -t ../.aws-sam/build/template.yaml --env-vars ../env.json",
     "lint": "eslint controllers/**/*.ts utils/**/*.ts models/*.ts types/**/*.ts db/*.ts app.ts --no-ignore",
     "lint:fix": "eslint controllers/**/*.ts utils/**/*.ts models/*.ts types/**/*.ts db/*.ts app.ts --no-ignore --fix",
     "type-check": "tsc --noEmit",
