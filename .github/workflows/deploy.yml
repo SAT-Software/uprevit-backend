@@ -14,7 +14,7 @@ jobs:
   # Linting job - runs first and blocks deployment if code quality issues found
   lint:
     name: Lint Code
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     
     steps:
       - name: Checkout code
@@ -54,7 +54,7 @@ jobs:
   # Deploy job - only runs after linting passes
   deploy:
     name: Deploy to AWS
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     needs: lint
     
     permissions:
