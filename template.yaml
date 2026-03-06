@@ -27,7 +27,7 @@ Parameters:
   ExportsBucket:
     Type: String
     Description: "S3 bucket name for generated export files"
-    Default: "uprevit-exports-dev-and-test"
+    Default: "exports-storage-dev-and-test"
   ExportJobQueueUrl:
     Type: String
     Description: "Optional explicit SQS queue URL override for local/dev"
