@@ -27,6 +27,13 @@ const MAX_RECEIVE_COUNT = Number.isFinite(parsedMaxReceiveCount)
  */
 class NonRetryableExportJobError extends Error {}
 
+const NON_RETRYABLE_AWS_ERROR_NAMES = new Set([
+	'NoSuchBucket',
+	'AccessDenied',
+	'InvalidAccessKeyId',
+	'SignatureDoesNotMatch',
+]);
+
 type ExportArtifact = {
 	buffer: Buffer;
 	fileName: string;
@@ -44,6 +51,17 @@ const getReceiveCount = (record: SQSRecord): number => {
 const toFailureMessage = (error: unknown): string => {
 	if (error instanceof Error && error.message) return error.message;
 	return 'Export job failed';
+};
+
+const isNonRetryableError = (error: unknown): boolean => {
+	if (error instanceof NonRetryableExportJobError) return true;
+
+	if (!error || typeof error !== 'object') return false;
+
+	const errorName = (error as { name?: unknown }).name;
+	if (typeof errorName !== 'string') return false;
+
+	return NON_RETRYABLE_AWS_ERROR_NAMES.has(errorName);
 };
 
 const parseQueueMessage = (record: SQSRecord): ProcessableExportQueueMessage => {
@@ -187,7 +205,7 @@ export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> 
 				receiveCount,
 			});
 		} catch (error) {
-			const isNonRetryable = error instanceof NonRetryableExportJobError;
+			const isNonRetryable = isNonRetryableError(error);
 			const shouldStopRetry = isNonRetryable || receiveCount >= MAX_RECEIVE_COUNT;
 
 			if (parsedMessage?.jobId && shouldStopRetry && ObjectId.isValid(parsedMessage.jobId)) {

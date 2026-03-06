@@ -50,7 +50,9 @@ export const applyStandardStyling = (worksheet: any) => {
 		});
 	});
 
-	worksheet.columns.forEach((column: any) => {
+	const columns = Array.isArray(worksheet.columns) ? worksheet.columns : [];
+
+	columns.forEach((column: any) => {
 		let maxLength = 0;
 		if (column.header) {
 			maxLength = column.header.toString().length;
