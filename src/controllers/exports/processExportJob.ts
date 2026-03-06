@@ -14,7 +14,13 @@ import {
 import { uploadExportObjectByKey } from '../../utils/s3-storage';
 
 const EXPORTS_PREFIX = (process.env.EXPORTS_PREFIX || 'exports').replace(/^\/+|\/+$/g, '');
-const MAX_RECEIVE_COUNT = Number.parseInt(process.env.EXPORT_JOB_MAX_RECEIVE_COUNT ?? '4', 10);
+const DEFAULT_MAX_RECEIVE_COUNT = 4;
+const parsedMaxReceiveCount = Number.parseInt(process.env.EXPORT_JOB_MAX_RECEIVE_COUNT ?? '', 10);
+const MAX_RECEIVE_COUNT = Number.isFinite(parsedMaxReceiveCount)
+	&& Number.isInteger(parsedMaxReceiveCount)
+	&& parsedMaxReceiveCount > 0
+	? parsedMaxReceiveCount
+	: DEFAULT_MAX_RECEIVE_COUNT;
 
 /**
  * Error used for queue messages that should not be retried.

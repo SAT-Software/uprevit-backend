@@ -27,15 +27,31 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		return ResponseWrapper.badRequest('Request body is required');
 	}
 
-	const body = JSON.parse(event.body);
-
-	if (typeof body.format !== 'string' || !EXPORT_JOB_FORMATS.includes(body.format as ExportJobFormat)) {
-		return ResponseWrapper.badRequest(`Request body must include 'format' and must be one of: ${EXPORT_JOB_FORMATS.join(', ')}`);
-	}
-
-	const format = body.format as ExportJobFormat;
+	let format: ExportJobFormat | undefined;
 
 	try {
+		let parsedBody: unknown;
+		try {
+			parsedBody = JSON.parse(event.body);
+		} catch (error) {
+			if (error instanceof SyntaxError) {
+				return ResponseWrapper.badRequest('Request body contains invalid JSON');
+			}
+
+			throw error;
+		}
+
+		if (!parsedBody || typeof parsedBody !== 'object' || Array.isArray(parsedBody)) {
+			return ResponseWrapper.badRequest('Request body must be a JSON object');
+		}
+
+		const body = parsedBody as { format?: unknown };
+		if (typeof body.format !== 'string' || !EXPORT_JOB_FORMATS.includes(body.format as ExportJobFormat)) {
+			return ResponseWrapper.badRequest(`Request body must include 'format' and must be one of: ${EXPORT_JOB_FORMATS.join(', ')}`);
+		}
+
+		format = body.format as ExportJobFormat;
+
 		const auth = await authenticateRequest(event);
 		if (!auth.isValid) return auth.error;
 

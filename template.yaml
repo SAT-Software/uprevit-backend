@@ -707,10 +707,10 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "${AWS::StackName}-product-export-job-queue"
-      VisibilityTimeout: 960
+      VisibilityTimeout: 5400
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt ProductExportJobDLQ.Arn
-        maxReceiveCount: 4
+        maxReceiveCount: 5
 
   ProcessProductExportJobFunction:
     Type: AWS::Serverless::Function
@@ -722,7 +722,7 @@ Resources:
       Environment:
         Variables:
           EXPORTS_PREFIX: exports
-          EXPORT_JOB_MAX_RECEIVE_COUNT: 4
+          EXPORT_JOB_MAX_RECEIVE_COUNT: 5
       Policies:
         - Statement:
             - Effect: Allow

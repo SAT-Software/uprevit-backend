@@ -12,6 +12,7 @@ import { getDb } from './db';
 
 const DEFAULT_EXPORT_FILE_TTL_HOURS = 24;
 const EXPORT_JOBS_PAGE_LIMIT = 10;
+const TERMINAL_EXPORT_JOB_STATUSES: ExportJobStatus[] = ['completed', 'failed'];
 
 let hasEnsuredProductExportJobIndexes = false;
 
@@ -33,13 +34,17 @@ const toStatusArray = (
 
 const normalizePagination = ({
 	page,
-	limit: _limit,
+	limit,
 }: {
 	page?: number;
 	limit?: number;
 }) => {
-	const normalizedPage = Number.isFinite(page) && page && page > 0 ? Math.floor(page) : 1;
-	const normalizedLimit = EXPORT_JOBS_PAGE_LIMIT;
+	const normalizedPage = typeof page === 'number' && Number.isFinite(page) && page > 0
+		? Math.floor(page)
+		: 1;
+	const normalizedLimit = typeof limit === 'number' && Number.isFinite(limit) && limit > 0
+		? Math.min(EXPORT_JOBS_PAGE_LIMIT, Math.max(1, Math.floor(limit)))
+		: EXPORT_JOBS_PAGE_LIMIT;
 
 	return {
 		page: normalizedPage,
@@ -184,7 +189,10 @@ export const markProductExportJobCompleted = async ({
 	const now = completedAt ?? new Date();
 
 	return collection.findOneAndUpdate(
-		{ _id: jobId },
+		{
+			_id: jobId,
+			status: { $nin: TERMINAL_EXPORT_JOB_STATUSES },
+		},
 		{
 			$set: {
 				status: 'completed',
@@ -216,7 +224,10 @@ export const markProductExportJobFailed = async ({
 	const now = failedAt ?? new Date();
 
 	return collection.findOneAndUpdate(
-		{ _id: jobId },
+		{
+			_id: jobId,
+			status: { $nin: TERMINAL_EXPORT_JOB_STATUSES },
+		},
 		{
 			$set: {
 				status: 'failed',

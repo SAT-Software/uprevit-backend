@@ -88,7 +88,7 @@ Phase 3 — Enqueue + Status + Download APIs (Product only)
   - Only job creator can read/download job
 ---
 Phase 4 — Worker + Export Engine Hardening (Timeout/Memory + Retries)
-- Create src/controllers/products/processProductExportJob.ts
+- Create src/controllers/exports/processExportJob.ts
   - SQS Lambda handler:
   - parse queue message (jobId)
   - lock/claim queued job -> processing

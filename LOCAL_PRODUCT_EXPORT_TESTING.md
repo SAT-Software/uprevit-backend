@@ -25,8 +25,8 @@ Cause:
 
 - Docker running (required for `sam local ...`).
 - AWS profile with access to SQS + S3.
-- Existing SQS queue URL (example):
-  - `https://sqs.us-east-1.amazonaws.com/940900040930/product-export-job-queue`
+- Existing SQS queue URL (example placeholder):
+  - `<SQS_QUEUE_URL>`
 - Existing buckets:
   - uploads bucket (source images)
   - exports bucket (generated files)
@@ -45,17 +45,17 @@ In `env.json`, keep values under `Parameters` with SAM parameter names:
 
 ## Start Backend Locally
 
-From backend root:
+From your local backend repo root (or run the same npm script from your own project root/scripts):
 
 ```bash
-cd /Users/amit/Developer/Startup/uprevit-backend
+cd <project-root>
 npm run start:local
 ```
 
 If code/template changed and you need built artifacts for explicit invoke, run:
 
 ```bash
-AWS_PROFILE=uprevit-amit sam build -t template.yaml --cached --parallel
+AWS_PROFILE=<your-aws-profile> sam build -t template.yaml --cached --parallel
 ```
 
 ## End-to-End Local Test Flow
@@ -67,9 +67,15 @@ AWS_PROFILE=uprevit-amit sam build -t template.yaml --cached --parallel
 
 ### 2) Pull one message from SQS
 
+Set your queue URL once for the terminal session:
+
 ```bash
-AWS_PROFILE=uprevit-amit aws sqs receive-message \
-  --queue-url https://sqs.us-east-1.amazonaws.com/940900040930/product-export-job-queue \
+export SQS_QUEUE_URL="<SQS_QUEUE_URL>"
+```
+
+```bash
+AWS_PROFILE=<your-aws-profile> aws sqs receive-message \
+  --queue-url "$SQS_QUEUE_URL" \
   --max-number-of-messages 1 \
   --message-attribute-names All \
   --attribute-names All \
@@ -105,11 +111,11 @@ PY
 Use built template for worker invoke:
 
 ```bash
-AWS_PROFILE=uprevit-amit sam local invoke ProcessProductExportJobFunction \
+AWS_PROFILE=<your-aws-profile> sam local invoke ProcessProductExportJobFunction \
   -t .aws-sam/build/template.yaml \
   --event events/product-export-job.json \
   --env-vars env.json \
-  --parameter-overrides "MongoDbUri=<...> DbName=uprevit-test UserPoolId=<...> ClientId=<...> UploadsBucket=uprevit-storage-dev-and-test ExportsBucket=exports-storage-dev-and-test ExportJobQueueUrl=https://sqs.us-east-1.amazonaws.com/940900040930/product-export-job-queue"
+  --parameter-overrides "MongoDbUri=<...> DbName=<db-name> UserPoolId=<...> ClientId=<...> UploadsBucket=<uploads-bucket> ExportsBucket=<exports-bucket> ExportJobQueueUrl=$SQS_QUEUE_URL"
 ```
 
 ### 5) Validate output

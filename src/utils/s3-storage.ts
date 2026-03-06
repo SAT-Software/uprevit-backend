@@ -83,9 +83,18 @@ const buildAttachmentDisposition = (fileName: string): string => {
 	return `attachment; filename="${safeFileName}"; filename*=UTF-8''${encoded}`;
 };
 
+const normalizePresignedUrlTtl = (ttlSeconds?: number): number => {
+	const requestedTtl = typeof ttlSeconds === 'number' && Number.isFinite(ttlSeconds)
+		? Math.floor(ttlSeconds)
+		: VIEW_URL_EXPIRES_IN_SECONDS;
+
+	return Math.max(1, Math.min(requestedTtl, VIEW_URL_EXPIRES_IN_SECONDS));
+};
+
 export const createExportPresignedGetUrl = async (
 	key: string,
 	fileName?: string,
+	ttlSeconds?: number,
 ): Promise<string> => {
 	const command = new GetObjectCommand({
 		Bucket: exportsBucket,
@@ -93,7 +102,7 @@ export const createExportPresignedGetUrl = async (
 		...(fileName ? { ResponseContentDisposition: buildAttachmentDisposition(fileName) } : {}),
 	});
 
-	const url = await getSignedUrl(client, command, { expiresIn: VIEW_URL_EXPIRES_IN_SECONDS });
+	const url = await getSignedUrl(client, command, { expiresIn: normalizePresignedUrlTtl(ttlSeconds) });
 
 	return url;
 };

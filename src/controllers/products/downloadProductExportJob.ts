@@ -54,7 +54,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Export file has expired');
 		}
 
-		const downloadUrl = await createExportPresignedGetUrl(job.s3Key, job.fileName);
+		const secondsUntilExpiry = Math.floor((job.expiresAt.getTime() - Date.now()) / 1000);
+		const downloadUrl = await createExportPresignedGetUrl(job.s3Key, job.fileName, secondsUntilExpiry);
 
 		return ResponseWrapper.success({
 			message: 'Export download URL generated successfully',
