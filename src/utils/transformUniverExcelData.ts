@@ -22,7 +22,19 @@ interface TransformResult {
  * @return {TransformResult} Transformed data with sheets array containing name, data, and merges
  */
 export default function transformUniverExcelData(data: any): TransformResult {
-	const sheetsObj = data.workbook_data.sheets;
+	if (!data || typeof data !== 'object') {
+		return { sheets: [] };
+	}
+
+	const workbookData = data.workbook_data;
+	if (!workbookData || typeof workbookData !== 'object') {
+		return { sheets: [] };
+	}
+
+	const sheetsObj = workbookData.sheets;
+	if (!sheetsObj || typeof sheetsObj !== 'object') {
+		return { sheets: [] };
+	}
     
 	const sheets: TransformedSheet[] = Object.values(sheetsObj).map((sheet: any) => {
 		const cellData = sheet.cellData || {};
@@ -44,7 +56,8 @@ export default function transformUniverExcelData(data: any): TransformResult {
 		// Find max column across all rows
 		let maxCol = 0;
 		for (const rowIdx of rowIndices) {
-			const colIndices = Object.keys(cellData[rowIdx]).map(Number).filter(n => !isNaN(n));
+			const rowCells = cellData[rowIdx] || {};
+			const colIndices = Object.keys(rowCells).map(Number).filter(n => !isNaN(n));
 			if (colIndices.length > 0) {
 				maxCol = Math.max(maxCol, ...colIndices);
 			}

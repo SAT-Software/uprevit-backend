@@ -24,6 +24,14 @@ Parameters:
     Type: String
     Description: "S3 bucket name for uploaded files"
     Default: "uprevit-storage-dev-and-test"
+  ExportsBucket:
+    Type: String
+    Description: "S3 bucket name for generated export files"
+    Default: "uprevit-exports-dev-and-test"
+  ExportJobQueueUrl:
+    Type: String
+    Description: "Optional explicit SQS queue URL override for local/dev"
+    Default: ""
 
 # ──────────────────────────────────────────────────────────────────────────
 # TOP-LEVEL METADATA  – YAML anchor for the build recipe
@@ -54,12 +62,17 @@ Globals:
         USER_POOL_ID: !Ref UserPoolId
         CLIENT_ID: !Ref ClientId
         UPLOADS_BUCKET: !Ref UploadsBucket
+        EXPORTS_BUCKET: !Ref ExportsBucket
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
 
   Api:
     TracingEnabled: true
+
+Conditions:
+  HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]
+
 Resources:
   HelloWorldFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -601,39 +614,146 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/getAllProductVersions.ts]
 
-  ExportProductExcelFunction:
+  EnqueueProductExportFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
-      Handler: controllers/products/exportProductExcel.lambdaHandler
+      Handler: controllers/products/enqueueProductExport.lambdaHandler
+      Environment:
+        Variables:
+          EXPORT_JOB_QUEUE_URL: !If [HasExportJobQueueUrl, !Ref ExportJobQueueUrl, !Ref ProductExportJobQueue]
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !GetAtt ProductExportJobQueue.Arn
       Events:
-        ExportProductExcel:
+        EnqueueProductExport:
           Type: Api
           Properties:
-            Path: /products/{productId}/export/excel
-            Method: get
+            Path: /products/{productId}/exports
+            Method: post
     Metadata:
       <<: *EsbuildBase
       BuildProperties:
         <<: *EsbuildProps
-        EntryPoints: [controllers/products/exportProductExcel.ts]
+        EntryPoints: [controllers/products/enqueueProductExport.ts]
 
-  ExportProductPDFFunction:
+  GetProductExportJobsFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
-      Handler: controllers/products/exportProductPDF.lambdaHandler
+      Handler: controllers/products/getProductExportJobs.lambdaHandler
       Events:
-        ExportProductPDF:
+        GetProductExportJobs:
           Type: Api
           Properties:
-            Path: /products/{productId}/export/pdf
+            Path: /products/exports/jobs
             Method: get
     Metadata:
       <<: *EsbuildBase
       BuildProperties:
         <<: *EsbuildProps
-        EntryPoints: [controllers/products/exportProductPDF.ts]
+        EntryPoints: [controllers/products/getProductExportJobs.ts]
+
+  GetProductExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getProductExportJob.lambdaHandler
+      Events:
+        GetProductExportJob:
+          Type: Api
+          Properties:
+            Path: /products/exports/jobs/{jobId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getProductExportJob.ts]
+
+  DownloadProductExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/downloadProductExportJob.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${ExportsBucket}/*"
+      Events:
+        DownloadProductExportJob:
+          Type: Api
+          Properties:
+            Path: /products/exports/jobs/{jobId}/download
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/downloadProductExportJob.ts]
+
+  ProductExportJobDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-product-export-job-dlq"
+      MessageRetentionPeriod: 1209600
+
+  ProductExportJobQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-product-export-job-queue"
+      VisibilityTimeout: 5400
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ProductExportJobDLQ.Arn
+        maxReceiveCount: 5
+
+  ProcessProductExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/exports/processExportJob.lambdaHandler
+      Timeout: 900
+      MemorySize: 3072
+      Environment:
+        Variables:
+          EXPORTS_PREFIX: exports
+          EXPORT_JOB_MAX_RECEIVE_COUNT: 5
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:ReceiveMessage
+                - sqs:DeleteMessage
+                - sqs:GetQueueAttributes
+                - sqs:ChangeMessageVisibility
+              Resource: !GetAtt ProductExportJobQueue.Arn
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${ExportsBucket}/*"
+      Events:
+        ProductExportQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ProductExportJobQueue.Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/exports/processExportJob.ts]
 
   # ──────────────────────────────────────────────────────────────────────────
   # AUDIT LOGS V2
