@@ -718,7 +718,7 @@ Resources:
       CodeUri: src/
       Handler: controllers/exports/processExportJob.lambdaHandler
       Timeout: 900
-      MemorySize: 3072
+      MemorySize: 3008
       Environment:
         Variables:
           EXPORTS_PREFIX: exports
