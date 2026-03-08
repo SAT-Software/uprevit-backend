@@ -1,4 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { ObjectId } from 'mongodb';
 import type { ExportJobStatus } from '../../models/exportJob';
 import { authenticateRequest } from '../../utils/authUtils';
 import { toExportJobSummary } from '../../utils/exportJobSerializers';
@@ -36,7 +37,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const statusQuery = event.queryStringParameters?.status;
+		const targetIdQuery = event.queryStringParameters?.targetId;
 		let statuses: ExportJobStatus[] | undefined;
+		let targetId: ObjectId | undefined;
 
 		try {
 			statuses = parseStatusFilters(statusQuery);
@@ -44,10 +47,18 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest(error instanceof Error ? error.message : 'Invalid status filter');
 		}
 
-		const { jobs, pagination } = await listProductExportJobsForUser({
+		if (targetIdQuery) {
+			if (!ObjectId.isValid(targetIdQuery)) {
+				return ResponseWrapper.badRequest('targetId must be a valid id.');
+			}
+			targetId = new ObjectId(targetIdQuery);
+		}
+
+		const { jobs, pagination, hasActiveJobs, activeJobsCount } = await listProductExportJobsForUser({
 			requestedBySub: cognitoSub,
 			workspaceId: userContext.workspaceId,
 			target: 'product',
+			targetId,
 			statuses,
 			page,
 		});
@@ -56,6 +67,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			message: 'Product export jobs fetched successfully',
 			result: {
 				jobs: jobs.map(toExportJobSummary),
+				hasActiveJobs,
+				activeJobsCount,
 				pagination,
 			},
 		});

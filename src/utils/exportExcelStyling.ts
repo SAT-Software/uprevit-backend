@@ -44,7 +44,7 @@ export const applyStandardStyling = (worksheet: any) => {
 	worksheet.eachRow((row: any, rowNumber: number) => {
 		if (rowNumber === 1) return; // Skip header row (already styled)
 
-		row.eachCell({ includeEmpty: false }, (cell: any) => {
+		row.eachCell({ includeEmpty: true }, (cell: any) => {
 			cell.border = borderStyle;
 			cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
 		});
@@ -53,6 +53,8 @@ export const applyStandardStyling = (worksheet: any) => {
 	const columns = Array.isArray(worksheet.columns) ? worksheet.columns : [];
 
 	columns.forEach((column: any) => {
+		if (typeof column.width === 'number' && column.width > 0) return;
+
 		let maxLength = 0;
 		if (column.header) {
 			maxLength = column.header.toString().length;
