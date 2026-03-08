@@ -55,6 +55,8 @@ export interface ReportsExportRequest {
     };
 }
 
+export type PersistedReportExportRequest = Pick<ReportsExportRequest, 'conditions' | 'conditionLogic' | 'sort'>;
+
 export const TAB_CONFIG: Record<string, { path: string; isArray: boolean }> = {
 	product_information: {
 		path: 'product_information.data',

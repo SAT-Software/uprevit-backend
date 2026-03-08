@@ -1098,6 +1098,89 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/reports/reportsQuery.ts]
 
+  EnqueueReportExportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/enqueueReportExport.lambdaHandler
+      Environment:
+        Variables:
+          EXPORT_JOB_QUEUE_URL: !If [HasExportJobQueueUrl, !Ref ExportJobQueueUrl, !Ref ProductExportJobQueue]
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !GetAtt ProductExportJobQueue.Arn
+      Events:
+        EnqueueReportExport:
+          Type: Api
+          Properties:
+            Path: /reports/exports
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/enqueueReportExport.ts]
+
+  GetReportExportJobsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/getReportExportJobs.lambdaHandler
+      Events:
+        GetReportExportJobs:
+          Type: Api
+          Properties:
+            Path: /reports/exports/jobs
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/getReportExportJobs.ts]
+
+  GetReportExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/getReportExportJob.lambdaHandler
+      Events:
+        GetReportExportJob:
+          Type: Api
+          Properties:
+            Path: /reports/exports/jobs/{jobId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/getReportExportJob.ts]
+
+  DownloadReportExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/downloadReportExportJob.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${ExportsBucket}/*"
+      Events:
+        DownloadReportExportJob:
+          Type: Api
+          Properties:
+            Path: /reports/exports/jobs/{jobId}/download
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/downloadReportExportJob.ts]
+
   ReportsExportPDFFunction:
     Type: AWS::Serverless::Function
     Properties:

@@ -305,6 +305,7 @@ export function buildExportPipeline(
 			'compliance_information.tab_completed': 1,
 			'symbols_graphics.tab_completed': 1,
 			'label_components.tab_completed': 1,
+			'label_tags.tab_completed': 1,
 		},
 	});
 
