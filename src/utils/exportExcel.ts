@@ -15,18 +15,26 @@ require("regenerator-runtime/runtime");
 const ExcelJS = require("exceljs/dist/es5");
 
 const IMAGE_FETCH_CONCURRENCY = 5;
-const IMAGE_ROW_HEIGHT = 88;
 const IMAGE_PLACEHOLDER_TEXT = "Image format not supported";
+const IMAGE_ROW_HORIZONTAL_PADDING_PX = 16;
+const IMAGE_ROW_VERTICAL_PADDING_PX = 10;
+const PLACEHOLDER_ROW_HEIGHT_POINTS = 36;
+const DEFAULT_COLUMN_WIDTH = 8.43;
+
+type SheetDataRow = Record<string, string | number>;
 
 type SheetImageRow = {
 	rowNumber: number;
-	imageColumnIndex: number;
+	startColumnIndex: number;
+	endColumnIndex: number;
 	imageUrl?: string;
 };
 
 type WorkbookImageAsset = {
 	imageId?: number;
 	placeholderText?: string;
+	widthPx?: number;
+	heightPx?: number;
 };
 
 const toOptionalString = (value: unknown): string | undefined => {
@@ -164,6 +172,84 @@ const detectImageExtension = (
 	return null;
 };
 
+const getPngDimensions = (bytes: Uint8Array): { widthPx: number; heightPx: number } | null => {
+	if (
+		bytes.length < 24 ||
+		bytes[0] !== 0x89 ||
+		bytes[1] !== 0x50 ||
+		bytes[2] !== 0x4e ||
+		bytes[3] !== 0x47
+	) {
+		return null;
+	}
+
+	const widthPx =
+		(bytes[16] << 24) |
+		(bytes[17] << 16) |
+		(bytes[18] << 8) |
+		bytes[19];
+	const heightPx =
+		(bytes[20] << 24) |
+		(bytes[21] << 16) |
+		(bytes[22] << 8) |
+		bytes[23];
+
+	if (widthPx <= 0 || heightPx <= 0) return null;
+	return { widthPx, heightPx };
+};
+
+const getJpegDimensions = (bytes: Uint8Array): { widthPx: number; heightPx: number } | null => {
+	if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+
+	let offset = 2;
+	while (offset + 3 < bytes.length) {
+		if (bytes[offset] !== 0xff) {
+			offset += 1;
+			continue;
+		}
+
+		let marker = bytes[offset + 1];
+		offset += 2;
+
+		while (marker === 0xff && offset < bytes.length) {
+			marker = bytes[offset];
+			offset += 1;
+		}
+
+		if (marker === 0xd8 || marker === 0xd9) continue;
+		if (marker === 0xda) break;
+		if (offset + 1 >= bytes.length) break;
+
+		const segmentLength = (bytes[offset] << 8) + bytes[offset + 1];
+		if (segmentLength < 2 || offset + segmentLength > bytes.length) break;
+
+		const isStartOfFrame =
+			(marker >= 0xc0 && marker <= 0xc3) ||
+			(marker >= 0xc5 && marker <= 0xc7) ||
+			(marker >= 0xc9 && marker <= 0xcb) ||
+			(marker >= 0xcd && marker <= 0xcf);
+
+		if (isStartOfFrame && segmentLength >= 7) {
+			const heightPx = (bytes[offset + 3] << 8) + bytes[offset + 4];
+			const widthPx = (bytes[offset + 5] << 8) + bytes[offset + 6];
+			if (widthPx > 0 && heightPx > 0) return { widthPx, heightPx };
+			return null;
+		}
+
+		offset += segmentLength;
+	}
+
+	return null;
+};
+
+const getImageDimensions = (
+	bytes: Uint8Array,
+	extension: "png" | "jpeg",
+): { widthPx: number; heightPx: number } | null => {
+	if (extension === "png") return getPngDimensions(bytes);
+	return getJpegDimensions(bytes);
+};
+
 const fetchWorkbookImageAsset = async (workbook: any, url: string): Promise<WorkbookImageAsset> => {
 	if (isLikelyWebpUrl(url)) return { placeholderText: IMAGE_PLACEHOLDER_TEXT };
 
@@ -177,12 +263,19 @@ const fetchWorkbookImageAsset = async (workbook: any, url: string): Promise<Work
 		if (extension === "webp") return { placeholderText: IMAGE_PLACEHOLDER_TEXT };
 		if (!extension) return { placeholderText: "Unsupported image" };
 
+		const dimensions = getImageDimensions(bytes, extension);
+		if (!dimensions) return { placeholderText: "Unsupported image" };
+
 		const imageId = workbook.addImage({
 			extension,
 			buffer: Buffer.from(bytes),
 		});
 
-		return { imageId };
+		return {
+			imageId,
+			widthPx: dimensions.widthPx,
+			heightPx: dimensions.heightPx,
+		};
 	} catch {
 		return { placeholderText: "Image unavailable" };
 	}
@@ -206,32 +299,124 @@ const preloadWorkbookImageAssets = async (
 	return new Map(entries);
 };
 
+const createEmptyRow = (rowData: SheetDataRow): SheetDataRow => {
+	const emptyRow: SheetDataRow = {};
+	Object.keys(rowData).forEach((key) => {
+		emptyRow[key] = "";
+	});
+	return emptyRow;
+};
+
+const appendSheetDataAndImageRows = ({
+	rows,
+	imageRows,
+	rowData,
+	imageUrl,
+	columnCount,
+}: {
+	rows: SheetDataRow[];
+	imageRows: SheetImageRow[];
+	rowData: SheetDataRow;
+	imageUrl?: string;
+	columnCount: number;
+}) => {
+	rows.push(rowData);
+
+	if (!imageUrl) return;
+
+	const imageRowNumber = rows.length + 2;
+	rows.push(createEmptyRow(rowData));
+	imageRows.push({
+		rowNumber: imageRowNumber,
+		startColumnIndex: 1,
+		endColumnIndex: columnCount,
+		imageUrl,
+	});
+};
+
+const getMergeRange = (worksheet: any, imageRow: SheetImageRow): string => {
+	const startColumnLetter = worksheet.getColumn(imageRow.startColumnIndex).letter;
+	const endColumnLetter = worksheet.getColumn(imageRow.endColumnIndex).letter;
+	return `${startColumnLetter}${imageRow.rowNumber}:${endColumnLetter}${imageRow.rowNumber}`;
+};
+
+const mergeSheetImageRows = (worksheet: any, imageRows: SheetImageRow[]) => {
+	imageRows.forEach((imageRow) => {
+		worksheet.mergeCells(getMergeRange(worksheet, imageRow));
+	});
+};
+
+const columnWidthToPixels = (width: number | undefined): number => {
+	const normalizedWidth = typeof width === "number" && width > 0 ? width : DEFAULT_COLUMN_WIDTH;
+	return Math.floor(normalizedWidth * 7 + 5);
+};
+
+const pixelsToRowHeightPoints = (pixels: number): number => {
+	return pixels * 0.75;
+};
+
+const getImageRowWidthPx = (worksheet: any, imageRow: SheetImageRow): number => {
+	let totalWidth = 0;
+	for (let columnIndex = imageRow.startColumnIndex; columnIndex <= imageRow.endColumnIndex; columnIndex += 1) {
+		totalWidth += columnWidthToPixels(worksheet.getColumn(columnIndex).width);
+	}
+	return totalWidth;
+};
+
 const attachSheetImages = ({
-	workbook,
 	worksheet,
 	imageRows,
 	assetMap,
 }: {
-	workbook: any;
 	worksheet: any;
 	imageRows: SheetImageRow[];
 	assetMap: Map<string, WorkbookImageAsset>;
 }) => {
 	for (const imageRow of imageRows) {
-		const cell = worksheet.getRow(imageRow.rowNumber).getCell(imageRow.imageColumnIndex);
+		const row = worksheet.getRow(imageRow.rowNumber);
+		const cell = row.getCell(imageRow.startColumnIndex);
 		const asset = imageRow.imageUrl ? assetMap.get(imageRow.imageUrl) : undefined;
 
-		if (!asset?.imageId) {
+		if (
+			asset?.imageId === undefined ||
+			!asset.widthPx ||
+			!asset.heightPx
+		) {
 			cell.value = asset?.placeholderText || "";
 			cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+			row.height = PLACEHOLDER_ROW_HEIGHT_POINTS;
 			continue;
 		}
 
+		const totalWidthPx = getImageRowWidthPx(worksheet, imageRow);
+		const availableWidthPx = Math.max(totalWidthPx - IMAGE_ROW_HORIZONTAL_PADDING_PX * 2, 1);
+		const drawWidthPx = availableWidthPx;
+		const drawHeightPx = Math.max(
+			(asset.heightPx * drawWidthPx) / Math.max(asset.widthPx, 1),
+			1,
+		);
+		const rowHeightPx = drawHeightPx + IMAGE_ROW_VERTICAL_PADDING_PX * 2;
+		const firstColumnWidthPx = Math.max(
+			columnWidthToPixels(worksheet.getColumn(imageRow.startColumnIndex).width),
+			1,
+		);
+		const rowHeightForAnchorPx = Math.max(rowHeightPx, 1);
+
 		cell.value = "";
-		worksheet.getRow(imageRow.rowNumber).height = IMAGE_ROW_HEIGHT;
-		workbook.getWorksheet(worksheet.name).addImage(asset.imageId, {
-			tl: { col: imageRow.imageColumnIndex - 1 + 0.1, row: imageRow.rowNumber - 1 + 0.1 },
-			br: { col: imageRow.imageColumnIndex - 0.1, row: imageRow.rowNumber - 0.1 },
+		row.height = pixelsToRowHeightPoints(rowHeightPx);
+		worksheet.addImage(asset.imageId, {
+			tl: {
+				col:
+					imageRow.startColumnIndex - 1 +
+					IMAGE_ROW_HORIZONTAL_PADDING_PX / firstColumnWidthPx,
+				row:
+					imageRow.rowNumber - 1 +
+					IMAGE_ROW_VERTICAL_PADDING_PX / rowHeightForAnchorPx,
+			},
+			ext: {
+				width: drawWidthPx,
+				height: drawHeightPx,
+			},
 			editAs: "oneCell",
 		});
 	}
@@ -310,34 +495,33 @@ export async function generateProductExcelExport(productData: Product) {
 
 		labelComponentsSheet.columns = [
 			{ header: "Component Number", key: "component_number", width: 30 },
-			{ header: "Image", key: "image", width: 28 },
 			{ header: "Component Description", key: "component_description", width: 50 },
 			{ header: "Label Type", key: "label_type", width: 30 },
 			{ header: "Dimensions", key: "dimensions", width: 30 },
 			{ header: "Component Type", key: "component_type", width: 30 },
 		];
 
-		const labelComponentsRows: Array<Record<string, string>> = [];
+		const labelComponentsRows: SheetDataRow[] = [];
 		const labelComponentsImageRows: SheetImageRow[] = [];
-		(productData.label_components?.data || []).forEach((item, index) => {
-			labelComponentsRows.push({
-				component_number: item.component_number || "",
-				image: "",
-				component_description: item.component_description || "",
-				label_type: Array.isArray(item.label_type) ? item.label_type.join(", ") : "",
-				dimensions: item.dimensions || "",
-				component_type: item.component_type || "",
-			});
-
-			labelComponentsImageRows.push({
-				rowNumber: index + 2,
-				imageColumnIndex: 2,
+		(productData.label_components?.data || []).forEach((item) => {
+			appendSheetDataAndImageRows({
+				rows: labelComponentsRows,
+				imageRows: labelComponentsImageRows,
+				rowData: {
+					component_number: item.component_number || "",
+					component_description: item.component_description || "",
+					label_type: Array.isArray(item.label_type) ? item.label_type.join(", ") : "",
+					dimensions: item.dimensions || "",
+					component_type: item.component_type || "",
+				},
 				imageUrl: resolveImageUrl(item.image, item.key, signedUrlMap),
+				columnCount: labelComponentsSheet.columns.length,
 			});
 		});
 
 		labelComponentsSheet.addRows(labelComponentsRows);
 		applyStandardStyling(labelComponentsSheet);
+		mergeSheetImageRows(labelComponentsSheet, labelComponentsImageRows);
 		labelComponentsSheet.getRow(1).font = { bold: true };
 
 		const symbolsSheet = workbook.addWorksheet("Symbols", {
@@ -346,30 +530,29 @@ export async function generateProductExcelExport(productData: Product) {
 
 		symbolsSheet.columns = [
 			{ header: "Name", key: "text", width: 30 },
-			{ header: "Image", key: "image", width: 28 },
 			{ header: "Text Present", key: "text_present", width: 20 },
 			{ header: "Label Presence", key: "label_presence", width: 50 },
 		];
 
-		const symbolsRows: Array<Record<string, string>> = [];
+		const symbolsRows: SheetDataRow[] = [];
 		const symbolsImageRows: SheetImageRow[] = [];
-		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Symbols") || []).forEach((item, index) => {
-			symbolsRows.push({
-				text: item.text || "",
-				image: "",
-				text_present: item.text_present === undefined ? "" : item.text_present ? "Yes" : "No",
-				label_presence: Array.isArray(item.label_presence) ? item.label_presence.join(",") : "",
-			});
-
-			symbolsImageRows.push({
-				rowNumber: index + 2,
-				imageColumnIndex: 2,
+		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Symbols") || []).forEach((item) => {
+			appendSheetDataAndImageRows({
+				rows: symbolsRows,
+				imageRows: symbolsImageRows,
+				rowData: {
+					text: item.text || "",
+					text_present: item.text_present === undefined ? "" : item.text_present ? "Yes" : "No",
+					label_presence: Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "",
+				},
 				imageUrl: resolveImageUrl(item.image, item.key, signedUrlMap),
+				columnCount: symbolsSheet.columns.length,
 			});
 		});
 
 		symbolsSheet.addRows(symbolsRows);
 		applyStandardStyling(symbolsSheet);
+		mergeSheetImageRows(symbolsSheet, symbolsImageRows);
 		symbolsSheet.getRow(1).font = { bold: true };
 
 		const schematicsSheet = workbook.addWorksheet("Schematics", {
@@ -378,30 +561,29 @@ export async function generateProductExcelExport(productData: Product) {
 
 		schematicsSheet.columns = [
 			{ header: "Name", key: "text", width: 30 },
-			{ header: "Image", key: "image", width: 28 },
 			{ header: "Label Presence", key: "label_presence", width: 50 },
 			{ header: "Description", key: "description", width: 50 },
 		];
 
-		const schematicsRows: Array<Record<string, string>> = [];
+		const schematicsRows: SheetDataRow[] = [];
 		const schematicsImageRows: SheetImageRow[] = [];
-		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Schematics") || []).forEach((item, index) => {
-			schematicsRows.push({
-				text: item.text || "",
-				image: "",
-				label_presence: Array.isArray(item.label_presence) ? item.label_presence.join(",") : "",
-				description: item.description || "",
-			});
-
-			schematicsImageRows.push({
-				rowNumber: index + 2,
-				imageColumnIndex: 2,
+		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Schematics") || []).forEach((item) => {
+			appendSheetDataAndImageRows({
+				rows: schematicsRows,
+				imageRows: schematicsImageRows,
+				rowData: {
+					text: item.text || "",
+					label_presence: Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "",
+					description: item.description || "",
+				},
 				imageUrl: resolveImageUrl(item.image, item.key, signedUrlMap),
+				columnCount: schematicsSheet.columns.length,
 			});
 		});
 
 		schematicsSheet.addRows(schematicsRows);
 		applyStandardStyling(schematicsSheet);
+		mergeSheetImageRows(schematicsSheet, schematicsImageRows);
 		schematicsSheet.getRow(1).font = { bold: true };
 
 		const barcodesSheet = workbook.addWorksheet("Barcodes", {
@@ -410,32 +592,31 @@ export async function generateProductExcelExport(productData: Product) {
 
 		barcodesSheet.columns = [
 			{ header: "Type", key: "text", width: 30 },
-			{ header: "Image", key: "image", width: 28 },
 			{ header: "Label Presence", key: "label_presence", width: 50 },
 			{ header: "Count", key: "count", width: 20 },
 			{ header: "Description", key: "description", width: 50 },
 		];
 
-		const barcodesRows: Array<Record<string, string | number>> = [];
+		const barcodesRows: SheetDataRow[] = [];
 		const barcodesImageRows: SheetImageRow[] = [];
-		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Barcodes") || []).forEach((item, index) => {
-			barcodesRows.push({
-				text: item.text || "",
-				image: "",
-				label_presence: Array.isArray(item.label_presence) ? item.label_presence.join(",") : "",
-				count: item.count || 1,
-				description: item.description || "",
-			});
-
-			barcodesImageRows.push({
-				rowNumber: index + 2,
-				imageColumnIndex: 2,
+		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Barcodes") || []).forEach((item) => {
+			appendSheetDataAndImageRows({
+				rows: barcodesRows,
+				imageRows: barcodesImageRows,
+				rowData: {
+					text: item.text || "",
+					label_presence: Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "",
+					count: item.count ?? 1,
+					description: item.description || "",
+				},
 				imageUrl: resolveImageUrl(item.image, item.key, signedUrlMap),
+				columnCount: barcodesSheet.columns.length,
 			});
 		});
 
 		barcodesSheet.addRows(barcodesRows);
 		applyStandardStyling(barcodesSheet);
+		mergeSheetImageRows(barcodesSheet, barcodesImageRows);
 		barcodesSheet.getRow(1).font = { bold: true };
 
 		const otherComponentsSheet = workbook.addWorksheet("Other Components", {
@@ -444,30 +625,29 @@ export async function generateProductExcelExport(productData: Product) {
 
 		otherComponentsSheet.columns = [
 			{ header: "Name", key: "text", width: 30 },
-			{ header: "Image", key: "image", width: 28 },
 			{ header: "Label Presence", key: "label_presence", width: 50 },
 			{ header: "Description", key: "description", width: 50 },
 		];
 
-		const otherComponentsRows: Array<Record<string, string>> = [];
+		const otherComponentsRows: SheetDataRow[] = [];
 		const otherComponentsImageRows: SheetImageRow[] = [];
-		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Other Components") || []).forEach((item, index) => {
-			otherComponentsRows.push({
-				text: item.text || "",
-				image: "",
-				label_presence: Array.isArray(item.label_presence) ? item.label_presence.join(",") : "",
-				description: item.description || "",
-			});
-
-			otherComponentsImageRows.push({
-				rowNumber: index + 2,
-				imageColumnIndex: 2,
+		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Other Components") || []).forEach((item) => {
+			appendSheetDataAndImageRows({
+				rows: otherComponentsRows,
+				imageRows: otherComponentsImageRows,
+				rowData: {
+					text: item.text || "",
+					label_presence: Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "",
+					description: item.description || "",
+				},
 				imageUrl: resolveImageUrl(item.image, item.key, signedUrlMap),
+				columnCount: otherComponentsSheet.columns.length,
 			});
 		});
 
 		otherComponentsSheet.addRows(otherComponentsRows);
 		applyStandardStyling(otherComponentsSheet);
+		mergeSheetImageRows(otherComponentsSheet, otherComponentsImageRows);
 		otherComponentsSheet.getRow(1).font = { bold: true };
 
 		const productDataSheet = workbook.addWorksheet("Product Specifications", {
@@ -502,31 +682,27 @@ export async function generateProductExcelExport(productData: Product) {
 			{ header: "Name", key: "name", width: 30 },
 			{ header: "Description", key: "description", width: 50 },
 			{ header: "Type", key: "type", width: 30 },
-			{ header: "Image", key: "image", width: 28 },
-			{ header: "Tagged Image", key: "tagged_image", width: 28 },
 		];
 
-		const labelTagsRows: Array<Record<string, string>> = [];
+		const labelTagsRows: SheetDataRow[] = [];
 		const labelTagsImageRows: SheetImageRow[] = [];
-		(productData.label_tags?.data || []).forEach((item, index) => {
-			labelTagsRows.push({
-				name: item.name || "",
-				description: item.description || "",
-				type: item.type || "",
-				image: "",
-				tagged_image: "",
-			});
-
-			const preferredImageUrl = getPreferredLabelTagImageUrl(item, signedUrlMap);
-			labelTagsImageRows.push({
-				rowNumber: index + 2,
-				imageColumnIndex: 4,
-				imageUrl: preferredImageUrl,
+		(productData.label_tags?.data || []).forEach((item) => {
+			appendSheetDataAndImageRows({
+				rows: labelTagsRows,
+				imageRows: labelTagsImageRows,
+				rowData: {
+					name: item.name || "",
+					description: item.description || "",
+					type: item.type || "",
+				},
+				imageUrl: getPreferredLabelTagImageUrl(item, signedUrlMap),
+				columnCount: labelTagsSheet.columns.length,
 			});
 		});
 
 		labelTagsSheet.addRows(labelTagsRows);
 		applyStandardStyling(labelTagsSheet);
+		mergeSheetImageRows(labelTagsSheet, labelTagsImageRows);
 		labelTagsSheet.getRow(1).font = { bold: true };
 
 		const imageUrls = [
@@ -543,42 +719,36 @@ export async function generateProductExcelExport(productData: Product) {
 		const workbookImageAssets = await preloadWorkbookImageAssets(workbook, imageUrls);
 
 		attachSheetImages({
-			workbook,
 			worksheet: labelComponentsSheet,
 			imageRows: labelComponentsImageRows,
 			assetMap: workbookImageAssets,
 		});
 
 		attachSheetImages({
-			workbook,
 			worksheet: symbolsSheet,
 			imageRows: symbolsImageRows,
 			assetMap: workbookImageAssets,
 		});
 
 		attachSheetImages({
-			workbook,
 			worksheet: schematicsSheet,
 			imageRows: schematicsImageRows,
 			assetMap: workbookImageAssets,
 		});
 
 		attachSheetImages({
-			workbook,
 			worksheet: barcodesSheet,
 			imageRows: barcodesImageRows,
 			assetMap: workbookImageAssets,
 		});
 
 		attachSheetImages({
-			workbook,
 			worksheet: otherComponentsSheet,
 			imageRows: otherComponentsImageRows,
 			assetMap: workbookImageAssets,
 		});
 
 		attachSheetImages({
-			workbook,
 			worksheet: labelTagsSheet,
 			imageRows: labelTagsImageRows,
 			assetMap: workbookImageAssets,

@@ -44,7 +44,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest(error instanceof Error ? error.message : 'Invalid status filter');
 		}
 
-		const { jobs, pagination } = await listProductExportJobsForUser({
+		const { jobs, pagination, hasActiveJobs, activeJobsCount } = await listProductExportJobsForUser({
 			requestedBySub: cognitoSub,
 			workspaceId: userContext.workspaceId,
 			target: 'product',
@@ -56,6 +56,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			message: 'Product export jobs fetched successfully',
 			result: {
 				jobs: jobs.map(toExportJobSummary),
+				hasActiveJobs,
+				activeJobsCount,
 				pagination,
 			},
 		});

@@ -13,6 +13,7 @@ import { getDb } from './db';
 const DEFAULT_EXPORT_FILE_TTL_HOURS = 24;
 const EXPORT_JOBS_PAGE_LIMIT = 10;
 const TERMINAL_EXPORT_JOB_STATUSES: ExportJobStatus[] = ['completed', 'failed'];
+const ACTIVE_EXPORT_JOB_STATUSES: ExportJobStatus[] = ['queued', 'processing'];
 
 let hasEnsuredProductExportJobIndexes = false;
 
@@ -286,6 +287,8 @@ export const listProductExportJobsForUser = async ({
 	limit?: number;
 }): Promise<{
 	jobs: ExportJobDocument[];
+	hasActiveJobs: boolean;
+	activeJobsCount: number;
 	pagination: {
 		page: number;
 		limit: number;
@@ -319,7 +322,25 @@ export const listProductExportJobsForUser = async ({
 		query.status = { $in: statuses };
 	}
 
-	const [jobs, totalCount] = await Promise.all([
+	const activeJobsQuery: {
+		requestedBySub: string;
+		workspaceId?: ObjectId;
+		target?: ExportJobTarget;
+		status: { $in: ExportJobStatus[] };
+	} = {
+		requestedBySub,
+		status: { $in: ACTIVE_EXPORT_JOB_STATUSES },
+	};
+
+	if (workspaceId) {
+		activeJobsQuery.workspaceId = workspaceId;
+	}
+
+	if (target) {
+		activeJobsQuery.target = target;
+	}
+
+	const [jobs, totalCount, activeJobsCount] = await Promise.all([
 		collection
 			.find(query)
 			.sort({ createdAt: -1, _id: -1 })
@@ -327,12 +348,15 @@ export const listProductExportJobsForUser = async ({
 			.limit(normalizedLimit)
 			.toArray(),
 		collection.countDocuments(query),
+		collection.countDocuments(activeJobsQuery),
 	]);
 
 	const totalPages = Math.max(1, Math.ceil(totalCount / normalizedLimit));
 
 	return {
 		jobs,
+		hasActiveJobs: activeJobsCount > 0,
+		activeJobsCount,
 		pagination: {
 			page: normalizedPage,
 			limit: normalizedLimit,

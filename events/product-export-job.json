@@ -1,0 +1,11 @@
+{
+  "Records": [
+    {
+      "messageId": "manual-excel-export-69ac4d437ee29f14dede0313",
+      "body": "{\"schemaVersion\": 1, \"jobId\": \"69ac4d437ee29f14dede0313\", \"target\": \"product\", \"targetId\": \"6972d17778cdf6996ecbcdf7\", \"workspaceId\": \"69174ada552dcbbf657f8a91\", \"format\": \"excel\", \"queuedAt\": \"2026-03-07T16:07:31.949Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1"
+      }
+    }
+  ]
+}
