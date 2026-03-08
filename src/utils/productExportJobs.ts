@@ -275,6 +275,7 @@ export const listProductExportJobsForUser = async ({
 	requestedBySub,
 	workspaceId,
 	target,
+	targetId,
 	statuses,
 	page,
 	limit,
@@ -282,6 +283,7 @@ export const listProductExportJobsForUser = async ({
 	requestedBySub: string;
 	workspaceId?: ObjectId;
 	target?: ExportJobTarget;
+	targetId?: ObjectId;
 	statuses?: ExportJobStatus[];
 	page?: number;
 	limit?: number;
@@ -305,6 +307,7 @@ export const listProductExportJobsForUser = async ({
 		requestedBySub: string;
 		workspaceId?: ObjectId;
 		target?: ExportJobTarget;
+		targetId?: ObjectId;
 		status?: { $in: ExportJobStatus[] };
 	} = {
 		requestedBySub,
@@ -318,6 +321,10 @@ export const listProductExportJobsForUser = async ({
 		query.target = target;
 	}
 
+	if (targetId) {
+		query.targetId = targetId;
+	}
+
 	if (statuses?.length) {
 		query.status = { $in: statuses };
 	}
@@ -326,6 +333,7 @@ export const listProductExportJobsForUser = async ({
 		requestedBySub: string;
 		workspaceId?: ObjectId;
 		target?: ExportJobTarget;
+		targetId?: ObjectId;
 		status: { $in: ExportJobStatus[] };
 	} = {
 		requestedBySub,
@@ -338,6 +346,10 @@ export const listProductExportJobsForUser = async ({
 
 	if (target) {
 		activeJobsQuery.target = target;
+	}
+
+	if (targetId) {
+		activeJobsQuery.targetId = targetId;
 	}
 
 	const [jobs, totalCount, activeJobsCount] = await Promise.all([

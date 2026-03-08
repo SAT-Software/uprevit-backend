@@ -1,8 +1,9 @@
 {
   "Records": [
     {
-      "messageId": "manual-excel-export-69ac4d437ee29f14dede0313",
-      "body": "{\"schemaVersion\": 1, \"jobId\": \"69ac4d437ee29f14dede0313\", \"target\": \"product\", \"targetId\": \"6972d17778cdf6996ecbcdf7\", \"workspaceId\": \"69174ada552dcbbf657f8a91\", \"format\": \"excel\", \"queuedAt\": \"2026-03-07T16:07:31.949Z\"}",
+      "messageId": "2501d356-40bc-425f-99a5-56ae76635b00",
+      "receiptHandle": "AQEBsw14F9UHVVR/LQEV2Ldhx8y3Aq1LHbW96lDKn/DpJOXYZstEkOrddJN5/j6ZLIrEvJ+f3A3dUegp0DNp+2DFaetcqpltnucycLLQaGQm3S17AJ26fb0EoiyH7yiVhojQNza4QyjuzevMLj97/klTyjfrjt0SVGzr50DAcUm8r3yYh8TGwGmkpjkKdn0Bk9khufrSi+ihyRPozkq6Wrvz47BxvX775Mk9qBJSXc1NeEzy71TCH1Cysx0bhHU2P+/2JyB+83bfXbIfKGUtJFuYEK0fz0RS+wQ1HF7TccJ7xh6Aw8Cj2p1bNJCUDXbh4ZTjl/rk6MoFeVxryKtQIrx7aKFLtUZKf8bu1zpUUDeMWFBtyiNPvqbwDPJWIW1LtHSUqPis7ouAqDhXvXmDBeM3zA==",
+      "body": "{\"schemaVersion\":1,\"jobId\":\"69acf9f3e91210252059b7b5\",\"target\":\"product\",\"targetId\":\"6972d17778cdf6996ecbcdf7\",\"workspaceId\":\"69174ada552dcbbf657f8a91\",\"requestedBySub\":\"04588418-d0d1-70c7-5085-fc039e7b1a1c\",\"requestedByUserId\":\"69174adb552dcbbf657f8a93\",\"format\":\"pdf\",\"queuedAt\":\"2026-03-08T04:24:19.089Z\"}",
       "attributes": {
         "ApproximateReceiveCount": "1"
       }
