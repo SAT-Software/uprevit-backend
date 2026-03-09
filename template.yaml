@@ -627,7 +627,14 @@ Resources:
             - Effect: Allow
               Action:
                 - sqs:SendMessage
-              Resource: !GetAtt ProductExportJobQueue.Arn
+              Resource: !If
+                - HasExportJobQueueUrl
+                - !Sub
+                  - arn:${AWS::Partition}:sqs:${QueueRegion}:${QueueAccountId}:${QueueName}
+                  - QueueRegion: !Select [1, !Split [".", !Select [2, !Split ["/", !Ref ExportJobQueueUrl]]]]
+                    QueueAccountId: !Select [3, !Split ["/", !Ref ExportJobQueueUrl]]
+                    QueueName: !Select [4, !Split ["/", !Ref ExportJobQueueUrl]]
+                - !GetAtt ProductExportJobQueue.Arn
       Events:
         EnqueueProductExport:
           Type: Api
@@ -1111,7 +1118,14 @@ Resources:
             - Effect: Allow
               Action:
                 - sqs:SendMessage
-              Resource: !GetAtt ProductExportJobQueue.Arn
+              Resource: !If
+                - HasExportJobQueueUrl
+                - !Sub
+                  - arn:${AWS::Partition}:sqs:${QueueRegion}:${QueueAccountId}:${QueueName}
+                  - QueueRegion: !Select [1, !Split [".", !Select [2, !Split ["/", !Ref ExportJobQueueUrl]]]]
+                    QueueAccountId: !Select [3, !Split ["/", !Ref ExportJobQueueUrl]]
+                    QueueName: !Select [4, !Split ["/", !Ref ExportJobQueueUrl]]
+                - !GetAtt ProductExportJobQueue.Arn
       Events:
         EnqueueReportExport:
           Type: Api
