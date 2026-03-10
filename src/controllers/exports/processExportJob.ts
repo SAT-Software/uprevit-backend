@@ -1,16 +1,21 @@
 import { SQSBatchResponse, SQSEvent, SQSRecord } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
+import { EXPORT_JOB_FORMATS, EXPORT_JOB_TARGETS, type ExportJobFormat, type ExportJobTarget } from '../../models/exportJob';
 import type { Product } from '../../models/product';
 import type { ExportQueueMessage } from '../../types/export-job';
+import { EXPORT_LIMITS, type PersistedReportExportRequest } from '../../types/reports';
 import { getDb } from '../../utils/db';
 import { generateProductExcelExport } from '../../utils/exportExcel';
 import { generateProductPDFExport } from '../../utils/exportPDF';
-import { logError, logInfo, logWarn } from '../../utils/logger';
 import {
-	markProductExportJobCompleted,
-	markProductExportJobFailed,
-	markProductExportJobProcessing,
-} from '../../utils/productExportJobs';
+	markExportJobCompleted,
+	markExportJobFailed,
+	markExportJobProcessing,
+} from '../../utils/exportJobs';
+import { logError, logInfo, logWarn } from '../../utils/logger';
+import { generateReportsExcelExport } from '../../utils/reports/exportReportsExcel';
+import { generateReportsPDFExport } from '../../utils/reports/exportReportsPDF';
+import { buildExportPipeline } from '../../utils/reports/queryBuilder';
 import { uploadExportObjectByKey } from '../../utils/s3-storage';
 
 const EXPORTS_PREFIX = (process.env.EXPORTS_PREFIX || 'exports').replace(/^\/+|\/+$/g, '');
@@ -41,6 +46,40 @@ type ExportArtifact = {
 };
 
 type ProcessableExportQueueMessage = Pick<ExportQueueMessage, 'jobId' | 'targetId' | 'target' | 'format'>;
+
+type ReportExportProduct = {
+	_id: ObjectId;
+	product_name: string;
+	product_plan_number: string;
+	product_description?: string;
+	status: string;
+	target_date?: Date | null;
+	version: number;
+	department_id?: ObjectId;
+	project_id?: ObjectId;
+	product_information?: {
+		data?: {
+			market_geography?: string;
+			country_of_origin?: string;
+			oem_contract_manufacturer?: string;
+			commercial_clinical?: string;
+			manufacturing_location?: string;
+		};
+		tab_completed?: boolean;
+	};
+	compliance_information?: {
+		tab_completed?: boolean;
+	};
+	symbols_graphics?: {
+		tab_completed?: boolean;
+	};
+	label_components?: {
+		tab_completed?: boolean;
+	};
+	label_tags?: {
+		tab_completed?: boolean;
+	};
+};
 
 const getReceiveCount = (record: SQSRecord): number => {
 	const parsed = Number.parseInt(record.attributes?.ApproximateReceiveCount ?? '1', 10);
@@ -82,11 +121,15 @@ const parseQueueMessage = (record: SQSRecord): ProcessableExportQueueMessage => 
 	if (
 		typeof jobId !== 'string' ||
 		!ObjectId.isValid(jobId) ||
-		typeof targetId !== 'string' ||
-		!ObjectId.isValid(targetId) ||
-		target !== 'product' ||
-		(format !== 'pdf' && format !== 'excel')
+		typeof target !== 'string' ||
+		!EXPORT_JOB_TARGETS.includes(target as ExportJobTarget) ||
+		typeof format !== 'string' ||
+		!EXPORT_JOB_FORMATS.includes(format as ExportJobFormat)
 	) {
+		throw new NonRetryableExportJobError('Invalid export queue message payload');
+	}
+
+	if (target === 'product' && (typeof targetId !== 'string' || !ObjectId.isValid(targetId))) {
 		throw new NonRetryableExportJobError('Invalid export queue message payload');
 	}
 
@@ -102,6 +145,12 @@ const buildExportFileName = (product: Product, format: 'pdf' | 'excel'): string 
 	const extension = format === 'pdf' ? 'pdf' : 'xlsx';
 	const safePlanNumber = (product.product_plan_number || 'product').replace(/[^a-zA-Z0-9._-]/g, '_');
 	return `Product_${safePlanNumber}_v${product.version}.${extension}`;
+};
+
+const buildReportExportFileName = (format: 'pdf' | 'excel', date: Date = new Date()): string => {
+	const extension = format === 'pdf' ? 'pdf' : 'xlsx';
+	const timestamp = date.toISOString().split('T')[0];
+	return `Products_Report_${timestamp}.${extension}`;
 };
 
 const buildExportContentType = (format: 'pdf' | 'excel'): string => {
@@ -132,6 +181,45 @@ const generateProductArtifact = async ({
 	};
 };
 
+const generateReportArtifact = async ({
+	reportParams,
+	workspaceId,
+	format,
+}: {
+	reportParams: PersistedReportExportRequest;
+	workspaceId: ObjectId;
+	format: 'pdf' | 'excel';
+}): Promise<ExportArtifact> => {
+	const db = await getDb();
+	const maxLimit = format === 'pdf' ? EXPORT_LIMITS.PDF : EXPORT_LIMITS.EXCEL;
+	const pipeline = buildExportPipeline(
+		{
+			workspaceId: workspaceId.toString(),
+			conditions: reportParams.conditions,
+			...(reportParams.conditionLogic ? { conditionLogic: reportParams.conditionLogic } : {}),
+			...(reportParams.sort ? { sort: reportParams.sort } : {}),
+		},
+		workspaceId,
+		maxLimit,
+	);
+
+	const products = (await db.collection<ReportExportProduct>('products').aggregate(pipeline).toArray()) as ReportExportProduct[];
+	const rawBuffer = format === 'pdf'
+		? await generateReportsPDFExport(products)
+		: await generateReportsExcelExport(products);
+
+	if (!rawBuffer) {
+		throw new Error('Failed to generate export file');
+	}
+
+	const buffer = Buffer.isBuffer(rawBuffer) ? rawBuffer : Buffer.from(rawBuffer);
+	return {
+		buffer,
+		fileName: buildReportExportFileName(format),
+		contentType: buildExportContentType(format),
+	};
+};
+
 /**
  * Processes queued export jobs from SQS.
  * @param {SQSEvent} event - SQS event payload
@@ -147,9 +235,8 @@ export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> 
 		try {
 			parsedMessage = parseQueueMessage(record);
 			const jobId = new ObjectId(parsedMessage.jobId);
-			const targetId = new ObjectId(parsedMessage.targetId);
 
-			const processingJob = await markProductExportJobProcessing({
+			const processingJob = await markExportJobProcessing({
 				jobId,
 				expectedStatus: ['queued', 'processing'],
 				incrementAttempts: true,
@@ -163,26 +250,48 @@ export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> 
 				continue;
 			}
 
-			const db = await getDb();
-			const product = await db.collection<Product>('products').findOne({
-				_id: targetId,
-				workspace_id: processingJob.workspaceId,
-			});
+			let artifact: ExportArtifact;
+			let s3Key: string;
 
-			if (!product) {
-				await markProductExportJobFailed({
-					jobId,
-					errorMessage: 'Product not found for export job',
+			if (processingJob.target === 'product') {
+				const targetId = processingJob.targetId ?? (parsedMessage.targetId ? new ObjectId(parsedMessage.targetId) : undefined);
+				if (!targetId) {
+					throw new NonRetryableExportJobError('Product export job is missing target product id');
+				}
+
+				const db = await getDb();
+				const product = await db.collection<Product>('products').findOne({
+					_id: targetId,
+					workspace_id: processingJob.workspaceId,
 				});
-				continue;
+
+				if (!product) {
+					await markExportJobFailed({
+						jobId,
+						errorMessage: 'Product not found for export job',
+					});
+					continue;
+				}
+
+				artifact = await generateProductArtifact({
+					product,
+					format: parsedMessage.format,
+				});
+				s3Key = `${EXPORTS_PREFIX}/products/${processingJob.workspaceId.toString()}/${jobId.toString()}/${artifact.fileName}`;
+			} else if (processingJob.target === 'report') {
+				if (!processingJob.reportParams) {
+					throw new NonRetryableExportJobError('Report export job is missing report parameters');
+				}
+
+				artifact = await generateReportArtifact({
+					reportParams: processingJob.reportParams,
+					workspaceId: processingJob.workspaceId,
+					format: parsedMessage.format,
+				});
+				s3Key = `${EXPORTS_PREFIX}/reports/${processingJob.workspaceId.toString()}/${jobId.toString()}/${artifact.fileName}`;
+			} else {
+				throw new NonRetryableExportJobError('Unsupported export job target');
 			}
-
-			const artifact = await generateProductArtifact({
-				product,
-				format: parsedMessage.format,
-			});
-
-			const s3Key = `${EXPORTS_PREFIX}/products/${processingJob.workspaceId.toString()}/${jobId.toString()}/${artifact.fileName}`;
 
 			await uploadExportObjectByKey({
 				key: s3Key,
@@ -190,7 +299,7 @@ export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> 
 				contentType: artifact.contentType,
 			});
 
-			await markProductExportJobCompleted({
+			await markExportJobCompleted({
 				jobId,
 				s3Key,
 				fileName: artifact.fileName,
@@ -209,7 +318,7 @@ export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> 
 			const shouldStopRetry = isNonRetryable || receiveCount >= MAX_RECEIVE_COUNT;
 
 			if (parsedMessage?.jobId && shouldStopRetry && ObjectId.isValid(parsedMessage.jobId)) {
-				await markProductExportJobFailed({
+				await markExportJobFailed({
 					jobId: new ObjectId(parsedMessage.jobId),
 					errorMessage: toFailureMessage(error),
 				});

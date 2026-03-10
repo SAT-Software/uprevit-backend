@@ -48,6 +48,8 @@ export type ExportJobsListResponse = {
 	message: string;
 	result: {
 		jobs: ExportJobSummary[];
+		hasActiveJobs: boolean;
+		activeJobsCount: number;
 		pagination: {
 			page: number;
 			limit: number;
@@ -56,5 +58,16 @@ export type ExportJobsListResponse = {
 			hasNextPage: boolean;
 			hasPrevPage: boolean;
 		};
+	};
+};
+
+export type ExportDownloadResponse = {
+	message: string;
+	result: {
+		jobId: string;
+		downloadUrl: string;
+		fileName?: string;
+		contentType?: string;
+		expiresAt: string;
 	};
 };

@@ -1,4 +1,5 @@
 import { ObjectId } from 'mongodb';
+import type { PersistedReportExportRequest } from '../types/reports';
 
 export const EXPORT_JOB_COLLECTION = 'exportJobs';
 
@@ -24,6 +25,7 @@ export type ExportJob = {
 	requestedBySub: string;
 	requestedByUserId?: ObjectId;
 	format: ExportJobFormat;
+	reportParams?: PersistedReportExportRequest;
 	status: ExportJobStatus;
 	attempts: number;
 	fileName?: string;
