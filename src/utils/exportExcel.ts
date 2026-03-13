@@ -489,6 +489,26 @@ export async function generateProductExcelExport(productData: Product) {
 		applyStandardStyling(complianceInfoSheet);
 		complianceInfoSheet.getRow(1).font = { bold: true };
 
+		const languagesInfoSheet = workbook.addWorksheet("Languages", {
+			pageSetup: { paperSize: 9, orientation: "landscape" },
+		});
+
+		languagesInfoSheet.columns = [
+			{ header: "Code", key: "code", width: 12 },
+			{ header: "Language", key: "name", width: 28 },
+			{ header: "Country", key: "country", width: 24 },
+		];
+
+		const languageRows = (productData.languages_information?.data || []).map((item) => ({
+			code: item.code || "",
+			name: item.name || "",
+			country: item.country || "",
+		}));
+
+		languagesInfoSheet.addRows(languageRows);
+		applyStandardStyling(languagesInfoSheet);
+		languagesInfoSheet.getRow(1).font = { bold: true };
+
 		const labelComponentsSheet = workbook.addWorksheet("Label Components", {
 			pageSetup: { paperSize: 9, orientation: "landscape" },
 		});

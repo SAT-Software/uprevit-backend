@@ -134,6 +134,8 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 	'product.compliance_item.deleted': ({ actorName }) => productItemSummary(actorName, 'deleted', 'compliance item', []),
 	'product.compliance_information.completion.updated': ({ actorName, meta }) =>
 		withActor(actorName, `${meta?.tabCompleted ? 'marked' : 'unmarked'} compliance information tab as complete`),
+	'product.languages_information.updated': ({ actorName, changes }) =>
+		withActor(actorName, `updated languages information${listChangedFields(changes)}`),
 	'product.label_component.added': ({ actorName }) => productItemSummary(actorName, 'added', 'label component', []),
 	'product.label_component.updated': ({ actorName, changes }) => productItemSummary(actorName, 'updated', 'label component', changes),
 	'product.label_component.deleted': ({ actorName }) => productItemSummary(actorName, 'deleted', 'label component', []),

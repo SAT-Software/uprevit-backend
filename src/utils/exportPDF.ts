@@ -310,6 +310,14 @@ export async function generateProductPDFExport(productData: Product) {
 			]),
 		);
 
+		const languageRows = toTextRows(
+			(productData.languages_information?.data || []).map((item) => [
+				item.code,
+				item.name,
+				item.country || "",
+			]),
+		);
+
 		const labelComponentsRows: TableRow[] = [];
 		(productData.label_components?.data || []).forEach((item) => {
 			appendDataAndImageRows(
@@ -686,6 +694,17 @@ export async function generateProductPDFExport(productData: Product) {
 				{ label: "Description", widthPct: 0.7 },
 			],
 			complianceRows,
+			true,
+		);
+
+		drawTable(
+			"Languages",
+			[
+				{ label: "Code", widthPct: 0.18 },
+				{ label: "Language", widthPct: 0.38 },
+				{ label: "Country", widthPct: 0.44 },
+			],
+			languageRows,
 			true,
 		);
 

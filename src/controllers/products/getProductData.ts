@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
-import type { ExcelData, LabelTags, Product, SymbolsGraphics, ProductInformation, ComplianceInformation, LabelComponents, ProductData } from '../../models/product';
+import type { ExcelData, LabelTags, Product, SymbolsGraphics, ProductInformation, ComplianceInformation, LabelComponents, ProductData, LanguagesInformation } from '../../models/product';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
@@ -93,6 +93,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const enumValidation = validateEnum([
 			'product-information',
 			'compliance-information',
+			'languages-information',
 			'label-components',
 			'symbols-graphics',
 			'product-specifications',
@@ -171,6 +172,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					data: product.compliance_information.data,
 					tab_completed: product.compliance_information.tab_completed,
 				},
+				languages_information: {
+					product_data: productData,
+					data: product.languages_information?.data || [],
+				},
 				label_components: {
 					product_data: productData,
 					data: labelComponentsData,
@@ -213,7 +218,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			});
 		}
 
-		let tabData: ProductInformation | ComplianceInformation | LabelComponents | SymbolsGraphics | ExcelData | LabelTags;
+		let tabData: ProductInformation | ComplianceInformation | LanguagesInformation | LabelComponents | SymbolsGraphics | ExcelData | LabelTags;
 
 		switch (tab) {
 		case 'product-information':
@@ -230,6 +235,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				product_data: productData,
 				data: product.compliance_information.data,
 				tab_completed: product.compliance_information.tab_completed,
+			};
+			break;
+
+		case 'languages-information':
+			tabData = {
+				product_data: productData,
+				data: product.languages_information?.data || [],
 			};
 			break;
 

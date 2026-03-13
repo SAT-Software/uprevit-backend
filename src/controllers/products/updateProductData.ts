@@ -15,6 +15,7 @@ import {
 import { UpdateProductDataRequest } from '../../types/products/all-update-product-data';
 import { addComplianceStandard, deleteComplianceStandard, updateComplianceStandard, updateComplianceTabCompletion } from './productData/compliance-standard';
 import { addLabelComponent, deleteLabelComponent, updateLabelComponent, updateLabelComponentTabCompletion } from './productData/label-components';
+import { updateLanguagesInformation } from './productData/languages';
 import { AddSymbolsGraphics, deleteSymbolsGraphics, UpdateSymbolsGraphics, updateSymbolsGraphicsTabCompletion } from './productData/symbols-graphics';
 import { addProductData, deleteProductData, updateProductData, updateProductDataTabCompletion } from './productData/product-data';
 import { addOperationalParameters, deleteOperationalParameters, updateOperationalParameters, updateOperationalParametersTabCompletion } from './productData/operational-parameters';
@@ -27,6 +28,7 @@ import { logError } from '../../utils/logger';
 const validTabs = [
 	'product-information',
 	'compliance-information',
+	'languages-information',
 	'label-components',
 	'symbols-graphics',
 	'product-specifications',
@@ -96,6 +98,11 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
 		eventKey: 'product.compliance_information.completion.updated',
 		action: 'update',
 		changedPaths: ['compliance_information.tab_completed'],
+	},
+	update_languages_information: {
+		eventKey: 'product.languages_information.updated',
+		action: 'update',
+		changedPaths: ['languages_information.data'],
 	},
 	add_label_component: {
 		eventKey: 'product.label_component.added',
@@ -409,6 +416,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (updateComplianceTabCompletionResult.error) return updateComplianceTabCompletionResult.error;
 
 			({ updateQuery, updatedData } = updateComplianceTabCompletionResult);
+
+			break;
+
+		case 'update_languages_information':
+			const updateLanguagesInformationResult = updateLanguagesInformation(input.data, input.tab, input.action);
+			if (updateLanguagesInformationResult.error) return updateLanguagesInformationResult.error;
+
+			({ updateQuery, updatedData } = updateLanguagesInformationResult);
 
 			break;
 
