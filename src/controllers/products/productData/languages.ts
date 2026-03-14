@@ -14,6 +14,22 @@ type LanguagesInformationReturn = {
 
 const LANGUAGE_CODE_REGEX = /^[A-Z]{2}$/;
 
+const isLanguageObject = (language: unknown): language is ProductLanguage => {
+	return Boolean(language) && typeof language === 'object' && !Array.isArray(language);
+};
+
+const getLanguagesPayloadError = (
+	inputData: UpdateLanguagesInformationData | null | undefined,
+): string | null => {
+	if (!inputData || !Array.isArray(inputData.languages)) {
+		return 'languages must be provided as an array.';
+	}
+
+	return inputData.languages.every(isLanguageObject)
+		? null
+		: 'Each language must be an object.';
+};
+
 const normalizeLanguage = (language: ProductLanguage): ProductLanguage => {
 	const code = typeof language.code === 'string' ? language.code.trim().toUpperCase() : '';
 	const name = typeof language.name === 'string' ? language.name.trim() : '';
@@ -65,9 +81,8 @@ export function updateLanguagesInformation(
 		const isValidatedTabLanguagesInfo = validateTab(tab, 'languages-information', action);
 		if (isValidatedTabLanguagesInfo) throw new Error(isValidatedTabLanguagesInfo.body);
 
-		if (!inputData || !Array.isArray(inputData.languages)) {
-			throw new Error('languages must be provided as an array.');
-		}
+		const payloadError = getLanguagesPayloadError(inputData);
+		if (payloadError) throw new Error(payloadError);
 
 		const normalizedLanguages = inputData.languages.map(normalizeLanguage);
 		const validationError = getLanguageValidationError(normalizedLanguages);
