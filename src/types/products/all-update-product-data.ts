@@ -1,5 +1,6 @@
 import { AddComplianceStandard, DeleteComplianceStandard, UpdateComplianceStandard, UpdateComplianceTabCompletion } from "./compliance-info";
 import { AddLabelComponent, DeleteLabelComponent, LabelComponentTabCompletion, UpdateLabelComponent } from "./label-components";
+import { UpdateLanguagesInformation } from "./languages-info";
 import { AddUpdateCustomField, DeleteCustomField, UpdateProductInfo, UpdateProductInfoTabCompletion } from "./product-info";
 import { AddProductData, DeleteProductData, ProductDataTabCompletion, UpdateProductData } from "./product-data";
 import { AddSymbolsGraphics, DeleteSymbolsGraphics, SymbolsGraphicsTabCompletion, UpdateSymbolsGraphics } from "./symbols-graphics";
@@ -15,6 +16,7 @@ export type UpdateProductDataRequest =
     | UpdateComplianceStandard
     | DeleteComplianceStandard
     | UpdateComplianceTabCompletion
+    | UpdateLanguagesInformation
     | AddLabelComponent
     | UpdateLabelComponent
     | DeleteLabelComponent

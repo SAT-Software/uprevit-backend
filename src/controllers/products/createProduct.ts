@@ -103,6 +103,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				data: [],
 				tab_completed: false,
 			},
+			languages_information: input.languages_information || {
+				data: [],
+			},
 			label_components: input.label_components || {
 				data: [],
 				tab_completed: false,

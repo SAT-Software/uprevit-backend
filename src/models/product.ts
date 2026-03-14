@@ -52,6 +52,15 @@ export type ComplianceInformation = {
 	tab_completed: boolean;
 };
 
+export type LanguagesInformation = {
+	product_data: ProductData,
+	data: Array<{
+			code: string;
+			name: string;
+			country?: string;
+	}>;
+};
+
 export type LabelComponents = {
 	product_data: ProductData,
 	data: Array<{
@@ -135,6 +144,7 @@ export type Product = {
 	complete_count?: number;
 	product_information: ProductInformation;
 	compliance_information: ComplianceInformation;
+	languages_information: LanguagesInformation;
 	label_components: LabelComponents;
 	symbols_graphics: SymbolsGraphics;
 	product_data: ExcelData;
