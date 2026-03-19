@@ -7,6 +7,5 @@ s3_prefix = "uprevit-test"
 region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "MongoDbUri=\"mongodb+srv://uprevit-testing:sat272011-uprevit@uprevit-test.bh21hmu.mongodb.net/?retryWrites=true&w=majority&appName=Uprevit-test\" DbName=\"uprevit-test\" UserPoolId=\"us-east-1_mpuQjaoL2\" ClientId=\"7vvr577cmdnbbo1qjv8e0m40nd\" UploadsBucket=\"uprevit-storage-dev-and-test\" ExportsBucket=\"exports-storage-dev-and-test\""
 image_repositories = []
 disable_rollback = false

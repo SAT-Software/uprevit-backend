@@ -8,8 +8,12 @@ Description: >
 Parameters:
   MongoDbUri:
     Type: String
-    Description: "MongoDB connection string URI"
-    Default: "mongodb+srv://uprevit-testing:sat272011-uprevit@uprevit-test.bh21hmu.mongodb.net/?retryWrites=true&w=majority&appName=Uprevit-test"
+    Description: "Optional direct MongoDB connection string URI for local use"
+    Default: ""
+  MongoDbUriParameter:
+    Type: String
+    Description: "Optional SSM SecureString parameter name containing the MongoDB connection string"
+    Default: ""
   DbName:
     Type: String
     Description: "MongoDB database name"
@@ -57,7 +61,13 @@ Globals:
     Tracing: Active
     Environment:
       Variables:
-        MONGODB_URI: !Ref MongoDbUri
+        MONGODB_URI: !If
+          - HasMongoDbUri
+          - !Ref MongoDbUri
+          - !If
+            - HasMongoDbUriParameter
+            - !Sub "{{resolve:ssm-secure:${MongoDbUriParameter}}}"
+            - ""
         DB_NAME: !Ref DbName
         USER_POOL_ID: !Ref UserPoolId
         CLIENT_ID: !Ref ClientId
@@ -71,6 +81,8 @@ Globals:
     TracingEnabled: true
 
 Conditions:
+  HasMongoDbUri: !Not [!Equals [!Ref MongoDbUri, ""]]
+  HasMongoDbUriParameter: !Not [!Equals [!Ref MongoDbUriParameter, ""]]
   HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]
 
 Resources:

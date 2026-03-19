@@ -3,12 +3,12 @@
 
 name: Deploy Backend to AWS
 
-# This workflow runs on any push to the 'main' branch
 on:
   push:
     branches:
       - main
-      - develop
+      - release/**
+  workflow_dispatch:
 
 jobs:
   # Linting job - runs first and blocks deployment if code quality issues found
@@ -56,6 +56,17 @@ jobs:
     name: Deploy to AWS
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: lint
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'stage' }}
+    env:
+      AWS_REGION: us-east-1
+      STACK_NAME: ${{ vars.STACK_NAME }}
+      MONGODB_URI_PARAM: ${{ vars.MONGODB_URI_PARAM }}
+      DB_NAME: ${{ vars.DB_NAME }}
+      USER_POOL_ID: ${{ vars.USER_POOL_ID }}
+      CLIENT_ID: ${{ vars.CLIENT_ID }}
+      UPLOADS_BUCKET: ${{ vars.UPLOADS_BUCKET }}
+      EXPORTS_BUCKET: ${{ vars.EXPORTS_BUCKET }}
+      EXPORT_JOB_QUEUE_URL: ${{ vars.EXPORT_JOB_QUEUE_URL }}
     
     permissions:
       id-token: write
@@ -70,7 +81,7 @@ jobs:
         with:
           # PASTE THE ARN OF THE ROLE YOU CREATED IN AWS HERE
           role-to-assume: arn:aws:iam::940900040930:role/GitHubActionsSamDeployRole
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -85,8 +96,32 @@ jobs:
       - name: Install AWS SAM CLI
         run: pip install aws-sam-cli
 
+      - name: Validate deploy configuration
+        run: |
+          for name in STACK_NAME MONGODB_URI_PARAM DB_NAME USER_POOL_ID CLIENT_ID UPLOADS_BUCKET EXPORTS_BUCKET; do
+            value="${!name}"
+            if [ -z "$value" ]; then
+              echo "Missing GitHub environment variable: $name"
+              exit 1
+            fi
+          done
+
       - name: Build SAM Application
         run: sam build --use-container
 
       - name: Deploy SAM Application
-        run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
+        run: >-
+          sam deploy
+          --stack-name "$STACK_NAME"
+          --region "${{ env.AWS_REGION }}"
+          --capabilities CAPABILITY_IAM
+          --no-confirm-changeset
+          --no-fail-on-empty-changeset
+          --parameter-overrides
+          "MongoDbUriParameter=$MONGODB_URI_PARAM"
+          "DbName=$DB_NAME"
+          "UserPoolId=$USER_POOL_ID"
+          "ClientId=$CLIENT_ID"
+          "UploadsBucket=$UPLOADS_BUCKET"
+          "ExportsBucket=$EXPORTS_BUCKET"
+          "ExportJobQueueUrl=$EXPORT_JOB_QUEUE_URL"
