@@ -8,11 +8,8 @@ Description: >
 Parameters:
   MongoDbUri:
     Type: String
-    Description: "Optional direct MongoDB connection string URI for local use"
-    Default: ""
-  MongoDbUriParameter:
-    Type: String
-    Description: "Optional SSM SecureString parameter name containing the MongoDB connection string"
+    Description: "MongoDB connection string URI"
+    NoEcho: true
     Default: ""
   DbName:
     Type: String
@@ -61,13 +58,7 @@ Globals:
     Tracing: Active
     Environment:
       Variables:
-        MONGODB_URI: !If
-          - HasMongoDbUri
-          - !Ref MongoDbUri
-          - !If
-            - HasMongoDbUriParameter
-            - !Sub "{{resolve:ssm-secure:${MongoDbUriParameter}}}"
-            - ""
+        MONGODB_URI: !Ref MongoDbUri
         DB_NAME: !Ref DbName
         USER_POOL_ID: !Ref UserPoolId
         CLIENT_ID: !Ref ClientId
@@ -81,8 +72,6 @@ Globals:
     TracingEnabled: true
 
 Conditions:
-  HasMongoDbUri: !Not [!Equals [!Ref MongoDbUri, ""]]
-  HasMongoDbUriParameter: !Not [!Equals [!Ref MongoDbUriParameter, ""]]
   HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]
 
 Resources:

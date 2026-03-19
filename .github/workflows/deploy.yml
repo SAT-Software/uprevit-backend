@@ -6,6 +6,7 @@ name: Deploy Backend to AWS
 on:
   push:
     branches:
+      - develop
       - main
       - release/**
   workflow_dispatch:
@@ -56,7 +57,7 @@ jobs:
     name: Deploy to AWS
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: lint
-    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'stage' }}
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/develop' && 'develop' || 'stage' }}
     env:
       AWS_REGION: us-east-1
       STACK_NAME: ${{ vars.STACK_NAME }}
@@ -106,6 +107,17 @@ jobs:
             fi
           done
 
+      - name: Load MongoDB URI from SSM
+        run: |
+          mongo_uri="$(aws ssm get-parameter --name "$MONGODB_URI_PARAM" --with-decryption --query 'Parameter.Value' --output text)"
+          if [ -z "$mongo_uri" ] || [ "$mongo_uri" = "None" ]; then
+            echo "Failed to load MongoDB URI from SSM parameter: $MONGODB_URI_PARAM"
+            exit 1
+          fi
+
+          echo "::add-mask::$mongo_uri"
+          echo "MONGODB_URI=$mongo_uri" >> "$GITHUB_ENV"
+
       - name: Build SAM Application
         run: sam build --use-container
 
@@ -114,11 +126,13 @@ jobs:
           sam deploy
           --stack-name "$STACK_NAME"
           --region "${{ env.AWS_REGION }}"
+          --resolve-s3
+          --s3-prefix "$STACK_NAME"
           --capabilities CAPABILITY_IAM
           --no-confirm-changeset
           --no-fail-on-empty-changeset
           --parameter-overrides
-          "MongoDbUriParameter=$MONGODB_URI_PARAM"
+          "MongoDbUri=$MONGODB_URI"
           "DbName=$DB_NAME"
           "UserPoolId=$USER_POOL_ID"
           "ClientId=$CLIENT_ID"
