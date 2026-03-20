@@ -52,7 +52,7 @@ Metadata:
 Globals:
   Function:
     Timeout: 120
-    Runtime: nodejs20.x
+    Runtime: nodejs22.x
     Architectures:
       - x86_64
     Tracing: Active
