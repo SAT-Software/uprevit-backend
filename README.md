@@ -28,12 +28,19 @@ The AWS Toolkit is an open source plug-in for popular IDEs that uses the SAM CLI
 
 ## Environment Variables
 
-The application requires the following environment variables to be set in the SAM template:
+For local SAM development, put runtime environment variable names in `env.json` and pass that file with `--env-vars`.
 
-- `MONGODB_URI`: The MongoDB connection string (e.g., "mongodb://localhost:27017" for local development)
-- `DB_NAME`: The name of the MongoDB database (e.g., "uprevit")
+Start from `env.example.json`, then create your local ignored `env.json` with real values.
 
-These are configured in the `template.yaml` file under the `HelloWorldFunction` resource.
+The required runtime keys are:
+
+- `MONGODB_URI`: The MongoDB connection string
+- `DB_NAME`: The MongoDB database name
+- `USER_POOL_ID`: The Cognito User Pool ID
+- `CLIENT_ID`: The Cognito App Client ID
+
+AWS SAM `--env-vars` expects Lambda environment variable names, not CloudFormation parameter names like `MongoDbUri` or `UserPoolId`.
+The local helper script normalizes your ignored `env.json` into `.sam-local-env.json` before startup.
 
 ## Local Development
 
@@ -47,8 +54,15 @@ To run the application locally:
 
 2. Build and run with SAM:
    ```bash
-   sam build
-   sam local start-api
+    cp env.example.json env.json
+    npm run start:local
+    ```
+
+   If you are using built artifacts:
+
+   ```bash
+   cd src
+   npm run start:local:build
    ```
 
 ## Deployment
@@ -65,6 +79,7 @@ sam deploy --guided
 - Fixed MongoDB connection issue by removing dotenv dependency and using environment variables directly in Lambda
 - Updated SAM template to include required environment variables
 - Improved error handling and logging in the Lambda function
+- Added local SAM env normalization so ignored `env.json` files are converted to the AWS-documented `--env-vars` format before startup
 
 ## Use the SAM CLI to build and test locally
 

@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "start:local": "AWS_PROFILE=uprevit-amit sam local start-api --env-vars env.json"
+    "prepare:sam-env": "node scripts/prepare-sam-env.mjs",
+    "start:local": "npm run prepare:sam-env && AWS_PROFILE=uprevit-amit sam local start-api --env-vars .sam-local-env.json"
   },
   "devDependencies": {
     "esbuild": "^0.25.5"

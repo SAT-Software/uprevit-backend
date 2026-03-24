@@ -1,7 +1,8 @@
 {
 	"scripts": {
-		"start:local": "AWS_PROFILE=uprevit-amit sam local start-api -t ../template.yaml --env-vars ../env.json",
-		"start:local:build": "sam build -t ../template.yaml --cached --parallel && AWS_PROFILE=uprevit-amit sam local start-api -t ../.aws-sam/build/template.yaml --env-vars ../env.json",
+		"prepare:sam-env": "node ../scripts/prepare-sam-env.mjs",
+		"start:local": "npm run prepare:sam-env && AWS_PROFILE=uprevit-amit sam local start-api -t ../template.yaml --env-vars ../.sam-local-env.json",
+		"start:local:build": "npm run prepare:sam-env && sam build -t ../template.yaml --cached --parallel && AWS_PROFILE=uprevit-amit sam local start-api -t ../.aws-sam/build/template.yaml --env-vars ../.sam-local-env.json",
     "lint": "eslint controllers/**/*.ts utils/**/*.ts models/*.ts types/**/*.ts db/*.ts app.ts --no-ignore",
     "lint:fix": "eslint controllers/**/*.ts utils/**/*.ts models/*.ts types/**/*.ts db/*.ts app.ts --no-ignore --fix",
     "type-check": "tsc --noEmit",

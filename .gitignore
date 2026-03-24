@@ -207,6 +207,7 @@ $RECYCLE.BIN/
 # Environment variables
 .env
 env.json
+.sam-local-env.json
 
 .kilocode/rules/*
 mongodb-data-local
