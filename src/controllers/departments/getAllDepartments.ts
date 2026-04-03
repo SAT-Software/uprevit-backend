@@ -1,0 +1,143 @@
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getDb } from '../../utils/db';
+import { ObjectId } from 'mongodb';
+import { Department } from '../../models/department';
+import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
+import { authenticateRequest } from '../../utils/authUtils';
+import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
+import { enrichDepartmentsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
+
+type DepartmentUser = {
+	_id: ObjectId;
+	name: string;
+	email: string;
+	profileAvatar?: string;
+};
+
+type DepartmentWithUsers = Omit<Department, 'users'> & {
+	users?: DepartmentUser[];
+	auditLogs?: unknown[];
+	actionAt?: Date;
+};
+
+/**
+ * Get all departments
+ * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
+ * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
+ */
+
+export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+	try {
+		const auth = await authenticateRequest(event);
+		if(!auth.isValid) {
+			return auth.error;
+		}
+
+		const db = await getDb();
+
+		const limit = parseInt(event.queryStringParameters?.limit || '10');
+		const page = parseInt(event.queryStringParameters?.page || '1');
+		const sort = event.queryStringParameters?.sort || 'department_name';
+		const workspaceId = event.queryStringParameters?.workspaceId;
+
+		if (!workspaceId) return ResponseWrapper.badRequest('Workspace ID is required.');
+
+		const isArchiveParam = event.queryStringParameters?.isArchive;
+		let isArchive = false;
+
+		if (isArchiveParam !== undefined) {
+			isArchive = isArchiveParam.toLowerCase() === 'true';
+		}
+
+		if (limit < 1 || limit > 100) {
+			return ResponseWrapper.badRequest('Limit must be between 1 and 100');
+		}
+
+		if (page < 1) {
+			return ResponseWrapper.badRequest('Page must be greater than 0');
+		}
+
+		const allowedSortFields = ['department_name', 'department_description', 'manager', '_id'];
+		if (!allowedSortFields.includes(sort)) {
+			return ResponseWrapper.badRequest(`Invalid sort field. Allowed fields: ${allowedSortFields.join(', ')}`);
+		}
+
+		const skip = (page - 1) * limit;
+
+		const sortObj: { [key: string]: 1 | -1 } = {};
+		sortObj[sort] = 1;
+
+		const filter = isArchive
+			? { isArchived: true, workspace_id: new ObjectId(workspaceId) }
+			: { isArchived: { $ne: true }, workspace_id: new ObjectId(workspaceId) };
+
+		const totalCount = await db.collection<Department>('departments').countDocuments(filter);
+
+		const departments = await db
+			.collection<Department>('departments')
+			.aggregate<DepartmentWithUsers>([
+				{ $match: filter },
+				{ $sort: sortObj },
+				{ $skip: skip },
+				{ $limit: limit },
+				{
+					$lookup: {
+						from: 'users',
+						localField: 'users',
+						foreignField: '_id',
+						pipeline: [
+							{
+								$project: {
+									_id: 1,
+									name: 1,
+									email: 1,
+									profileAvatar: 1,
+								},
+							},
+						],
+						as: 'users',
+					},
+				},
+				isArchive
+					? buildLegacyAuditLookupStage({ scopeType: 'department', mode: 'archive' })
+					: buildLegacyAuditLookupStage({ scopeType: 'department', updateActions: ['update', 'restore'] }),
+			])
+			.toArray();
+
+		const departmentsWithSignedAvatars = await Promise.all(
+			departments.map(async (department) => {
+				if (!department.users?.length) return department;
+
+				const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(department.users);
+
+				return {
+					...department,
+					users: usersWithSignedAvatars,
+				};
+			}),
+		);
+
+		const departmentsWithSignedUrls = await enrichDepartmentsWithImageUrls(departmentsWithSignedAvatars);
+
+		const totalPages = Math.ceil(totalCount / limit);
+
+		return ResponseWrapper.success({
+			message: 'Departments fetched successfully',
+			result: {
+				departments: departmentsWithSignedUrls,
+				pagination: {
+					currentPage: page,
+					totalPages,
+					totalCount,
+					limit,
+					hasNextPage: page < totalPages,
+					hasPrevPage: page > 1,
+				},
+			},
+		});
+	} catch (err) {
+		logError('Get all departments handler failed', err);
+		return ResponseWrapper.internalServerError('Failed to get departments');
+	}
+};

@@ -1,0 +1,41 @@
+import { AddComplianceStandard, DeleteComplianceStandard, UpdateComplianceStandard, UpdateComplianceTabCompletion } from "./compliance-info";
+import { AddLabelComponent, DeleteLabelComponent, LabelComponentTabCompletion, UpdateLabelComponent } from "./label-components";
+import { UpdateLanguagesInformation } from "./languages-info";
+import { AddUpdateCustomField, DeleteCustomField, UpdateProductInfo, UpdateProductInfoTabCompletion } from "./product-info";
+import { AddProductData, DeleteProductData, ProductDataTabCompletion, UpdateProductData } from "./product-data";
+import { AddSymbolsGraphics, DeleteSymbolsGraphics, SymbolsGraphicsTabCompletion, UpdateSymbolsGraphics } from "./symbols-graphics";
+import { AddOperationalParameters, DeleteOperationalParameters, OperationalParametersTabCompletion, UpdateOperationalParameters } from "./operational-parameters";
+import { AddLabelTag, DeleteLabelTag, LabelTagsTabCompletion, UpdateLabelTag, UpdateLabelTagLegend, UpdateLabelTagTaggedImage } from "./label-tags";
+
+export type UpdateProductDataRequest =
+    | UpdateProductInfo
+    | AddUpdateCustomField
+    | DeleteCustomField
+    | UpdateProductInfoTabCompletion
+    | AddComplianceStandard
+    | UpdateComplianceStandard
+    | DeleteComplianceStandard
+    | UpdateComplianceTabCompletion
+    | UpdateLanguagesInformation
+    | AddLabelComponent
+    | UpdateLabelComponent
+    | DeleteLabelComponent
+    | LabelComponentTabCompletion
+    | AddSymbolsGraphics
+    | UpdateSymbolsGraphics
+    | DeleteSymbolsGraphics
+    | SymbolsGraphicsTabCompletion
+    | AddProductData
+    | UpdateProductData
+    | DeleteProductData
+    | ProductDataTabCompletion
+    | AddOperationalParameters
+    | UpdateOperationalParameters
+    | DeleteOperationalParameters
+    | OperationalParametersTabCompletion
+    | AddLabelTag
+    | UpdateLabelTag
+    | UpdateLabelTagLegend
+    | UpdateLabelTagTaggedImage
+    | DeleteLabelTag
+    | LabelTagsTabCompletion;

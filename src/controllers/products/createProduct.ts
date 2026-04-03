@@ -1,0 +1,169 @@
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getDb } from '../../utils/db';
+import type { Product } from '../../models/product';
+import { ObjectId } from 'mongodb';
+import { ResponseWrapper } from '../../utils/responseWrapper';
+import { validateEnum, validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
+import { authenticateRequest } from '../../utils/authUtils';
+import { logError } from '../../utils/logger';
+import { recordAuditEvent } from '../../utils/auditLogV2';
+
+/**
+ * Create a product
+ * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
+ * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
+ */
+
+export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+	let userId: string | undefined;
+	let workspaceId: string | undefined;
+	
+	try {
+		const auth = await authenticateRequest(event);	
+		if(!auth.isValid) return auth.error;
+		
+		userId = auth.payload?.sub;
+
+		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
+
+		const input = JSON.parse(event.body);
+		if(!input)return ResponseWrapper.badRequest('Invalid JSON in request body');
+		
+		workspaceId = input.workspace_id;
+	
+
+		const missingFieldsResult = validateMissingFields({
+			'project_id': input.project_id.toString(),
+			'product_plan_number': input.product_plan_number,
+			'product_name': input.product_name,
+			'product_description': input.product_description,
+			'status': input.status,
+			'version': input.version,
+		});
+
+		if(missingFieldsResult) return missingFieldsResult;
+
+
+		const enumValidation = validateEnum(['draft', 'submitted', 'archived'], input.status);
+				
+		if(enumValidation) return enumValidation;
+
+
+		const objectIdValidation = validateObjectIds({
+			'project_id': input.project_id,
+			'department_id': input.department_id!,
+			'workspace_id': input.workspace_id,
+		});
+
+		if(objectIdValidation) return objectIdValidation;
+
+
+		const db = await getDb();
+
+		const projectObjectId = new ObjectId(input.project_id);
+		const departmentObjectId = new ObjectId(input.department_id);
+		const workspaceObjectId = new ObjectId(input.workspace_id);
+
+		const existingProduct = await db.collection<Product>('products').findOne({
+			product_plan_number: input.product_plan_number,
+			parent_id: { $exists: false }
+		});
+
+		if (existingProduct) {
+			return ResponseWrapper.conflict('Product plan number already exists');
+		}
+
+		const productData = {
+			project_id: projectObjectId,
+			workspace_id: workspaceObjectId,
+			department_id: departmentObjectId,
+			product_plan_number: input.product_plan_number,
+			product_name: input.product_name,
+			product_description: input.product_description,
+			version: input.version,
+			is_latest: true,
+			parent_id: null,
+			target_date: input.target_date || null,
+			actual_completion_date: input.actual_completion_date || null,
+			status: input.status,
+			complete_count: input.complete_count || 0,
+			product_information: input.product_information || {
+				data: {
+					_id: new ObjectId(),
+					market_geography: '',
+					country_of_origin: '',
+					oem_contract_manufacturer: '',
+					commercial_clinical: '',
+					manufacturing_location: '',
+					custom_fields: [],
+				},
+				tab_completed: false,
+			},
+			compliance_information: input.compliance_information || {
+				data: [],
+				tab_completed: false,
+			},
+			languages_information: input.languages_information || {
+				data: [],
+			},
+			label_components: input.label_components || {
+				data: [],
+				tab_completed: false,
+			},
+			symbols_graphics: input.symbols_graphics || { data: [], tab_completed: false },
+			product_data: input.product_data || {
+				data: {
+					_id: new ObjectId(),
+					workbook_data: {},
+				},
+				tab_completed: false,
+			},
+			operational_parameters: input.operational_parameters || {
+				data: {
+					_id: new ObjectId(),
+					workbook_data: {},
+				},
+				tab_completed: false,
+			},
+			label_tags: input.label_tags || {
+				data: [],
+				tab_completed: false,
+			},
+		};
+
+		const product = await db.collection<Product>('products').insertOne(productData);
+
+		await recordAuditEvent({
+			workspaceId: workspaceObjectId.toString(),
+			scope: { type: 'product', id: product.insertedId.toString() },
+			entity: { type: 'product', id: product.insertedId.toString() },
+			action: 'create',
+			eventKey: 'product.created',
+			visibility: 'all',
+			where: { module: 'products' },
+			auth: auth.payload,
+			after: {
+				product_plan_number: input.product_plan_number,
+				product_name: input.product_name,
+				product_description: input.product_description,
+				status: input.status,
+				version: input.version,
+			},
+			changedPaths: ['product_plan_number', 'product_name', 'product_description', 'status', 'version'],
+			meta: {
+				productName: input.product_name,
+			},
+		});
+
+		return ResponseWrapper.created({
+			message: 'Product created successfully',
+			product: product,
+		});
+	} catch (err) {
+		logError('Create product handler failed', err, {
+			userId,
+			workspaceId,
+		});
+		return ResponseWrapper.internalServerError('Failed to create product');
+	}
+};

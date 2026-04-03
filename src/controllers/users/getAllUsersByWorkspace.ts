@@ -1,0 +1,43 @@
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { getDb } from '../../utils/db';
+import { User } from '../../models/user';
+import { ResponseWrapper } from '../../utils/responseWrapper';
+import { logError } from '../../utils/logger';
+import { authenticateRequest } from '../../utils/authUtils';
+import { ObjectId } from 'mongodb';
+import { enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
+
+/**
+ * Get all users by workspace
+ * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
+ * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
+ */
+
+export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+	try {
+		const auth = await authenticateRequest(event);
+		
+		if(!auth.isValid) {
+			return auth.error;
+		}
+
+		if (!event.queryStringParameters?.workspaceId) {
+			return ResponseWrapper.badRequest('Missing required fields: workspaceId is required');
+		}
+		const workspaceId = event.queryStringParameters.workspaceId;
+
+		const db = await getDb();
+
+		const users: User[] = await db.collection<User>('users').find({ workspaceId: new ObjectId(workspaceId) }).toArray();
+		const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(users);
+
+		return ResponseWrapper.success({
+			message: 'Users retrieved successfully',
+			data: usersWithSignedAvatars,
+		});
+
+	} catch (err) {
+		logError('Get users by workspace handler failed', err);
+		return ResponseWrapper.internalServerError('Failed to get users');
+	}
+};

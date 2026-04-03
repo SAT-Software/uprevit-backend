@@ -1,0 +1,11 @@
+{
+  "Records": [
+    {
+      "messageId": "report-export-local-1",
+      "body": "{\"schemaVersion\":1,\"jobId\":\"69ad6b65c40da0b3d85aeac4\",\"target\":\"report\",\"workspaceId\":\"69174ada552dcbbf657f8a91\",\"requestedBySub\":\"04588418-d0d1-70c7-5085-fc039e7b1a1c\",\"requestedByUserId\":\"69174adb552dcbbf657f8a93\",\"format\":\"pdf\",\"queuedAt\":\"2026-03-08T12:28:21.804Z\"}",
+      "attributes": {
+        "ApproximateReceiveCount": "1"
+      }
+    }
+  ]
+}

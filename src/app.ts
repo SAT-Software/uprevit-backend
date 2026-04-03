@@ -1,4 +1,7 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import {APIGatewayProxyEvent, APIGatewayProxyResult} from 'aws-lambda';
+import {authenticateRequest} from './utils/authUtils';
+import {ResponseWrapper} from './utils/responseWrapper';
+import {logError} from './utils/logger';
 
 /**
  *
@@ -10,21 +13,24 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
  *
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-    try {
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                message: 'hello world',
-            }),
-        };
-    } catch (err) {
-        console.log(err);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({
-                message: 'some error happened',
-            }),
-        };
-    }
+export const lambdaHandler = async (event: APIGatewayProxyEvent):
+	Promise<APIGatewayProxyResult> => {
+	try {
+		const auth = await authenticateRequest(event);
+
+		if (!auth.isValid) {
+			return ResponseWrapper.unauthorized('Unauthorized');
+		}
+
+		return ResponseWrapper.success(
+			{
+				message: 'Hello from Lambda!',
+				database: 'Connected successfully',
+				timestamp: new Date().toISOString(),
+			}
+		);
+	} catch (err) {
+		logError('Hello world handler failed', err);
+		return ResponseWrapper.internalServerError('An error occurred');
+	}
 };

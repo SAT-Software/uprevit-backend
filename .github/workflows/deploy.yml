@@ -1,0 +1,141 @@
+
+# .github/workflows/deploy.yml
+
+name: Deploy Backend to AWS
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+      - release/**
+  workflow_dispatch:
+
+jobs:
+  # Linting job - runs first and blocks deployment if code quality issues found
+  lint:
+    name: Lint Code
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: src/package-lock.json
+
+      - name: Install dependencies
+        working-directory: src
+        run: npm ci
+
+      - name: Run ESLint
+        working-directory: src
+        run: |
+          echo "Running ESLint with zero warnings policy..."
+          npx eslint \
+            controllers/**/*.ts \
+            utils/**/*.ts \
+            models/*.ts \
+            types/**/*.ts \
+            db/*.ts \
+            app.ts \
+            --no-ignore \
+            --max-warnings 0
+
+      - name: Run TypeScript type check
+        working-directory: src
+        run: |
+          echo "Running TypeScript compiler check..."
+          npx tsc --noEmit
+
+  # Deploy job - only runs after linting passes
+  deploy:
+    name: Deploy to AWS
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: lint
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/develop' && 'develop' || 'stage' }}
+    env:
+      AWS_REGION: us-east-1
+      STACK_NAME: ${{ vars.STACK_NAME }}
+      MONGODB_URI_PARAM: ${{ vars.MONGODB_URI_PARAM }}
+      DB_NAME: ${{ vars.DB_NAME }}
+      USER_POOL_ID: ${{ vars.USER_POOL_ID }}
+      CLIENT_ID: ${{ vars.CLIENT_ID }}
+      UPLOADS_BUCKET: ${{ vars.UPLOADS_BUCKET }}
+      EXPORTS_BUCKET: ${{ vars.EXPORTS_BUCKET }}
+      EXPORT_JOB_QUEUE_URL: ${{ vars.EXPORT_JOB_QUEUE_URL }}
+    
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          # PASTE THE ARN OF THE ROLE YOU CREATED IN AWS HERE
+          role-to-assume: arn:aws:iam::940900040930:role/GitHubActionsSamDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install AWS SAM CLI
+        run: pip install aws-sam-cli
+
+      - name: Validate deploy configuration
+        run: |
+          for name in STACK_NAME MONGODB_URI_PARAM DB_NAME USER_POOL_ID CLIENT_ID UPLOADS_BUCKET EXPORTS_BUCKET; do
+            value="${!name}"
+            if [ -z "$value" ]; then
+              echo "Missing GitHub environment variable: $name"
+              exit 1
+            fi
+          done
+
+      - name: Load MongoDB URI from SSM
+        run: |
+          mongo_uri="$(aws ssm get-parameter --name "$MONGODB_URI_PARAM" --with-decryption --query 'Parameter.Value' --output text)"
+          if [ -z "$mongo_uri" ] || [ "$mongo_uri" = "None" ]; then
+            echo "Failed to load MongoDB URI from SSM parameter: $MONGODB_URI_PARAM"
+            exit 1
+          fi
+
+          echo "::add-mask::$mongo_uri"
+          echo "MONGODB_URI=$mongo_uri" >> "$GITHUB_ENV"
+
+      - name: Build SAM Application
+        run: sam build --use-container
+
+      - name: Deploy SAM Application
+        run: >-
+          sam deploy
+          --stack-name "$STACK_NAME"
+          --region "${{ env.AWS_REGION }}"
+          --resolve-s3
+          --s3-prefix "$STACK_NAME"
+          --capabilities CAPABILITY_IAM
+          --no-confirm-changeset
+          --no-fail-on-empty-changeset
+          --parameter-overrides
+          "MongoDbUri=$MONGODB_URI"
+          "DbName=$DB_NAME"
+          "UserPoolId=$USER_POOL_ID"
+          "ClientId=$CLIENT_ID"
+          "UploadsBucket=$UPLOADS_BUCKET"
+          "ExportsBucket=$EXPORTS_BUCKET"
+          "ExportJobQueueUrl=$EXPORT_JOB_QUEUE_URL"

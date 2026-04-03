@@ -1,44 +1,1306 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   uprevit-backend
 
   Sample SAM Template for uprevit-backend
 
+Parameters:
+  MongoDbUri:
+    Type: String
+    Description: "MongoDB connection string URI"
+    NoEcho: true
+    Default: ""
+  DbName:
+    Type: String
+    Description: "MongoDB database name"
+    Default: "uprevit-test"
+  UserPoolId:
+    Type: String
+    Description: "The Cognito User Pool ID for token validation"
+  ClientId:
+    Type: String
+    Description: "The Cognito App Client ID for token validation"
+  UploadsBucket:
+    Type: String
+    Description: "S3 bucket name for uploaded files"
+    Default: "uprevit-storage-dev-and-test"
+  ExportsBucket:
+    Type: String
+    Description: "S3 bucket name for generated export files"
+    Default: "exports-storage-dev-and-test"
+  ExportJobQueueUrl:
+    Type: String
+    Description: "Optional explicit SQS queue URL override for local/dev"
+    Default: ""
+
+# ──────────────────────────────────────────────────────────────────────────
+# TOP-LEVEL METADATA  – YAML anchor for the build recipe
+# ──────────────────────────────────────────────────────────────────────────
+Metadata:
+  # Common part that never changes
+  EsbuildBase: &EsbuildBase
+    BuildMethod: esbuild
+
+  # Common BuildProperties (minus EntryPoints)
+  EsbuildProps: &EsbuildProps
+    Minify: true
+    Target: es2020
+    Sourcemap: true
+
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 3
-
+    Timeout: 120
+    Runtime: nodejs22.x
+    Architectures:
+      - x86_64
     Tracing: Active
+    Environment:
+      Variables:
+        MONGODB_URI: !Ref MongoDbUri
+        DB_NAME: !Ref DbName
+        USER_POOL_ID: !Ref UserPoolId
+        CLIENT_ID: !Ref ClientId
+        UPLOADS_BUCKET: !Ref UploadsBucket
+        EXPORTS_BUCKET: !Ref ExportsBucket
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
+
   Api:
     TracingEnabled: true
+
+Conditions:
+  HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]
+
 Resources:
   HelloWorldFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       CodeUri: src/
       Handler: app.lambdaHandler
-      Runtime: nodejs20.x
-      Architectures:
-      - x86_64
       Events:
         HelloWorld:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
             Path: /hello
             Method: get
-    Metadata: # Manage esbuild properties
-      BuildMethod: esbuild
+    Metadata:
+      <<: *EsbuildBase
       BuildProperties:
-        Minify: true
-        Target: es2020
-        Sourcemap: true
-        EntryPoints:
-        - app.ts
+        <<: *EsbuildProps
+        EntryPoints: [app.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # USERS
+  # ──────────────────────────────────────────────────────────────────────────
+  CreateUserFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/users/createUser.lambdaHandler
+      Events:
+        CreateUser:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /users
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/users/createUser.ts]
+
+  GetUserFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/users/getUser.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetUser:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /users/{id}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/users/getUser.ts]
+
+  UpdateUserFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/users/updateUser.lambdaHandler
+      Events:
+        UpdateUser:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /users
+            Method: put
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/users/updateUser.ts]
+
+  DeleteUserFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/users/deleteUser.lambdaHandler
+      Events:
+        DeleteUser:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /users/{id}
+            Method: delete
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/users/deleteUser.ts]
+
+  GetAllUsersByWorkspaceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/users/getAllUsersByWorkspace.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetAllUsersByWorkspace:
+          Type: Api
+          Properties:
+            Path: /users/workspace
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/users/getAllUsersByWorkspace.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # ONBOARDING
+  # ──────────────────────────────────────────────────────────────────────────
+  AdminOnboardingCreateWorkspaceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/onboarding/adminOnboardingCreateWorkspace.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminAddUserToGroup
+              Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+      Events:
+        AdminOnboardingCreateWorkspace:
+          Type: Api
+          Properties:
+            Path: /onboarding/admin/workspace
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/onboarding/adminOnboardingCreateWorkspace.ts]
+
+  InviteNewUserByAdminFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/onboarding/InviteNewUserByAdmin.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminAddUserToGroup
+              Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+      Events:
+        InviteNewUserByAdmin:
+          Type: Api
+          Properties:
+            Path: /invites/workspace/{workspaceId}
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/onboarding/InviteNewUserByAdmin.ts]
+
+  OnboardAndUpdateInvitedUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/onboarding/onboardAndUpdateInvitedUser.handler
+      Events:
+        OnboardAndUpdateInvitedUser:
+          Type: Api
+          Properties:
+            Path: /onboarding/user
+            Method: put
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/onboarding/onboardAndUpdateInvitedUser.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # WORKSPACES
+  # ──────────────────────────────────────────────────────────────────────────
+  CreateWorkspaceFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workspaces/createWorkspace.lambdaHandler
+      Events:
+        CreateWorkspace:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /workspace
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workspaces/createWorkspace.ts]
+
+  GetWorkspaceFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workspaces/getWorkspace.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetWorkspace:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /workspace/{id}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workspaces/getWorkspace.ts]
+
+  UpdateWorkspaceFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workspaces/updateWorkspace.lambdaHandler
+      Events:
+        UpdateWorkspace:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /workspace
+            Method: put
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workspaces/updateWorkspace.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # DEPARTMENTS
+  # ──────────────────────────────────────────────────────────────────────────
+  CreateDepartmentFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/departments/createDepartment.lambdaHandler
+      Events:
+        CreateDepartment:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /departments
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/departments/createDepartment.ts]
+
+  GetDepartmentFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/departments/getDepartment.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetDepartment:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /departments/{id}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/departments/getDepartment.ts]
+
+  GetAllDepartmentsFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-0-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/departments/getAllDepartments.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetAllDepartments:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-0-31.md#api
+          Properties:
+            Path: /departments
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/departments/getAllDepartments.ts]
+
+  UpdateDepartmentFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/departments/updateDepartment.lambdaHandler
+      Events:
+        UpdateDepartment:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /departments
+            Method: put
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/departments/updateDepartment.ts]
+
+  ArchiveDepartmentFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/departments/archiveDepartment.lambdaHandler
+      Events:
+        ArchiveDepartment:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /departments/{id}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/departments/archiveDepartment.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # PROJECTS
+  # ──────────────────────────────────────────────────────────────────────────
+
+  CreateProjectFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/projects/createProject.lambdaHandler
+      Events:
+        CreateProject:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /projects
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/projects/createProject.ts]
+
+  UpdateProjectFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/projects/updateProject.lambdaHandler
+      Events:
+        UpdateProject:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /projects
+            Method: put
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/projects/updateProject.ts]
+
+  GetAllProjectsFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/projects/getAllProjects.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetAllProjects:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /projects
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/projects/getAllProjects.ts]
+
+  GetProjectFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/projects/getProject.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetProject:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /projects/{id}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/projects/getProject.ts]
+
+  ArchiveProjectFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/projects/archiveProject.lambdaHandler
+      Events:
+        ArchiveProject:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /projects/{id}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/projects/archiveProject.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # PRODUCTS
+  # ──────────────────────────────────────────────────────────────────────────
+
+  CreateProductFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/createProduct.lambdaHandler
+      Events:
+        CreateProduct:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /products
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/createProduct.ts]
+
+  GetAllProductsFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getAllProducts.lambdaHandler
+      Events:
+        GetAllProducts:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /products
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getAllProducts.ts]
+
+  UpdateProductFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/updateProduct.lambdaHandler
+      Events:
+        UpdateProduct:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /products/{productId}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/updateProduct.ts]
+
+  UpdateProductDataFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/updateProductData.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:DeleteObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        UpdateProductData:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /products/productData
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/updateProductData.ts]
+
+  GetProductDataFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getProductData.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetProductData:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /products/productData
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getProductData.ts]
+
+  CreateProductVersionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/createProductVersion.lambdaHandler
+      Events:
+        CreateProductVersion:
+          Type: Api
+          Properties:
+            Path: /products/{productId}/version
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/createProductVersion.ts]
+
+  GetAllProductVersionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getAllProductVersions.lambdaHandler
+      Events:
+        GetAllProductVersions:
+          Type: Api
+          Properties:
+            Path: /products/versions
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getAllProductVersions.ts]
+
+  EnqueueProductExportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/enqueueProductExport.lambdaHandler
+      Environment:
+        Variables:
+          EXPORT_JOB_QUEUE_URL: !If [HasExportJobQueueUrl, !Ref ExportJobQueueUrl, !Ref ProductExportJobQueue]
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !If
+                - HasExportJobQueueUrl
+                - !Sub
+                  - arn:${AWS::Partition}:sqs:${QueueRegion}:${QueueAccountId}:${QueueName}
+                  - QueueRegion: !Select [1, !Split [".", !Select [2, !Split ["/", !Ref ExportJobQueueUrl]]]]
+                    QueueAccountId: !Select [3, !Split ["/", !Ref ExportJobQueueUrl]]
+                    QueueName: !Select [4, !Split ["/", !Ref ExportJobQueueUrl]]
+                - !GetAtt ProductExportJobQueue.Arn
+      Events:
+        EnqueueProductExport:
+          Type: Api
+          Properties:
+            Path: /products/{productId}/exports
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/enqueueProductExport.ts]
+
+  GetProductExportJobsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getProductExportJobs.lambdaHandler
+      Events:
+        GetProductExportJobs:
+          Type: Api
+          Properties:
+            Path: /products/exports/jobs
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getProductExportJobs.ts]
+
+  GetProductExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/getProductExportJob.lambdaHandler
+      Events:
+        GetProductExportJob:
+          Type: Api
+          Properties:
+            Path: /products/exports/jobs/{jobId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/getProductExportJob.ts]
+
+  DownloadProductExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/downloadProductExportJob.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${ExportsBucket}/*"
+      Events:
+        DownloadProductExportJob:
+          Type: Api
+          Properties:
+            Path: /products/exports/jobs/{jobId}/download
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/downloadProductExportJob.ts]
+
+  ProductExportJobDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-product-export-job-dlq"
+      MessageRetentionPeriod: 1209600
+
+  ProductExportJobQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-product-export-job-queue"
+      VisibilityTimeout: 5400
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ProductExportJobDLQ.Arn
+        maxReceiveCount: 5
+
+  ProcessProductExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/exports/processExportJob.lambdaHandler
+      Timeout: 900
+      MemorySize: 3008
+      Environment:
+        Variables:
+          EXPORTS_PREFIX: exports
+          EXPORT_JOB_MAX_RECEIVE_COUNT: 5
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:ReceiveMessage
+                - sqs:DeleteMessage
+                - sqs:GetQueueAttributes
+                - sqs:ChangeMessageVisibility
+              Resource: !GetAtt ProductExportJobQueue.Arn
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${ExportsBucket}/*"
+      Events:
+        ProductExportQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ProductExportJobQueue.Arn
+            BatchSize: 1
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/exports/processExportJob.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # AUDIT LOGS V2
+  # ──────────────────────────────────────────────────────────────────────────
+
+  GetAuditLogsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/auditLogs/getAuditLogs.lambdaHandler
+      Events:
+        GetAuditLogs:
+          Type: Api
+          Properties:
+            Path: /audit-logs
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/auditLogs/getAuditLogs.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # BOOKMARKS
+  # ──────────────────────────────────────────────────────────────────────────
+
+  GetAllProductBookmarksFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource:
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/getAllProductBookmarkFolders.lambdaHandler
+      Events:
+        GetAllProductBookmarks:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/getAllProductBookmarkFolders.ts]
+
+  CreateProductBookmarkFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource:
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/createProductBookmarkFolder.lambdaHandler
+      Events:
+        CreateProductBookmark:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/createProductBookmarkFolder.ts]
+
+  UpdateProductBookmarkFolderFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource:
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/updateProductBookmarkFolder.lambdaHandler
+      Events:
+        UpdateProductBookmarkFolder:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products/{folderId}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/updateProductBookmarkFolder.ts]
+
+  DeleteProductBookmarkFolderFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource:
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/deleteProductBookmarkFolder.lambdaHandler
+      Events:
+        DeleteProductBookmarkFolder:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products/{folderId}
+            Method: delete
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/deleteProductBookmarkFolder.ts]
+
+  AddProductToBookmarkFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/addProductToBookmarkFolder.lambdaHandler
+      Events:
+        AddProductToBookmarkFolder:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products/add/{folderId}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/addProductToBookmarkFolder.ts]
+
+  DeleteProductFromBookmarkFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/deleteProductFromBookmark.lambdaHandler
+      Events:
+        DeleteProductFromBookmark:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products/delete/{folderId}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/deleteProductFromBookmark.ts]
+
+  GetProductsFromBookmarkFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/getProductsFromBookmark.lambdaHandler
+      Events:
+        GetProductsFromBookmark:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products/{folderId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/getProductsFromBookmark.ts]
+
+  GetBookmarkedSourceFileFoldersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/getBookmarkedSourceFileFolders.lambdaHandler
+      Events:
+        GetBookmarkedSourceFileFolders:
+          Type: Api
+          Properties:
+            Path: /bookmarks/source-files
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/getBookmarkedSourceFileFolders.ts]
+
+  ToggleBookmarkSourceFileFoldersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/toggleBookmarkSourceFileFolders.lambdaHandler
+      Events:
+        ToggleBookmarkSourceFileFolders:
+          Type: Api
+          Properties:
+            Path: /bookmarks/source-files
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/toggleBookmarkSourceFileFolders.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # DASHBOARD
+  # ──────────────────────────────────────────────────────────────────────────
+
+  GetDashboardStatsFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/dashboard/getDashboardStats.lambdaHandler
+      Events:
+        GetDashboardStats:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /dashboard
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/dashboard/getDashboardStats.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # SOURCE FILES
+  # ──────────────────────────────────────────────────────────────────────────
+  CreateSourceFileAndFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/sourceFiles/createSourceFileAndFolder.lambdaHandler
+      Events:
+        CreateSourceFileAndFolder:
+          Type: Api
+          Properties:
+            Path: /source-files
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/sourceFiles/createSourceFileAndFolder.ts]
+
+  GetAllSourceFilesFoldersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/sourceFiles/getAllSourceFilesFolders.lambdaHandler
+      Events:
+        GetAllSourceFilesFolders:
+          Type: Api
+          Properties:
+            Path: /source-files
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/sourceFiles/getAllSourceFilesFolders.ts]
+
+  GetSourceFilesByParentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/sourceFiles/getSourceFilesByParent.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetSourceFilesByParent:
+          Type: Api
+          Properties:
+            Path: /source-files/folder
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/sourceFiles/getSourceFilesByParent.ts]
+
+  GetCurrentFolderByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/sourceFiles/getCurrentFolderById.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetCurrentFolderById:
+          Type: Api
+          Properties:
+            Path: /source-files/current-folder
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/sourceFiles/getCurrentFolderById.ts]
+
+  DeleteSourceFileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/sourceFiles/deleteSourceFileAndFolder.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:DeleteObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        DeleteSourceFileAndFolder:
+          Type: Api
+          Properties:
+            Path: /source-files/{id}
+            Method: delete
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/sourceFiles/deleteSourceFileAndFolder.ts]
+
+  UpdateSourceFilesFolderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/sourceFiles/updateSourceFilesFolder.lambdaHandler
+      Events:
+        UpdateSourceFilesFolder:
+          Type: Api
+          Properties:
+            Path: /source-files/folder/{folderId}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/sourceFiles/updateSourceFilesFolder.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # REPORTS
+  # ──────────────────────────────────────────────────────────────────────────
+
+  ReportsQueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/reportsQuery.lambdaHandler
+      Events:
+        ReportsQuery:
+          Type: Api
+          Properties:
+            Path: /reports/query
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/reportsQuery.ts]
+
+  EnqueueReportExportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/enqueueReportExport.lambdaHandler
+      Environment:
+        Variables:
+          EXPORT_JOB_QUEUE_URL: !If [HasExportJobQueueUrl, !Ref ExportJobQueueUrl, !Ref ProductExportJobQueue]
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !If
+                - HasExportJobQueueUrl
+                - !Sub
+                  - arn:${AWS::Partition}:sqs:${QueueRegion}:${QueueAccountId}:${QueueName}
+                  - QueueRegion: !Select [1, !Split [".", !Select [2, !Split ["/", !Ref ExportJobQueueUrl]]]]
+                    QueueAccountId: !Select [3, !Split ["/", !Ref ExportJobQueueUrl]]
+                    QueueName: !Select [4, !Split ["/", !Ref ExportJobQueueUrl]]
+                - !GetAtt ProductExportJobQueue.Arn
+      Events:
+        EnqueueReportExport:
+          Type: Api
+          Properties:
+            Path: /reports/exports
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/enqueueReportExport.ts]
+
+  GetReportExportJobsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/getReportExportJobs.lambdaHandler
+      Events:
+        GetReportExportJobs:
+          Type: Api
+          Properties:
+            Path: /reports/exports/jobs
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/getReportExportJobs.ts]
+
+  GetReportExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/getReportExportJob.lambdaHandler
+      Events:
+        GetReportExportJob:
+          Type: Api
+          Properties:
+            Path: /reports/exports/jobs/{jobId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/getReportExportJob.ts]
+
+  DownloadReportExportJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/downloadReportExportJob.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${ExportsBucket}/*"
+      Events:
+        DownloadReportExportJob:
+          Type: Api
+          Properties:
+            Path: /reports/exports/jobs/{jobId}/download
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/downloadReportExportJob.ts]
+
+  ReportsExportPDFFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/reportsExportPDF.lambdaHandler
+      Timeout: 300
+      Events:
+        ReportsExportPDF:
+          Type: Api
+          Properties:
+            Path: /reports/export/pdf
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/reportsExportPDF.ts]
+
+  ReportsExportExcelFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/reportsExportExcel.lambdaHandler
+      Timeout: 300
+      Events:
+        ReportsExportExcel:
+          Type: Api
+          Properties:
+            Path: /reports/export/excel
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/reports/reportsExportExcel.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # S3 STORAGE
+  # ──────────────────────────────────────────────────────────────────────────
+
+  PresignUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/s3Storage/presignUpload.lambdaHandler
+      Timeout: 300
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        PresignUpload:
+          Type: Api
+          Properties:
+            Path: /s3-storage/presign-upload
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/s3Storage/presignUpload.ts]
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
@@ -52,17 +1314,8 @@ Resources:
     Properties:
       ResourceGroupName:
         Ref: ApplicationResourceGroup
-      AutoConfigurationEnabled: 'true'
+      AutoConfigurationEnabled: "true"
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
-    Description: API Gateway endpoint URL for Prod stage for Hello World function
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  HelloWorldFunction:
-    Description: Hello World Lambda Function ARN
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: Implicit IAM Role created for Hello World function
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+  ApiBaseUrl:
+    Description: API Gateway base URL for the deployed backend stage
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
