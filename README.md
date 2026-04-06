@@ -1,39 +1,41 @@
 # uprevit-backend
 
-A serverless backend application built with AWS SAM and Node.js.
+Serverless backend for Uprevit, built with AWS SAM, AWS Lambda, API Gateway, MongoDB, Cognito, S3, and SQS.
 
-This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
-
-- hello-world - Code for the application's Lambda function written in TypeScript.
-- events - Invocation events that you can use to invoke the function.
-- hello-world/tests - Unit tests for the application code. 
-- template.yaml - A template that defines the application's AWS resources.
-
-The application uses several AWS resources, including Lambda functions and an API Gateway API. These resources are defined in the `template.yaml` file in this project. You can update the template to add AWS resources through the same deployment process that updates your application code.
-
-If you prefer to use an integrated development environment (IDE) to build and test your application, you can use the AWS Toolkit.  
-The AWS Toolkit is an open source plug-in for popular IDEs that uses the SAM CLI to build and deploy serverless applications on AWS. The AWS Toolkit also adds a simplified step-through debugging experience for Lambda function code. See the following links to get started.
-
-* [CLion](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [GoLand](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [IntelliJ](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [WebStorm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [Rider](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [PhpStorm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [PyCharm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [RubyMine](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [DataGrip](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [VS Code](https://docs.aws.amazon.com/toolkit-for-vscode/latest/userguide/welcome.html)
-* [Visual Studio](https://docs.aws.amazon.com/toolkit-for-visual-studio/latest/user-guide/welcome.html)
+The main infrastructure entrypoint is `template.yaml`, and the application code lives under `src/`.
 
 ## Environment Variables
 
-The application requires the following environment variables to be set in the SAM template:
+For local SAM development, put runtime environment variable names in `env.json` and pass that file with `--env-vars`.
 
-- `MONGODB_URI`: The MongoDB connection string (e.g., "mongodb://localhost:27017" for local development)
-- `DB_NAME`: The name of the MongoDB database (e.g., "uprevit")
+Start from `env.example.json`, then create your local ignored `env.json` with real values.
 
-These are configured in the `template.yaml` file under the `HelloWorldFunction` resource.
+The required runtime keys are:
+
+- `MONGODB_URI`: The MongoDB connection string
+- `DB_NAME`: The MongoDB database name
+- `USER_POOL_ID`: The Cognito User Pool ID
+- `CLIENT_ID`: The Cognito App Client ID
+- `UPLOADS_BUCKET`: The S3 bucket used for uploaded files
+- `EXPORTS_BUCKET`: The S3 bucket used for generated exports
+- `EXPORT_JOB_QUEUE_URL`: The SQS queue URL used by export jobs
+
+AWS SAM `--env-vars` expects Lambda environment variable names, not CloudFormation parameter names like `MongoDbUri` or `UserPoolId`.
+The local helper script normalizes your ignored `env.json` into `.sam-local-env.json` before startup.
+
+## Production Deployment
+
+Production deployment is handled by GitHub Actions, not by running `sam deploy --guided` manually.
+
+Branch to environment mapping:
+
+- `develop` -> GitHub environment `develop`
+- `release/**` -> GitHub environment `stage`
+- `main` -> GitHub environment `prod`
+
+The deploy workflow reads non-secret configuration from GitHub environment variables and loads `MONGODB_URI` from AWS Systems Manager Parameter Store using `MONGODB_URI_PARAM`.
+
+After a successful deploy, the backend API base URL comes from the CloudFormation stack output `ApiBaseUrl`. That is the base URL the frontend should use for production.
 
 ## Local Development
 
@@ -47,34 +49,44 @@ To run the application locally:
 
 2. Build and run with SAM:
    ```bash
-   sam build
-   sam local start-api
+    cp env.example.json env.json
+    npm run start:local
+    ```
+
+   If you are using built artifacts:
+
+   ```bash
+   cd src
+   npm run start:local:build
    ```
 
-## Deployment
+## Release Flow
 
-To deploy to AWS:
+Recommended release flow:
 
-```bash
-sam build
-sam deploy --guided
-```
+1. Finalize changes on `release/x.y.z`
+2. Merge the release branch into `main`
+3. Let GitHub Actions deploy `main` to the `prod` environment
+4. Verify the deployed API and stack outputs
+5. Create the release tag
+6. Merge the release branch back into `develop`
 
 ## Recent Fixes
 
 - Fixed MongoDB connection issue by removing dotenv dependency and using environment variables directly in Lambda
 - Updated SAM template to include required environment variables
 - Improved error handling and logging in the Lambda function
+- Added local SAM env normalization so ignored `env.json` files are converted to the AWS-documented `--env-vars` format before startup
 
-## Use the SAM CLI to build and test locally
+## Local Build And Test
 
-Build your application with the `sam build` command.
+Build the application with the `sam build` command.
 
 ```bash
 uprevit-backend$ sam build
 ```
 
-The SAM CLI installs dependencies defined in `hello-world/package.json`, compiles TypeScript with esbuild, creates a deployment package, and saves it in the `.aws-sam/build` folder.
+The SAM CLI installs dependencies defined in `src/package.json`, compiles TypeScript with esbuild, creates a deployment package, and saves it in the `.aws-sam/build` folder.
 
 Test a single function by invoking it directly with a test event. An event is a JSON document that represents the input that the function receives from the event source. Test events are included in the `events` folder in this project.
 
@@ -84,7 +96,7 @@ Run functions locally and invoke them with the `sam local invoke` command.
 uprevit-backend$ sam local invoke HelloWorldFunction --event events/event.json
 ```
 
-The SAM CLI can also emulate your application's API. Use the `sam local start-api` to run the API locally on port 3000.
+The SAM CLI can also emulate the application's API. Use `sam local start-api` to run the API locally on port 3000.
 
 ```bash
 uprevit-backend$ sam local start-api
@@ -102,8 +114,9 @@ The SAM CLI reads the application template to determine the API's routes and the
             Method: get
 ```
 
-## Add a resource to your application
-The application template uses AWS Serverless Application Model (AWS SAM) to define application resources. AWS SAM is an extension of AWS CloudFormation with a simpler syntax for configuring common serverless application resources such as functions, triggers, and APIs. For resources not included in [the SAM specification](https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md), you can use standard [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html) resource types.
+## Infrastructure
+
+The application template uses AWS Serverless Application Model (AWS SAM) to define Lambda functions, API Gateway routes, queues, buckets, and related IAM permissions. For resources not covered by the SAM specification, standard CloudFormation resource types can be used in the same template.
 
 ## Fetch, tail, and filter Lambda function logs
 
@@ -117,26 +130,20 @@ uprevit-backend$ sam logs -n HelloWorldFunction --stack-name uprevit-backend --t
 
 You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
 
-## Unit tests
+## Unit Tests
 
-Tests are defined in the `hello-world/tests` folder in this project. Use NPM to install the [Jest test framework](https://jestjs.io/) and run unit tests.
+Backend tests use Jest from `src/`.
 
 ```bash
-uprevit-backend$ cd hello-world
-hello-world$ npm install
-hello-world$ npm run test
+cd src
+npm install
+npm run test
 ```
 
 ## Cleanup
 
-To delete the sample application that you created, use the AWS CLI. Assuming you used your project name for the stack name, you can run the following:
+To delete a deployed stack, use the AWS CLI. Assuming you used your project name for the stack name, you can run the following:
 
 ```bash
 sam delete --stack-name uprevit-backend
 ```
-
-## Resources
-
-See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) for an introduction to SAM specification, the SAM CLI, and serverless application concepts.
-
-Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond hello world samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)

@@ -33,15 +33,19 @@ Cause:
 
 ## Required Local Config
 
-In `env.json`, keep values under `Parameters` with SAM parameter names:
+In `env.json`, keep values under `Parameters` with Lambda environment variable names, which is the format AWS documents for `sam local ... --env-vars`:
 
-- `MongoDbUri`
-- `DbName`
-- `UserPoolId`
-- `ClientId`
-- `UploadsBucket`
-- `ExportsBucket`
-- `ExportJobQueueUrl`
+- `MONGODB_URI`
+- `DB_NAME`
+- `USER_POOL_ID`
+- `CLIENT_ID`
+- `UPLOADS_BUCKET`
+- `EXPORTS_BUCKET`
+- `EXPORT_JOB_QUEUE_URL`
+
+You can start from `env.example.json` and create your local ignored `env.json` from it.
+
+Note: the local startup helper also normalizes older `env.json` files that still use legacy keys like `MongoDbUri` and `UserPoolId`.
 
 ## Start Backend Locally
 
@@ -108,14 +112,19 @@ PY
 
 ### 4) Invoke worker locally
 
+Prepare the normalized local env file first:
+
+```bash
+npm run prepare:sam-env
+```
+
 Use built template for worker invoke:
 
 ```bash
 AWS_PROFILE=<your-aws-profile> sam local invoke ProcessProductExportJobFunction \
   -t .aws-sam/build/template.yaml \
   --event events/product-export-job.json \
-  --env-vars env.json \
-  --parameter-overrides "MongoDbUri=<...> DbName=<db-name> UserPoolId=<...> ClientId=<...> UploadsBucket=<uploads-bucket> ExportsBucket=<exports-bucket> ExportJobQueueUrl=$SQS_QUEUE_URL"
+  --env-vars .sam-local-env.json
 ```
 
 ### 5) Validate output
@@ -128,7 +137,7 @@ AWS_PROFILE=<your-aws-profile> sam local invoke ProcessProductExportJobFunction 
 
 ### `Invalid URL` / `QueueDoesNotExist`
 
-- Check `ExportJobQueueUrl` in `env.json`.
+- Check `EXPORT_JOB_QUEUE_URL` in `env.json`.
 - Verify queue URL and region with AWS CLI.
 
 ### `Cannot find module 'processExportJob'`

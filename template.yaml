@@ -9,7 +9,8 @@ Parameters:
   MongoDbUri:
     Type: String
     Description: "MongoDB connection string URI"
-    Default: "mongodb+srv://uprevit-testing:sat272011-uprevit@uprevit-test.bh21hmu.mongodb.net/?retryWrites=true&w=majority&appName=Uprevit-test"
+    NoEcho: true
+    Default: ""
   DbName:
     Type: String
     Description: "MongoDB database name"
@@ -51,7 +52,7 @@ Metadata:
 Globals:
   Function:
     Timeout: 120
-    Runtime: nodejs20.x
+    Runtime: nodejs22.x
     Architectures:
       - x86_64
     Tracing: Active
@@ -116,6 +117,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/users/getUser.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetUser:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -167,6 +174,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/users/getAllUsersByWorkspace.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetAllUsersByWorkspace:
           Type: Api
@@ -273,6 +286,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/workspaces/getWorkspace.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetWorkspace:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -327,6 +346,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/departments/getDepartment.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetDepartment:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -344,6 +369,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/departments/getAllDepartments.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetAllDepartments:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-0-31.md#api
@@ -433,6 +464,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/projects/getAllProjects.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetAllProjects:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -450,6 +487,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/projects/getProject.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetProject:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -1273,15 +1316,6 @@ Resources:
         Ref: ApplicationResourceGroup
       AutoConfigurationEnabled: "true"
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
-  HelloWorldApi:
-    Description: API Gateway endpoint URL for Prod stage for Hello World function
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
-  HelloWorldFunction:
-    Description: Hello World Lambda Function ARN
-    Value: !GetAtt HelloWorldFunction.Arn
-  HelloWorldFunctionIamRole:
-    Description: Implicit IAM Role created for Hello World function
-    Value: !GetAtt HelloWorldFunctionRole.Arn
+  ApiBaseUrl:
+    Description: API Gateway base URL for the deployed backend stage
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
