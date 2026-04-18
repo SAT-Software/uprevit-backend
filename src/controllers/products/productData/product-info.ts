@@ -9,6 +9,13 @@ import {
 	UpdateProductInformationCompletionData,
 } from '../../../types/products/product-info';
 
+type ExistingCustomField = {
+	_id: ObjectId;
+	parent_id?: string | null;
+	label: string;
+	value: string;
+};
+
 /**
  * Handles the update of product information fields.
  * @param {UpdateProductInformationData} inputData - The data object containing product information fields.
@@ -118,12 +125,14 @@ export function addCustomField(
  * @param {CustomFieldInput[]} inputData - An array of custom field data objects to update.
  * @param {string} tab - The current tab being updated.
  * @param {string} action - The action being performed.
+ * @param {ExistingCustomField[]} currentCustomFields - An array of existing custom fields to match against.
  * @return {Object} An object containing the update query, updated data, and any validation error.
  */
 export function updateCustomField(
 	inputData: CustomFieldInput[],
 	tab: string,
 	action: string,
+	currentCustomFields: ExistingCustomField[] = [],
 ): {
     updateQuery: Record<string, unknown>;
     updatedData: { customFields: CustomFieldInput[] };
@@ -134,14 +143,38 @@ export function updateCustomField(
 		if (isValidTabUpdateCustomField) throw new Error(isValidTabUpdateCustomField.body);
 	
 		if (!Array.isArray(inputData)) throw new Error('Data for updating custom fields must be an array.');
+
+		const existingFieldsById = new Map(
+			currentCustomFields.map((field) => [field._id.toString(), field]),
+		);
+
+		const normalizedCustomFields = inputData.map((field, index) => {
+			const fieldId = field.id ?? field.field_id;
+			const existingField = fieldId ? existingFieldsById.get(fieldId) : undefined;
+			const fallbackField = !fieldId ? currentCustomFields[index] : undefined;
+			const matchedField = existingField ?? fallbackField;
+
+			if (!matchedField) {
+				throw new Error('Each custom field update must reference an existing field id.');
+			}
+
+			return {
+				_id: matchedField._id,
+				parent_id: matchedField.parent_id ?? null,
+				label: field.label ?? matchedField.label,
+				value: field.value ?? matchedField.value,
+			};
+		});
 	
-		const validatedCustomFields = inputData.map((field) => ({
-			...field,
-			_id: field.id ? new ObjectId(field.id) : new ObjectId(),
-		}));
-	
-		const updateQuery = { $set: { 'product_information.custom_fields': validatedCustomFields } };
-		const updatedData = { customFields: inputData };
+		const updateQuery = { $set: { 'product_information.custom_fields': normalizedCustomFields } };
+		const updatedData = {
+			customFields: normalizedCustomFields.map((field) => ({
+				id: field._id.toString(),
+				parent_id: field.parent_id ?? null,
+				label: field.label,
+				value: field.value,
+			})),
+		};
 	
 		return { updateQuery, updatedData, error: null };
 	} catch (error) {

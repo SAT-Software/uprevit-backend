@@ -30,12 +30,14 @@ export type ProductInformation = {
 			manufacturing_location: string;
 			custom_fields?: Array<{
 				_id: ObjectId;
+				parent_id?: string | null;
 				label: string;
 				value: string;
 			}>;
 		};
 	custom_fields?: Array<{
 		_id: ObjectId;
+		parent_id?: string | null;
 		label: string;
 		value: string;
 	}>;
