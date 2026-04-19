@@ -30,6 +30,14 @@ export function addLabelComponent(
 			throw new Error('Data for add_label_component must be an array of label components.');
 		}
 
+		for (const component of newLabelComponentsData) {
+			const missingFieldsValidation = validateMissingFields({
+				component_number: component.component_number as string,
+				component_type: component.component_type as string,
+			});
+			if (missingFieldsValidation) throw new Error(missingFieldsValidation.body);
+		}
+
 		const componentsWithIds = newLabelComponentsData.map(component => ({
 			...component,
 			_id: new ObjectId(),
@@ -74,7 +82,6 @@ export function updateLabelComponent(
 			id: updatedLabelComponent.id,
 			component_number: updatedLabelComponent.component_number as string,
 			component_type: updatedLabelComponent.component_type as string,
-			component_description: updatedLabelComponent.component_description as string,
 		});
 		if (missingFieldsValidation) throw new Error(missingFieldsValidation.body);
 
