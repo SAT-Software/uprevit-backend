@@ -363,7 +363,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			break;
 
 		case 'update_custom_field':
-			const updateCustomFieldResult = updateCustomField(input.data, input.tab, input.action);
+			const updateCustomFieldResult = updateCustomField(
+				input.data,
+				input.tab,
+				input.action,
+				product.product_information.custom_fields || [],
+			);
 			if (updateCustomFieldResult.error) return updateCustomFieldResult.error;
 
 			({ updateQuery, updatedData } = updateCustomFieldResult);
