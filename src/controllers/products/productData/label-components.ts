@@ -97,7 +97,9 @@ export function updateLabelComponent(
 				'label_components.data.$[elem].label_type': updatedLabelComponent.label_type,
 				'label_components.data.$[elem].component_number': updatedLabelComponent.component_number,
 				'label_components.data.$[elem].component_type': updatedLabelComponent.component_type,
-				'label_components.data.$[elem].component_description': updatedLabelComponent.component_description,
+				...(updatedLabelComponent.component_description !== undefined && {
+					'label_components.data.$[elem].component_description': updatedLabelComponent.component_description,
+				}),
 				...(updatedLabelComponent.key !== undefined && {
 					'label_components.data.$[elem].key': updatedLabelComponent.key,
 				}),
