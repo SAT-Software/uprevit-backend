@@ -582,12 +582,6 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/updateProductData.lambdaHandler
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - s3:DeleteObject
-              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         UpdateProductData:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
