@@ -27,7 +27,8 @@ const enrichSymbolsGraphicsWithSignedUrls = async (
 ): Promise<SymbolsGraphics['data']> => {
 	return enrichItemsWithSignedUrls({
 		items: symbolsGraphics,
-		getKey: (item) => item.key,
+		getKey: (item) =>
+			item.key || (item.image?.startsWith('uploads/') ? item.image : undefined),
 		setSignedUrl: (item, signedUrl) => ({
 			...item,
 			image: signedUrl,
