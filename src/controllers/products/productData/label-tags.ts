@@ -71,7 +71,6 @@ export function updateLabelTag(
 		const missingFieldsValidation = validateMissingFields({
 			id: updatedLabelTag.id,
 			name: updatedLabelTag.name,
-			description: updatedLabelTag.description,
 			type: updatedLabelTag.type,
 		})
 		if(missingFieldsValidation) throw new Error(missingFieldsValidation.body);
@@ -81,7 +80,9 @@ export function updateLabelTag(
 
 		const updateQuery = {$set: {
 			'label_tags.data.$[elem].name': updatedLabelTag.name,
-			'label_tags.data.$[elem].description': updatedLabelTag.description,
+			...(updatedLabelTag.description !== undefined && {
+				'label_tags.data.$[elem].description': updatedLabelTag.description
+			}),
 			'label_tags.data.$[elem].type': updatedLabelTag.type,
 			'label_tags.data.$[elem].image': updatedLabelTag.image,
 			...(updatedLabelTag.key !== undefined && {

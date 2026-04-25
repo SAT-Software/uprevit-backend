@@ -70,13 +70,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			break;
 
 		case 'update-status': {
-			const statusAuth = await authenticateWithRole(event, 'admin');
-			if (!statusAuth.isValid) return statusAuth.error;
-
 			const newStatus = input.data.status;
 
 			if (!['draft', 'submitted', 'archived'].includes(newStatus)) {
 				return ResponseWrapper.badRequest('Invalid status. Must be one of: draft, submitted, archived');
+			}
+
+			if (newStatus !== 'submitted') {
+				const statusAuth = await authenticateWithRole(event, 'admin');
+				if (!statusAuth.isValid) return statusAuth.error;
 			}
 
 			if (newStatus === 'submitted' && existingProduct.complete_count !== 100) {
