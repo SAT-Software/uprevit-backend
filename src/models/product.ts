@@ -90,6 +90,8 @@ export type SymbolsGraphics = {
 			label_presence: string[];
 			entity: 'Symbols' | 'Schematics' | 'Barcodes' | 'Other Components';
 			count?: number;
+			standard_symbol_id?: string;
+			standard_ref_number?: string;
 	}>;
 	tab_completed: boolean;
 };

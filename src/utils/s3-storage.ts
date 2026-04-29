@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 const region = process.env.AWS_REGION;
 const uploadsBucket = process.env.UPLOADS_BUCKET;
 const exportsBucket = process.env.EXPORTS_BUCKET;
+const standardSymbolsBucket = process.env.STANDARD_SYMBOLS_BUCKET;
 
 if (!region) throw new Error("Missing required environment variable: AWS_REGION");
 if (!uploadsBucket) throw new Error("Missing required environment variable: UPLOADS_BUCKET");
@@ -107,6 +108,19 @@ export const createExportPresignedGetUrl = async (
 	return url;
 };
 
+export const createStandardSymbolPresignedGetUrl = async (key: string): Promise<string> => {
+	if (!standardSymbolsBucket) {
+		throw new Error("Missing required environment variable: STANDARD_SYMBOLS_BUCKET");
+	}
+
+	const command = new GetObjectCommand({
+		Bucket: standardSymbolsBucket,
+		Key: key,
+	});
+
+	return getSignedUrl(client, command, { expiresIn: VIEW_URL_EXPIRES_IN_SECONDS });
+};
+
 const normalizeKey = (key: unknown): string | null => {
 	if (typeof key !== "string") return null;
 	const trimmed = key.trim();
@@ -134,6 +148,32 @@ export const createPresignedGetUrlMap = async (keys: string[]): Promise<Map<stri
 			if (!result) continue;
 			const { key, url } = result;
 			signedUrlMap.set(key, url);
+		}
+	}
+
+	return signedUrlMap;
+};
+
+export const createStandardSymbolPresignedGetUrlMap = async (keys: string[]): Promise<Map<string, string>> => {
+	const uniqueKeys = [...new Set(keys.map(normalizeKey).filter((key): key is string => Boolean(key)))];
+	const signedUrlMap = new Map<string, string>();
+
+	for (let i = 0; i < uniqueKeys.length; i += SIGNING_CONCURRENCY) {
+		const keyChunk = uniqueKeys.slice(i, i + SIGNING_CONCURRENCY);
+		const chunkResults = await Promise.all(
+			keyChunk.map(async (key) => {
+				try {
+					const url = await createStandardSymbolPresignedGetUrl(key);
+					return { key, url };
+				} catch {
+					return null;
+				}
+			}),
+		);
+
+		for (const result of chunkResults) {
+			if (!result) continue;
+			signedUrlMap.set(result.key, result.url);
 		}
 	}
 

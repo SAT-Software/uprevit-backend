@@ -7,7 +7,7 @@ import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateEnum } from '../../utils/validationUtils';
 import { authenticateRequest } from '../../utils/authUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
-import { enrichItemsWithSignedUrls } from '../../utils/s3-storage';
+import { createPresignedGetUrlMap, createStandardSymbolPresignedGetUrlMap, enrichItemsWithSignedUrls } from '../../utils/s3-storage';
 
 const enrichLabelComponentsWithSignedUrls = async (
 	labelComponents: LabelComponents['data'],
@@ -25,14 +25,36 @@ const enrichLabelComponentsWithSignedUrls = async (
 const enrichSymbolsGraphicsWithSignedUrls = async (
 	symbolsGraphics: SymbolsGraphics['data'],
 ): Promise<SymbolsGraphics['data']> => {
-	return enrichItemsWithSignedUrls({
-		items: symbolsGraphics,
-		getKey: (item) =>
-			item.key || (item.image?.startsWith('uploads/') ? item.image : undefined),
-		setSignedUrl: (item, signedUrl) => ({
+	if (!symbolsGraphics.length) return symbolsGraphics;
+
+	const uploadKeys = symbolsGraphics
+		.filter((item) => !item.standard_symbol_id)
+		.map((item) => item.key || (item.image?.startsWith('uploads/') ? item.image : undefined))
+		.filter((key): key is string => Boolean(key));
+	const standardSymbolKeys = symbolsGraphics
+		.filter((item) => Boolean(item.standard_symbol_id))
+		.map((item) => item.key)
+		.filter((key): key is string => Boolean(key));
+
+	const [uploadUrlMap, standardSymbolUrlMap] = await Promise.all([
+		createPresignedGetUrlMap(uploadKeys),
+		createStandardSymbolPresignedGetUrlMap(standardSymbolKeys),
+	]);
+
+	return symbolsGraphics.map((item) => {
+		const key = item.key || (item.image?.startsWith('uploads/') ? item.image : undefined);
+		if (!key) return item;
+
+		const signedUrl = item.standard_symbol_id
+			? standardSymbolUrlMap.get(key)
+			: uploadUrlMap.get(key);
+
+		if (!signedUrl) return item;
+
+		return {
 			...item,
 			image: signedUrl,
-		}),
+		};
 	});
 };
 

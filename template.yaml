@@ -29,6 +29,10 @@ Parameters:
     Type: String
     Description: "S3 bucket name for generated export files"
     Default: "exports-storage-dev-and-test"
+  StandardSymbolsBucket:
+    Type: String
+    Description: "S3 bucket name for standard symbol library images"
+    Default: "uprevit-standard-symbols-dev"
   ExportJobQueueUrl:
     Type: String
     Description: "Optional explicit SQS queue URL override for local/dev"
@@ -64,6 +68,7 @@ Globals:
         CLIENT_ID: !Ref ClientId
         UPLOADS_BUCKET: !Ref UploadsBucket
         EXPORTS_BUCKET: !Ref ExportsBucket
+        STANDARD_SYMBOLS_BUCKET: !Ref StandardSymbolsBucket
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
@@ -605,6 +610,10 @@ Resources:
               Action:
                 - s3:GetObject
               Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${StandardSymbolsBucket}/*"
       Events:
         GetProductData:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -616,6 +625,29 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/getProductData.ts]
+
+  GetAllStandardSymbolsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/standardSymbols/getAllStandardSymbols.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${StandardSymbolsBucket}/*"
+      Events:
+        GetAllStandardSymbols:
+          Type: Api
+          Properties:
+            Path: /standard-symbols
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/standardSymbols/getAllStandardSymbols.ts]
 
   CreateProductVersionFunction:
     Type: AWS::Serverless::Function
