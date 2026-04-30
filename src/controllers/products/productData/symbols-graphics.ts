@@ -10,6 +10,7 @@ type SymbolsGraphicsReturn = {
     updateQuery: Record<string, unknown>;
     updatedData: any;
     error: APIGatewayProxyResult | null;
+	skipUpdate?: boolean;
 }
 
 type PersistedSymbolsGraphics = SymbolsGraphics & {
@@ -118,10 +119,10 @@ export function UpdateSymbolsGraphics(
 		const updateUnset: Record<string, ""> = {};
 		const existingSymbolsGraphic = existingSymbolsGraphics.find((item) => item._id?.toString() === updatedSymbolsGraphics.id);
 		const isStandardSymbol = Boolean(existingSymbolsGraphic?.standard_symbol_id || existingSymbolsGraphic?.standard_ref_number);
-		const coreFieldsChanged = isStandardSymbol
+		const imageKeyChanged = updatedSymbolsGraphics.key !== undefined
 			&& existingSymbolsGraphic?.key !== updatedSymbolsGraphics.key;
 
-		if (coreFieldsChanged) {
+		if (isStandardSymbol && imageKeyChanged) {
 			updateUnset['symbols_graphics.data.$[elem].standard_symbol_id'] = "";
 			updateUnset['symbols_graphics.data.$[elem].standard_ref_number'] = "";
 		}
@@ -306,6 +307,7 @@ export async function AddStandardSymbolsGraphics(
 			}
 
 			const selection = selectionsById.get(symbolId)!;
+			existingSymbolTexts.add(normalizeSymbolText(symbol.title));
 			added.push({
 				_id: new ObjectId(),
 				image: '',
@@ -324,7 +326,7 @@ export async function AddStandardSymbolsGraphics(
 			: {};
 		const updatedData = { added, skipped };
 
-		return { updateQuery, updatedData, error: null }
+		return { updateQuery, updatedData, error: null, skipUpdate: added.length === 0 }
 	} catch (error) {
 		if (error instanceof Error) return {
 			updateQuery: {},

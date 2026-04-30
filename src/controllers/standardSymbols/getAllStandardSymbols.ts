@@ -6,7 +6,7 @@ import { StandardSymbol } from "../../models/standardSymbols";
 import { createStandardSymbolPresignedGetUrlMap } from "../../utils/s3-storage";
 
 /**
- * Get all departments
+ * Get all standard symbols
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */

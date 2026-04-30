@@ -260,6 +260,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		let updateQuery = {};
 		let updatedData = {};
+		let skipUpdate = false;
 
 		switch (input.action) {
 		case 'update_product_information':
@@ -431,7 +432,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			break;
 		}
 
-		case 'add_standard_symbols_graphics': 
+		case 'add_standard_symbols_graphics': {
 			const addStandardSymbolsGraphicsResult = await AddStandardSymbolsGraphics(
 				input.data,
 				input.tab,
@@ -441,7 +442,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (addStandardSymbolsGraphicsResult.error) return addStandardSymbolsGraphicsResult.error;
 
 			({ updateQuery, updatedData } = addStandardSymbolsGraphicsResult);
+			skipUpdate = Boolean(addStandardSymbolsGraphicsResult.skipUpdate);
 			break;
+		}
 
 		case 'update_symbols_graphics': {
 			const updateSymbolsGraphicsResult = UpdateSymbolsGraphics(
@@ -615,6 +618,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		default:
 			return ResponseWrapper.badRequest('Invalid action');
+		}
+
+		if (skipUpdate) {
+			return ResponseWrapper.success({
+				message: 'Product updated successfully',
+				action: input.action,
+				tab: input.tab,
+				data: updatedData,
+			});
 		}
 
 		const options: { arrayFilters?: any[] } = {};

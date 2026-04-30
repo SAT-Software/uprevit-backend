@@ -27,12 +27,14 @@ const enrichSymbolsGraphicsWithSignedUrls = async (
 ): Promise<SymbolsGraphics['data']> => {
 	if (!symbolsGraphics.length) return symbolsGraphics;
 
+	const isStandardSymbol = (item: SymbolsGraphics['data'][number]) =>
+		Boolean(item.standard_symbol_id || item.standard_ref_number);
 	const uploadKeys = symbolsGraphics
-		.filter((item) => !item.standard_symbol_id)
+		.filter((item) => !isStandardSymbol(item))
 		.map((item) => item.key || (item.image?.startsWith('uploads/') ? item.image : undefined))
 		.filter((key): key is string => Boolean(key));
 	const standardSymbolKeys = symbolsGraphics
-		.filter((item) => Boolean(item.standard_symbol_id))
+		.filter(isStandardSymbol)
 		.map((item) => item.key)
 		.filter((key): key is string => Boolean(key));
 
@@ -45,7 +47,7 @@ const enrichSymbolsGraphicsWithSignedUrls = async (
 		const key = item.key || (item.image?.startsWith('uploads/') ? item.image : undefined);
 		if (!key) return item;
 
-		const signedUrl = item.standard_symbol_id
+		const signedUrl = isStandardSymbol(item)
 			? standardSymbolUrlMap.get(key)
 			: uploadUrlMap.get(key);
 
