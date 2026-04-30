@@ -16,7 +16,7 @@ import { UpdateProductDataRequest } from '../../types/products/all-update-produc
 import { addComplianceStandard, deleteComplianceStandard, updateComplianceStandard, updateComplianceTabCompletion } from './productData/compliance-standard';
 import { addLabelComponent, deleteLabelComponent, updateLabelComponent, updateLabelComponentTabCompletion } from './productData/label-components';
 import { updateLanguagesInformation } from './productData/languages';
-import { AddSymbolsGraphics, deleteSymbolsGraphics, UpdateSymbolsGraphics, updateSymbolsGraphicsTabCompletion } from './productData/symbols-graphics';
+import { AddStandardSymbolsGraphics, AddSymbolsGraphics, deleteSymbolsGraphics, UpdateSymbolsGraphics, updateSymbolsGraphicsTabCompletion } from './productData/symbols-graphics';
 import { addProductData, deleteProductData, updateProductData, updateProductDataTabCompletion } from './productData/product-data';
 import { addOperationalParameters, deleteOperationalParameters, updateOperationalParameters, updateOperationalParametersTabCompletion } from './productData/operational-parameters';
 import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion, updateLabelTagTaggedImage, updateLabelTagLegend } from './productData/label-tags';
@@ -123,6 +123,11 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
 		changedPaths: ['label_components.tab_completed'],
 	},
 	add_symbols_graphics: {
+		eventKey: 'product.symbol_graphic.added',
+		action: 'create',
+		changedPaths: ['symbols_graphics.data'],
+	},
+	add_standard_symbols_graphics: {
 		eventKey: 'product.symbol_graphic.added',
 		action: 'create',
 		changedPaths: ['symbols_graphics.data'],
@@ -255,6 +260,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		let updateQuery = {};
 		let updatedData = {};
+		let skipUpdate = false;
 
 		switch (input.action) {
 		case 'update_product_information':
@@ -426,8 +432,27 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			break;
 		}
 
+		case 'add_standard_symbols_graphics': {
+			const addStandardSymbolsGraphicsResult = await AddStandardSymbolsGraphics(
+				input.data,
+				input.tab,
+				input.action,
+				product.symbols_graphics.data,
+			);
+			if (addStandardSymbolsGraphicsResult.error) return addStandardSymbolsGraphicsResult.error;
+
+			({ updateQuery, updatedData } = addStandardSymbolsGraphicsResult);
+			skipUpdate = Boolean(addStandardSymbolsGraphicsResult.skipUpdate);
+			break;
+		}
+
 		case 'update_symbols_graphics': {
-			const updateSymbolsGraphicsResult = UpdateSymbolsGraphics(input.data as Required<SymbolsGraphics>, input.tab, input.action);
+			const updateSymbolsGraphicsResult = UpdateSymbolsGraphics(
+				input.data as Required<SymbolsGraphics>,
+				input.tab,
+				input.action,
+				product.symbols_graphics.data,
+			);
 			if (updateSymbolsGraphicsResult.error) return updateSymbolsGraphicsResult.error;
 
 			const entity = input.data.entity?.toLowerCase();
@@ -593,6 +618,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		default:
 			return ResponseWrapper.badRequest('Invalid action');
+		}
+
+		if (skipUpdate) {
+			return ResponseWrapper.success({
+				message: 'Product updated successfully',
+				action: input.action,
+				tab: input.tab,
+				data: updatedData,
+			});
 		}
 
 		const options: { arrayFilters?: any[] } = {};
