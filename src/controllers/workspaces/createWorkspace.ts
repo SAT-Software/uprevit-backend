@@ -36,7 +36,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const validationResult = validateMissingFields({
 			'workspaceName': input.workspaceName,
 			'companyName': input.companyName,
-			'companyId': input.companyId,
 		});
 		
 		if (validationResult) {
@@ -48,7 +47,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const workspace = await db.collection<Workspace>('workspaces').insertOne({
 			workspaceName: input.workspaceName,
 			companyName: input.companyName,
-			companyId: input.companyId,
 			description: input.description || '',
 			logo: normalizePersistedAssetReference(input.logo, ''),
 			plan: input.plan || '',

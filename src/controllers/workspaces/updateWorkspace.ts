@@ -83,7 +83,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				$set: {
 					workspaceName: input.workspaceName,
 					companyName: input.companyName,
-					companyId: input.companyId,
 					description: input.description,
 					logo: normalizePersistedAssetReference(input.logo, workspaceRecord.logo ?? ''),
 					plan: input.plan,
