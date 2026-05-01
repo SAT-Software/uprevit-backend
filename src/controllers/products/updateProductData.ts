@@ -55,6 +55,8 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
 			'product_information.data.oem_contract_manufacturer',
 			'product_information.data.commercial_clinical',
 			'product_information.data.manufacturing_location',
+			'product_information.data.class_of_device',
+			'product_information.data.basic_udi_di',
 		],
 	},
 	add_custom_field: {

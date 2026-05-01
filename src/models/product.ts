@@ -28,6 +28,8 @@ export type ProductInformation = {
 			oem_contract_manufacturer: string;
 			commercial_clinical: string;
 			manufacturing_location: string;
+			class_of_device?: string;
+			basic_udi_di?: string;
 			custom_fields?: Array<{
 				_id: ObjectId;
 				parent_id?: string | null;

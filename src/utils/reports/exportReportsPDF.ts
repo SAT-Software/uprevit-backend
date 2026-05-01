@@ -24,6 +24,8 @@ interface ProductForExport {
 	product_information?: {
 		data?: {
 			market_geography?: string;
+			class_of_device?: string;
+			basic_udi_di?: string;
 		};
 		tab_completed?: boolean;
 	};
@@ -82,13 +84,15 @@ export async function generateReportsPDFExport(products: ProductForExport[]): Pr
 		};
 
 		const columns = [
-			{ label: 'Product Name', widthPct: 0.20 },
-			{ label: 'Plan Number', widthPct: 0.12 },
-			{ label: 'Status', widthPct: 0.10 },
-			{ label: 'Version', widthPct: 0.08 },
-			{ label: 'Target Date', widthPct: 0.12 },
-			{ label: 'Market Geography', widthPct: 0.18 },
-			{ label: 'Description', widthPct: 0.20 },
+			{ label: 'Product Name', widthPct: 0.16 },
+			{ label: 'Plan Number', widthPct: 0.11 },
+			{ label: 'Status', widthPct: 0.08 },
+			{ label: 'Version', widthPct: 0.06 },
+			{ label: 'Target Date', widthPct: 0.10 },
+			{ label: 'Market Geography', widthPct: 0.13 },
+			{ label: 'Class of Device', widthPct: 0.13 },
+			{ label: 'Basic UDI-DI', widthPct: 0.13 },
+			{ label: 'Description', widthPct: 0.10 },
 		];
 
 		const colWidths = columns.map((h) => h.widthPct * CONTENT_WIDTH);
@@ -178,6 +182,8 @@ export async function generateReportsPDFExport(products: ProductForExport[]): Pr
 				String(product.version || ''),
 				product.target_date ? new Date(product.target_date).toLocaleDateString() : '',
 				product.product_information?.data?.market_geography || '',
+				product.product_information?.data?.class_of_device || '',
+				product.product_information?.data?.basic_udi_di || '',
 				product.product_description || '',
 			];
 
