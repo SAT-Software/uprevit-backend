@@ -13,6 +13,13 @@ import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 const cognito = new CognitoIdentityProviderClient();
 
+const resolveAdminName = (name: unknown, email: string): string => {
+	const trimmedName = typeof name === 'string' ? name.trim() : '';
+	if (trimmedName && trimmedName.toLowerCase() !== 'test') return trimmedName;
+
+	return email.split('@')[0].trim();
+};
+
 /**
  * @param {APIGatewayProxyEvent} event 
  * @return  {Promise<APIGatewayProxyResult>}
@@ -28,26 +35,25 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
 
-		
 		const input = JSON.parse(event.body);
 		if(!input) return ResponseWrapper.badRequest('Invalid JSON in request body');
-		
+
+		const normalizedEmail = typeof input.email === 'string' ? input.email.trim().toLowerCase() : null;
+		if (!normalizedEmail) return ResponseWrapper.badRequest('Email must be a non-empty string');
 
 		const validationResult = validateMissingFields({
 			workspaceName: input.workspaceName,
 			companyName: input.companyName,
-			companyId: input.companyId,
-			name: input.name,
-			email: input.email,
+			email: normalizedEmail,
 		});
 		if (validationResult) return validationResult;
 
 		const db = await getDb();
+		const adminName = resolveAdminName(input.name, normalizedEmail);
 
 		const workspace = await db.collection<Workspace>('workspaces').insertOne({
 			workspaceName: input.workspaceName,
 			companyName: input.companyName,
-			companyId: input.companyId,
 			description: input.description || '',
 			logo: normalizePersistedAssetReference(input.logo, ''),
 			plan: input.plan || '',
@@ -71,8 +77,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 
 		const user = await db.collection<User>('users').insertOne({
-			name: input.name,
-			email: input.email,
+			name: adminName,
+			email: normalizedEmail,
 			userType: 'admin',
 			cognitoSub: cognitoSub,
 			workspaceId: workspaceId,
@@ -97,7 +103,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		await cognito.send(new AdminUpdateUserAttributesCommand({
 			UserPoolId: process.env.USER_POOL_ID!,
-			Username: input.email,
+			Username: normalizedEmail,
 			UserAttributes: [
 				{ Name: "custom:userId", Value: userId.toString() },
 				{ Name: "custom:workspaceId", Value: workspaceId.toString() },
@@ -106,8 +112,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}));
 
 		await cognito.send(new AdminAddUserToGroupCommand({
-			UserPoolId: process.env.USER_POOL_ID!, 
-			Username: input.email, 
+			UserPoolId: process.env.USER_POOL_ID!,
+			Username: normalizedEmail,
 			GroupName: "admin",
 		}));
 		
