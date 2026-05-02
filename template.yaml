@@ -1327,20 +1327,6 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/s3Storage/presignUpload.ts]
-
-  ApplicationResourceGroup:
-    Type: AWS::ResourceGroups::Group
-    Properties:
-      Name:
-        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
-      ResourceQuery:
-        Type: CLOUDFORMATION_STACK_1_0
-  ApplicationInsightsMonitoring:
-    Type: AWS::ApplicationInsights::Application
-    Properties:
-      ResourceGroupName:
-        Ref: ApplicationResourceGroup
-      AutoConfigurationEnabled: "true"
 Outputs:
   ApiBaseUrl:
     Description: API Gateway base URL for the deployed backend stage
