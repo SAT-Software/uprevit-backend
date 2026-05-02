@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import crypto from "node:crypto";
 
@@ -22,9 +22,53 @@ const SIGNING_CONCURRENCY = parsePositiveInteger(process.env.S3_SIGNING_CONCURRE
 
 export const client = new S3Client({ region });
 
-export const createPresignedUrl = async (filename: string, contentType: string) => {
-	const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-	const key = `uploads/${crypto.randomUUID()}-${safeFilename}`;
+export type UploadScope = "workspace-assets" | "product-assets" | "source-files";
+
+type CreatePresignedUploadOptions = {
+	workspaceId?: string;
+	productId?: string;
+	uploadScope?: UploadScope;
+	pendingOwnerId?: string;
+};
+
+const sanitizeFilename = (filename: string): string => filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+const buildUniqueFilename = (filename: string): string => `${crypto.randomUUID()}-${sanitizeFilename(filename)}`;
+
+export const buildUploadKey = ({
+	filename,
+	workspaceId,
+	productId,
+	uploadScope = "workspace-assets",
+	pendingOwnerId,
+}: CreatePresignedUploadOptions & { filename: string }): string => {
+	const uniqueFilename = buildUniqueFilename(filename);
+
+	if (uploadScope === "source-files" && workspaceId) {
+		return `uploads/${workspaceId}/source-files/${uniqueFilename}`;
+	}
+
+	if (uploadScope === "product-assets" && workspaceId && productId) {
+		return `uploads/${workspaceId}/product/${productId}/${uniqueFilename}`;
+	}
+
+	if (uploadScope === "workspace-assets" && workspaceId) {
+		return `uploads/${workspaceId}/workspace/${uniqueFilename}`;
+	}
+
+	if (uploadScope === "workspace-assets" && pendingOwnerId) {
+		return `uploads/pending/${pendingOwnerId}/${uniqueFilename}`;
+	}
+
+	return `uploads/${uniqueFilename}`;
+};
+
+export const createPresignedUrl = async (
+	filename: string,
+	contentType: string,
+	options: CreatePresignedUploadOptions = {},
+) => {
+	const key = buildUploadKey({ filename, ...options });
 
 	const command = new PutObjectCommand({
 		Bucket: uploadsBucket,
@@ -57,6 +101,36 @@ export const deleteObjectByKey = async (key: string) => {
 			Key: key,
 		}),
 	);
+};
+
+const buildCopySource = (bucket: string, key: string): string => {
+	const encodedKey = key.split('/').map(encodeURIComponent).join('/');
+	return `${bucket}/${encodedKey}`;
+};
+
+export const movePendingWorkspaceAssetToWorkspace = async (
+	key: string,
+	workspaceId: string,
+): Promise<string> => {
+	const normalizedKey = normalizeKey(key);
+	if (!normalizedKey || !normalizedKey.startsWith("uploads/pending/")) return key;
+
+	const fileName = normalizedKey.split('/').pop();
+	if (!fileName) return key;
+
+	const targetKey = `uploads/${workspaceId}/workspace/${fileName}`;
+
+	await client.send(
+		new CopyObjectCommand({
+			Bucket: uploadsBucket,
+			CopySource: buildCopySource(uploadsBucket, normalizedKey),
+			Key: targetKey,
+		}),
+	);
+
+	await deleteObjectByKey(normalizedKey);
+
+	return targetKey;
 };
 
 type UploadObjectInput = {
