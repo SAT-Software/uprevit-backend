@@ -9,7 +9,7 @@ import { validateMissingFields } from "../../utils/validationUtils";
 import { authenticateWithRole } from "../../utils/authUtils";
 import { User } from "../../models/user";
 import { AdminAddUserToGroupCommand, AdminUpdateUserAttributesCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
-import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { movePendingWorkspaceAssetToWorkspace, normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 const cognito = new CognitoIdentityProviderClient();
 
@@ -50,12 +50,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const db = await getDb();
 		const adminName = resolveAdminName(input.name, normalizedEmail);
+		const normalizedLogo = normalizePersistedAssetReference(input.logo, '');
 
 		const workspace = await db.collection<Workspace>('workspaces').insertOne({
 			workspaceName: input.workspaceName,
 			companyName: input.companyName,
 			description: input.description || '',
-			logo: normalizePersistedAssetReference(input.logo, ''),
+			logo: normalizedLogo,
 			plan: input.plan || '',
 			planName: input.planName || '',
 			planId: input.planId || '',
@@ -66,6 +67,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 
 		const workspaceId = workspace.insertedId
+
+		const workspaceLogo = normalizedLogo
+			? await movePendingWorkspaceAssetToWorkspace(normalizedLogo, workspaceId.toString())
+			: '';
+
+		if (workspaceLogo !== normalizedLogo) {
+			await db.collection<Workspace>('workspaces').updateOne(
+				{ _id: workspaceId },
+				{ $set: { logo: workspaceLogo } },
+			);
+		}
 
 		await updateAuditLog({
 			entity: 'workspace',
