@@ -263,12 +263,11 @@ export async function AddStandardSymbolsGraphics(
 			const stringArrayValidation = validateStringArray(selection.label_presence || [], 'label_presence');
 			if (stringArrayValidation) throw new Error(stringArrayValidation.body);
 
-			
-			const booleanValidation = validateBoolean(selection.text_present, 'text_present');
+			const textPresent = selection.text_present ?? false;
+			const booleanValidation = validateBoolean(textPresent, 'text_present');
 			if (booleanValidation) throw new Error(booleanValidation.body);
-			
 
-			selectionsById.set(selection.id, selection);
+			selectionsById.set(selection.id, { ...selection, text_present: textPresent });
 		}
 
 		const db = await getDb();
