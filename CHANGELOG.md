@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-05-04
+
+### Added
+- Standard symbols library API with authenticated `/standard-symbols` access and signed image URLs.
+- Standard symbols data model, seed script, manifest, and image contact sheet for populating the standard symbol library.
+- Product Symbols & Graphics support for adding standard symbols with duplicate detection, standard reference tracking, and default `text_present` handling.
+- Product Information fields for Class of Device and Basic UDI-DI, including product defaults, update support, reports exports, and product PDF/Excel exports.
+- Workspace-, product-, source-file-, and pending-owner-scoped S3 upload key paths for better asset organization and ownership.
+- Root `npm run dev` workflow for live SAM cloud sync with `sam sync --watch --build-in-source`.
+- Demo branch deployment support in GitHub Actions using the `demo` GitHub environment variables.
+
+### Updated
+- Product data update auditing to include the new Product Information fields and standard symbol additions.
+- Product data reads to sign standard symbol images from the standard symbols bucket while continuing to sign uploaded product assets from the uploads bucket.
+- Workspace admin onboarding to normalize admin emails, derive a better admin name fallback, and move pending workspace logo uploads into the created workspace path.
+- Workspace model and onboarding flow so `companyId` is optional instead of required.
+- SAM template and environment examples to include the standard symbols bucket and related Lambda permissions.
+- Local SAM build guidance and scripts to use `--build-in-source` where needed.
+
+### Fixed
+- Standard symbol signing and duplicate handling when adding library symbols to products.
+- Standard symbol add flow so missing `text_present` values default safely.
+- Product custom field updates so existing field IDs and `parent_id` values are preserved instead of creating replacement fields.
+- Label component validation and updates so descriptions can remain optional on partial updates.
+- Label tag updates so descriptions are only changed when provided.
+- Product status authorization so completed products can be submitted by non-admin users while admin-only status changes remain protected.
+- Symbols & Graphics updates so replacing a standard symbol image clears standard-symbol metadata.
+
+### Removed
+- SAM Application Insights resources from the backend template.
+- Automatic deletion of replaced product asset S3 objects during product data updates.
+- Obsolete local product export testing notes.
+
 ## [0.1.0] - 2026-04-03
 
 ### Added
