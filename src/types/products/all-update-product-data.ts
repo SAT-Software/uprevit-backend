@@ -3,7 +3,7 @@ import { AddLabelComponent, DeleteLabelComponent, LabelComponentTabCompletion, U
 import { UpdateLanguagesInformation } from "./languages-info";
 import { AddUpdateCustomField, DeleteCustomField, UpdateProductInfo, UpdateProductInfoTabCompletion } from "./product-info";
 import { AddProductData, DeleteProductData, ProductDataTabCompletion, UpdateProductData } from "./product-data";
-import { AddSymbolsGraphics, DeleteSymbolsGraphics, SymbolsGraphicsTabCompletion, UpdateSymbolsGraphics } from "./symbols-graphics";
+import { AddSymbolsGraphics, DeleteSymbolsGraphics, SymbolsGraphicsTabCompletion, UpdateSymbolsGraphics, AddStandardSymbolsGraphics } from "./symbols-graphics";
 import { AddOperationalParameters, DeleteOperationalParameters, OperationalParametersTabCompletion, UpdateOperationalParameters } from "./operational-parameters";
 import { AddLabelTag, DeleteLabelTag, LabelTagsTabCompletion, UpdateLabelTag, UpdateLabelTagLegend, UpdateLabelTagTaggedImage } from "./label-tags";
 
@@ -38,4 +38,4 @@ export type UpdateProductDataRequest =
     | UpdateLabelTagLegend
     | UpdateLabelTagTaggedImage
     | DeleteLabelTag
-    | LabelTagsTabCompletion;
+    | LabelTagsTabCompletion | AddStandardSymbolsGraphics;

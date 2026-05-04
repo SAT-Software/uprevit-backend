@@ -1,10 +1,11 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import crypto from "node:crypto";
 
 const region = process.env.AWS_REGION;
 const uploadsBucket = process.env.UPLOADS_BUCKET;
 const exportsBucket = process.env.EXPORTS_BUCKET;
+const standardSymbolsBucket = process.env.STANDARD_SYMBOLS_BUCKET;
 
 if (!region) throw new Error("Missing required environment variable: AWS_REGION");
 if (!uploadsBucket) throw new Error("Missing required environment variable: UPLOADS_BUCKET");
@@ -21,9 +22,53 @@ const SIGNING_CONCURRENCY = parsePositiveInteger(process.env.S3_SIGNING_CONCURRE
 
 export const client = new S3Client({ region });
 
-export const createPresignedUrl = async (filename: string, contentType: string) => {
-	const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-	const key = `uploads/${crypto.randomUUID()}-${safeFilename}`;
+export type UploadScope = "workspace-assets" | "product-assets" | "source-files";
+
+type CreatePresignedUploadOptions = {
+	workspaceId?: string;
+	productId?: string;
+	uploadScope?: UploadScope;
+	pendingOwnerId?: string;
+};
+
+const sanitizeFilename = (filename: string): string => filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+const buildUniqueFilename = (filename: string): string => `${crypto.randomUUID()}-${sanitizeFilename(filename)}`;
+
+export const buildUploadKey = ({
+	filename,
+	workspaceId,
+	productId,
+	uploadScope = "workspace-assets",
+	pendingOwnerId,
+}: CreatePresignedUploadOptions & { filename: string }): string => {
+	const uniqueFilename = buildUniqueFilename(filename);
+
+	if (uploadScope === "source-files" && workspaceId) {
+		return `uploads/${workspaceId}/source-files/${uniqueFilename}`;
+	}
+
+	if (uploadScope === "product-assets" && workspaceId && productId) {
+		return `uploads/${workspaceId}/product/${productId}/${uniqueFilename}`;
+	}
+
+	if (uploadScope === "workspace-assets" && workspaceId) {
+		return `uploads/${workspaceId}/workspace/${uniqueFilename}`;
+	}
+
+	if (uploadScope === "workspace-assets" && pendingOwnerId) {
+		return `uploads/pending/${pendingOwnerId}/${uniqueFilename}`;
+	}
+
+	return `uploads/${uniqueFilename}`;
+};
+
+export const createPresignedUrl = async (
+	filename: string,
+	contentType: string,
+	options: CreatePresignedUploadOptions = {},
+) => {
+	const key = buildUploadKey({ filename, ...options });
 
 	const command = new PutObjectCommand({
 		Bucket: uploadsBucket,
@@ -56,6 +101,36 @@ export const deleteObjectByKey = async (key: string) => {
 			Key: key,
 		}),
 	);
+};
+
+const buildCopySource = (bucket: string, key: string): string => {
+	const encodedKey = key.split('/').map(encodeURIComponent).join('/');
+	return `${bucket}/${encodedKey}`;
+};
+
+export const movePendingWorkspaceAssetToWorkspace = async (
+	key: string,
+	workspaceId: string,
+): Promise<string> => {
+	const normalizedKey = normalizeKey(key);
+	if (!normalizedKey || !normalizedKey.startsWith("uploads/pending/")) return key;
+
+	const fileName = normalizedKey.split('/').pop();
+	if (!fileName) return key;
+
+	const targetKey = `uploads/${workspaceId}/workspace/${fileName}`;
+
+	await client.send(
+		new CopyObjectCommand({
+			Bucket: uploadsBucket,
+			CopySource: buildCopySource(uploadsBucket, normalizedKey),
+			Key: targetKey,
+		}),
+	);
+
+	await deleteObjectByKey(normalizedKey);
+
+	return targetKey;
 };
 
 type UploadObjectInput = {
@@ -107,6 +182,19 @@ export const createExportPresignedGetUrl = async (
 	return url;
 };
 
+export const createStandardSymbolPresignedGetUrl = async (key: string): Promise<string> => {
+	if (!standardSymbolsBucket) {
+		throw new Error("Missing required environment variable: STANDARD_SYMBOLS_BUCKET");
+	}
+
+	const command = new GetObjectCommand({
+		Bucket: standardSymbolsBucket,
+		Key: key,
+	});
+
+	return getSignedUrl(client, command, { expiresIn: VIEW_URL_EXPIRES_IN_SECONDS });
+};
+
 const normalizeKey = (key: unknown): string | null => {
 	if (typeof key !== "string") return null;
 	const trimmed = key.trim();
@@ -134,6 +222,32 @@ export const createPresignedGetUrlMap = async (keys: string[]): Promise<Map<stri
 			if (!result) continue;
 			const { key, url } = result;
 			signedUrlMap.set(key, url);
+		}
+	}
+
+	return signedUrlMap;
+};
+
+export const createStandardSymbolPresignedGetUrlMap = async (keys: string[]): Promise<Map<string, string>> => {
+	const uniqueKeys = [...new Set(keys.map(normalizeKey).filter((key): key is string => Boolean(key)))];
+	const signedUrlMap = new Map<string, string>();
+
+	for (let i = 0; i < uniqueKeys.length; i += SIGNING_CONCURRENCY) {
+		const keyChunk = uniqueKeys.slice(i, i + SIGNING_CONCURRENCY);
+		const chunkResults = await Promise.all(
+			keyChunk.map(async (key) => {
+				try {
+					const url = await createStandardSymbolPresignedGetUrl(key);
+					return { key, url };
+				} catch {
+					return null;
+				}
+			}),
+		);
+
+		for (const result of chunkResults) {
+			if (!result) continue;
+			signedUrlMap.set(result.key, result.url);
 		}
 	}
 

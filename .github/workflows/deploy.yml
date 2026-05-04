@@ -139,4 +139,5 @@ jobs:
           "ClientId=$CLIENT_ID"
           "UploadsBucket=$UPLOADS_BUCKET"
           "ExportsBucket=$EXPORTS_BUCKET"
+          "StandardSymbolsBucket=uprevit-standard-symbols"
           "ExportJobQueueUrl=$EXPORT_JOB_QUEUE_URL"

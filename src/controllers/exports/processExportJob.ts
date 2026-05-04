@@ -64,6 +64,8 @@ type ReportExportProduct = {
 			oem_contract_manufacturer?: string;
 			commercial_clinical?: string;
 			manufacturing_location?: string;
+			class_of_device?: string;
+			basic_udi_di?: string;
 		};
 		tab_completed?: boolean;
 	};

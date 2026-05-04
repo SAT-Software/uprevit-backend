@@ -29,6 +29,10 @@ Parameters:
     Type: String
     Description: "S3 bucket name for generated export files"
     Default: "exports-storage-dev-and-test"
+  StandardSymbolsBucket:
+    Type: String
+    Description: "S3 bucket name for standard symbol library images"
+    Default: "uprevit-standard-symbols"
   ExportJobQueueUrl:
     Type: String
     Description: "Optional explicit SQS queue URL override for local/dev"
@@ -64,6 +68,7 @@ Globals:
         CLIENT_ID: !Ref ClientId
         UPLOADS_BUCKET: !Ref UploadsBucket
         EXPORTS_BUCKET: !Ref ExportsBucket
+        STANDARD_SYMBOLS_BUCKET: !Ref StandardSymbolsBucket
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
@@ -207,6 +212,12 @@ Resources:
                 - cognito-idp:AdminUpdateUserAttributes
                 - cognito-idp:AdminAddUserToGroup
               Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:DeleteObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         AdminOnboardingCreateWorkspace:
           Type: Api
@@ -582,12 +593,6 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/updateProductData.lambdaHandler
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - s3:DeleteObject
-              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         UpdateProductData:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -611,6 +616,10 @@ Resources:
               Action:
                 - s3:GetObject
               Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${StandardSymbolsBucket}/*"
       Events:
         GetProductData:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -622,6 +631,29 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/getProductData.ts]
+
+  GetAllStandardSymbolsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/standardSymbols/getAllStandardSymbols.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${StandardSymbolsBucket}/*"
+      Events:
+        GetAllStandardSymbols:
+          Type: Api
+          Properties:
+            Path: /standard-symbols
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/standardSymbols/getAllStandardSymbols.ts]
 
   CreateProductVersionFunction:
     Type: AWS::Serverless::Function
@@ -1301,20 +1333,6 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/s3Storage/presignUpload.ts]
-
-  ApplicationResourceGroup:
-    Type: AWS::ResourceGroups::Group
-    Properties:
-      Name:
-        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
-      ResourceQuery:
-        Type: CLOUDFORMATION_STACK_1_0
-  ApplicationInsightsMonitoring:
-    Type: AWS::ApplicationInsights::Application
-    Properties:
-      ResourceGroupName:
-        Ref: ApplicationResourceGroup
-      AutoConfigurationEnabled: "true"
 Outputs:
   ApiBaseUrl:
     Description: API Gateway base URL for the deployed backend stage
