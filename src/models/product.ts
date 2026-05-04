@@ -28,14 +28,18 @@ export type ProductInformation = {
 			oem_contract_manufacturer: string;
 			commercial_clinical: string;
 			manufacturing_location: string;
+			class_of_device?: string;
+			basic_udi_di?: string;
 			custom_fields?: Array<{
 				_id: ObjectId;
+				parent_id?: string | null;
 				label: string;
 				value: string;
 			}>;
 		};
 	custom_fields?: Array<{
 		_id: ObjectId;
+		parent_id?: string | null;
 		label: string;
 		value: string;
 	}>;
@@ -88,6 +92,8 @@ export type SymbolsGraphics = {
 			label_presence: string[];
 			entity: 'Symbols' | 'Schematics' | 'Barcodes' | 'Other Components';
 			count?: number;
+			standard_symbol_id?: string;
+			standard_ref_number?: string;
 	}>;
 	tab_completed: boolean;
 };

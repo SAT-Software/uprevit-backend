@@ -47,7 +47,14 @@ To run the application locally:
    npm install
    ```
 
-2. Build and run with SAM:
+2. For live cloud sync during development, use the root dev script:
+   ```bash
+   npm run dev
+   ```
+
+   This script uses `sam sync --watch --build-in-source`, so make sure your local AWS SAM CLI version is `>= 1.104.0` before running it.
+
+3. Build and run with SAM:
    ```bash
     cp env.example.json env.json
     npm run start:local

@@ -11,10 +11,14 @@ export interface UpdateProductInformationData {
     oem_contract_manufacturer: string;
     commercial_clinical: string;
     manufacturing_location: string;
+    class_of_device?: string;
+    basic_udi_di?: string;
 }
 
 export interface CustomFieldInput {
     id?: string;
+    field_id?: string;
+    parent_id?: string | null;
     label?: string;
     value?: string;
 }
@@ -43,5 +47,3 @@ export type AddUpdateCustomField = BaseProductRequest<'add_custom_field' | 'upda
 export type DeleteCustomField = BaseProductRequest<'delete_custom_field', DeleteCustomFieldInput>;
 
 export type UpdateProductInfoTabCompletion = BaseProductRequest<'update_product_information_completion', UpdateProductInformationCompletionData>;
-
-

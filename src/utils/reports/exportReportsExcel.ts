@@ -26,6 +26,8 @@ interface ProductForExport {
 			oem_contract_manufacturer?: string;
 			commercial_clinical?: string;
 			manufacturing_location?: string;
+			class_of_device?: string;
+			basic_udi_di?: string;
 		};
 		tab_completed?: boolean;
 	};
@@ -71,6 +73,8 @@ export async function generateReportsExcelExport(products: ProductForExport[]): 
 			{ header: 'OEM/Contract', key: 'oem_contract_manufacturer', width: 18 },
 			{ header: 'Commercial/Clinical', key: 'commercial_clinical', width: 18 },
 			{ header: 'Manufacturing Location', key: 'manufacturing_location', width: 20 },
+			{ header: 'Class of Device', key: 'class_of_device', width: 20 },
+			{ header: 'Basic UDI-DI', key: 'basic_udi_di', width: 20 },
 			{ header: 'Product Info Complete', key: 'product_info_complete', width: 18 },
 			{ header: 'Compliance Complete', key: 'compliance_complete', width: 18 },
 			{ header: 'Symbols Complete', key: 'symbols_complete', width: 16 },
@@ -101,6 +105,8 @@ export async function generateReportsExcelExport(products: ProductForExport[]): 
 				oem_contract_manufacturer: productInfo?.oem_contract_manufacturer || '',
 				commercial_clinical: productInfo?.commercial_clinical || '',
 				manufacturing_location: productInfo?.manufacturing_location || '',
+				class_of_device: productInfo?.class_of_device || '',
+				basic_udi_di: productInfo?.basic_udi_di || '',
 				product_info_complete: product.product_information?.tab_completed ? 'Yes' : 'No',
 				compliance_complete: product.compliance_information?.tab_completed ? 'Yes' : 'No',
 				symbols_complete: product.symbols_graphics?.tab_completed ? 'Yes' : 'No',

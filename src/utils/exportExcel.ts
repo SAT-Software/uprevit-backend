@@ -460,6 +460,8 @@ export async function generateProductExcelExport(productData: Product) {
 				{ field: "OEM Contract Manufacturer", value: infoData.oem_contract_manufacturer || "" },
 				{ field: "Commercial/Clinical", value: infoData.commercial_clinical || "" },
 				{ field: "Manufacturing Location", value: infoData.manufacturing_location || "" },
+				{ field: "Class of Device", value: infoData.class_of_device || "" },
+				{ field: "Basic UDI-DI", value: infoData.basic_udi_di || "" },
 			);
 		}
 
