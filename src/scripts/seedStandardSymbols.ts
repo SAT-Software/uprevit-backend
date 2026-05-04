@@ -37,7 +37,7 @@ const REQUIRED_FIELDS: Array<keyof ManifestRow> = ['title', 'standard', 'ref_num
 
 const usage = [
 	'Usage:',
-	'  ts-node scripts/seedStandardSymbols.ts --manifest ./symbols.csv --images-dir ./images --bucket uprevit-standard-symbols-stage --prefix standard-symbols --dry-run',
+	'  ts-node scripts/seedStandardSymbols.ts --manifest ./symbols.csv --images-dir ./images --bucket uprevit-standard-symbols --prefix standard-symbols --dry-run',
 	'',
 	'Required env:',
 	'  MONGODB_URI, DB_NAME, AWS_REGION',

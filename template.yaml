@@ -32,7 +32,7 @@ Parameters:
   StandardSymbolsBucket:
     Type: String
     Description: "S3 bucket name for standard symbol library images"
-    Default: "uprevit-standard-symbols-dev"
+    Default: "uprevit-standard-symbols"
   ExportJobQueueUrl:
     Type: String
     Description: "Optional explicit SQS queue URL override for local/dev"

@@ -9,6 +9,7 @@ on:
       - develop
       - main
       - release/**
+      - demo
   workflow_dispatch:
 
 jobs:
@@ -57,7 +58,7 @@ jobs:
     name: Deploy to AWS
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: lint
-    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/develop' && 'develop' || 'stage' }}
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/demo' && 'demo' || github.ref == 'refs/heads/develop' && 'develop' || 'stage' }}
     env:
       AWS_REGION: us-east-1
       STACK_NAME: ${{ vars.STACK_NAME }}
@@ -138,4 +139,5 @@ jobs:
           "ClientId=$CLIENT_ID"
           "UploadsBucket=$UPLOADS_BUCKET"
           "ExportsBucket=$EXPORTS_BUCKET"
+          "StandardSymbolsBucket=uprevit-standard-symbols"
           "ExportJobQueueUrl=$EXPORT_JOB_QUEUE_URL"

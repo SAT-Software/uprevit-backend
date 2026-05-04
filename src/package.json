@@ -1,4 +1,5 @@
 {
+	"version": "0.2.0",
 	"scripts": {
 		"prepare:sam-env": "node ../scripts/prepare-sam-env.mjs",
 		"start:local": "npm run prepare:sam-env && AWS_PROFILE=uprevit-amit sam local start-api -t ../template.yaml --env-vars ../.sam-local-env.json",
