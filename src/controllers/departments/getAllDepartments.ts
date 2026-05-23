@@ -7,6 +7,21 @@ import { logError } from '../../utils/logger';
 import { authenticateRequest } from '../../utils/authUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 import { enrichDepartmentsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
+import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
+
+const ALLOWED_SORT_FIELDS = ['department_name', 'department_description', 'manager', 'actionAt', '_id'];
+
+const DEPARTMENT_FILTER_FIELDS: Record<string, ListFilterField> = {
+	department_name: { path: 'department_name', type: 'text' },
+	department_description: { path: 'department_description', type: 'text' },
+	manager: { path: 'manager', type: 'text' },
+	actionBy: { path: 'actionBy', type: 'text' },
+	actionAt: { path: 'actionAt', type: 'date' },
+	lastChangedBy: { path: 'actionBy', type: 'text' },
+	lastChangedOn: { path: 'actionAt', type: 'date' },
+	archivedBy: { path: 'actionBy', type: 'text' },
+	archivedOn: { path: 'actionAt', type: 'date' },
+};
 
 type DepartmentUser = {
 	_id: ObjectId;
@@ -36,74 +51,80 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const db = await getDb();
 
-		const limit = parseInt(event.queryStringParameters?.limit || '10');
-		const page = parseInt(event.queryStringParameters?.page || '1');
-		const sort = event.queryStringParameters?.sort || 'department_name';
+		const listQueryResult = parseListQuery({
+			query: event.queryStringParameters,
+			allowedSortFields: ALLOWED_SORT_FIELDS,
+			defaultSort: 'department_name',
+		});
+		if (listQueryResult.error) return listQueryResult.error;
+
+		const { limit, page, skip, sort, order, filters } = listQueryResult.value!;
 		const workspaceId = event.queryStringParameters?.workspaceId;
 
 		if (!workspaceId) return ResponseWrapper.badRequest('Workspace ID is required.');
+		if (!ObjectId.isValid(workspaceId)) return ResponseWrapper.badRequest('Invalid workspaceId');
 
 		const isArchiveParam = event.queryStringParameters?.isArchive;
 		let isArchive = false;
 
 		if (isArchiveParam !== undefined) {
+			if (isArchiveParam !== 'true' && isArchiveParam !== 'false') {
+				return ResponseWrapper.badRequest('isArchive parameter must be true or false');
+			}
 			isArchive = isArchiveParam.toLowerCase() === 'true';
 		}
 
-		if (limit < 1 || limit > 100) {
-			return ResponseWrapper.badRequest('Limit must be between 1 and 100');
-		}
-
-		if (page < 1) {
-			return ResponseWrapper.badRequest('Page must be greater than 0');
-		}
-
-		const allowedSortFields = ['department_name', 'department_description', 'manager', '_id'];
-		if (!allowedSortFields.includes(sort)) {
-			return ResponseWrapper.badRequest(`Invalid sort field. Allowed fields: ${allowedSortFields.join(', ')}`);
-		}
-
-		const skip = (page - 1) * limit;
-
 		const sortObj: { [key: string]: 1 | -1 } = {};
-		sortObj[sort] = 1;
+		sortObj[sort] = order === 'desc' ? -1 : 1;
 
 		const filter = isArchive
 			? { isArchived: true, workspace_id: new ObjectId(workspaceId) }
 			: { isArchived: { $ne: true }, workspace_id: new ObjectId(workspaceId) };
 
-		const totalCount = await db.collection<Department>('departments').countDocuments(filter);
-
-		const departments = await db
-			.collection<Department>('departments')
-			.aggregate<DepartmentWithUsers>([
-				{ $match: filter },
-				{ $sort: sortObj },
-				{ $skip: skip },
-				{ $limit: limit },
-				{
-					$lookup: {
-						from: 'users',
-						localField: 'users',
-						foreignField: '_id',
-						pipeline: [
-							{
-								$project: {
-									_id: 1,
-									name: 1,
-									email: 1,
-									profileAvatar: 1,
-								},
+		const pipeline = [
+			{ $match: filter },
+			{
+				$lookup: {
+					from: 'users',
+					localField: 'users',
+					foreignField: '_id',
+					pipeline: [
+						{
+							$project: {
+								_id: 1,
+								name: 1,
+								email: 1,
+								profileAvatar: 1,
 							},
-						],
-						as: 'users',
-					},
+						},
+					],
+					as: 'users',
 				},
-				isArchive
-					? buildLegacyAuditLookupStage({ scopeType: 'department', mode: 'archive' })
-					: buildLegacyAuditLookupStage({ scopeType: 'department', updateActions: ['update', 'restore'] }),
-			])
-			.toArray();
+			},
+			isArchive
+				? buildLegacyAuditLookupStage({ scopeType: 'department', mode: 'archive' })
+				: buildLegacyAuditLookupStage({ scopeType: 'department', updateActions: ['update', 'restore'] }),
+			{
+				$addFields: {
+					actionBy: { $arrayElemAt: ['$auditLogs.actionBy', 0] },
+					actionAt: { $arrayElemAt: ['$auditLogs.actionAt', 0] },
+				},
+			},
+		];
+
+		const filtersMatch = buildListFiltersMatch(filters, DEPARTMENT_FILTER_FIELDS);
+		if (filtersMatch.error) return filtersMatch.error;
+		if (filtersMatch.match) pipeline.push({ $match: filtersMatch.match });
+
+		const [departments, countResult] = await Promise.all([
+			db.collection<Department>('departments')
+				.aggregate<DepartmentWithUsers>(pipeline.concat([{ $sort: sortObj }, { $skip: skip }, { $limit: limit }]))
+				.toArray(),
+			db.collection<Department>('departments')
+				.aggregate<{ total: number }>(pipeline.concat({ $count: 'total' }))
+				.toArray(),
+		]);
+		const totalCount = countResult.length > 0 ? countResult[0].total : 0;
 
 		const departmentsWithSignedAvatars = await Promise.all(
 			departments.map(async (department) => {
