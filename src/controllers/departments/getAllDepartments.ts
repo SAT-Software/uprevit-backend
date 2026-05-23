@@ -116,15 +116,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (filtersMatch.error) return filtersMatch.error;
 		if (filtersMatch.match) pipeline.push({ $match: filtersMatch.match });
 
-		const departments = await db
-			.collection<Department>('departments')
-			.aggregate<DepartmentWithUsers>(pipeline.concat([{ $sort: sortObj }, { $skip: skip }, { $limit: limit }]))
-			.toArray();
-
-		const countResult = await db
-			.collection<Department>('departments')
-			.aggregate<{ total: number }>(pipeline.concat({ $count: 'total' }))
-			.toArray();
+		const [departments, countResult] = await Promise.all([
+			db.collection<Department>('departments')
+				.aggregate<DepartmentWithUsers>(pipeline.concat([{ $sort: sortObj }, { $skip: skip }, { $limit: limit }]))
+				.toArray(),
+			db.collection<Department>('departments')
+				.aggregate<{ total: number }>(pipeline.concat({ $count: 'total' }))
+				.toArray(),
+		]);
 		const totalCount = countResult.length > 0 ? countResult[0].total : 0;
 
 		const departmentsWithSignedAvatars = await Promise.all(

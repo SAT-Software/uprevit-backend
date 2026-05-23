@@ -220,9 +220,14 @@ function normalizeFilterValue(value: unknown, field: string, type: ListFieldType
 	}
 
 	if (type === 'number') {
-		const numberValue = typeof value === 'number' ? value : Number(value);
-		if (Number.isNaN(numberValue)) return `Filter '${field}' must use a numeric value`;
-		return numberValue;
+		if (typeof value === 'number') {
+			if (Number.isNaN(value)) return `Filter '${field}' must use a numeric value`;
+			return value;
+		}
+		if (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)) {
+			return Number(value);
+		}
+		return `Filter '${field}' must use a numeric value`;
 	}
 
 	if (type === 'boolean') {
@@ -293,7 +298,9 @@ function buildFilterQuery(filter: ListFilter, fieldConfig: ListFilterField): Doc
 	}
 
 	const normalizedValue = normalizeFilterValue(value, filter.field, type);
-	if (typeof normalizedValue === 'string' && type !== 'text') return normalizedValue;
+	const isNormalizeError =
+		typeof normalizedValue === 'string' && (type !== 'text' || typeof value !== 'string');
+	if (isNormalizeError) return normalizedValue;
 
 	if (type !== 'text' && ['contains', 'not_contains', 'starts_with', 'ends_with'].includes(operator)) {
 		return `Operator '${operator}' is only supported for text fields`;
