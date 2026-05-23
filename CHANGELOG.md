@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-05-23
+
+### Added
+
+- Added shared list query parsing and a MongoDB filter builder for paginated workspace APIs.
+- Added list query support to departments, projects, and products handlers.
+- Added pagination, sorting, and filtering to the workspace users endpoint.
+
+### Updated
+
+- Updated department retrieval to run related lookups concurrently with `Promise.all`.
+- Updated package versions to `0.3.0`.
+
+### Fixed
+
+- Fixed legacy audit action determination logic for product data changes.
+
 ## [0.2.0] - 2026-05-04
 
 ### Added
