@@ -12,6 +12,7 @@ type BuildLegacyAuditLookupStageInput = {
 	updateActions?: AuditAction[];
 };
 
+const PRODUCT_CREATION_EVENT_KEYS = ['product.created', 'product.version.created'] as const;
 
 export const buildLegacyAuditLookupStage = ({
 	scopeType,
@@ -55,6 +56,9 @@ export const buildLegacyAuditLookupStage = ({
 	}
 
 	const actionFilters = Array.from(new Set(['create', ...updateActions]));
+	const legacyCreateCondition = scopeType === 'product'
+		? { $in: ['$eventKey', PRODUCT_CREATION_EVENT_KEYS] }
+		: { $eq: ['$action', 'create'] };
 
 	return {
 		$lookup: {
@@ -75,7 +79,7 @@ export const buildLegacyAuditLookupStage = ({
 				{
 					$addFields: {
 						legacyAction: {
-							$cond: [{ $eq: ['$action', 'create'] }, 'create', 'update'],
+							$cond: [legacyCreateCondition, 'create', 'update'],
 						},
 					},
 				},

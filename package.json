@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "scripts": {
     "dev": "sam sync --watch --build-in-source --stack-name uprevit-test --region us-east-1",
     "prepare:sam-env": "node scripts/prepare-sam-env.mjs",
