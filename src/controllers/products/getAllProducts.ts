@@ -24,6 +24,7 @@ const ALLOWED_SORT_FIELDS = [
 	'modifiedOn',
 	'archivedBy',
 	'archivedOn',
+	'actionBy',
 	'actionAt',
 	'_id',
 ];
@@ -113,8 +114,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			try {
 				const statusArray = JSON.parse(statusFilter);
 				if (Array.isArray(statusArray) && statusArray.length > 0) {
-					filter.status = { $in: statusArray };
-					statusValues = statusArray.filter((status): status is string => typeof status === 'string');
+					const statusStrings = statusArray.filter(
+						(status): status is string => typeof status === 'string',
+					);
+					if (statusStrings.length > 0) {
+						filter.status = { $in: statusStrings };
+						statusValues = statusStrings;
+					}
 				}
 			} catch (e) {
 				// If parsing fails, treat as single status

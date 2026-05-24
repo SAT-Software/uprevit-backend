@@ -9,7 +9,19 @@ import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 import { enrichDepartmentsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 
-const ALLOWED_SORT_FIELDS = ['department_name', 'department_description', 'manager', 'actionAt', '_id'];
+const ALLOWED_SORT_FIELDS = [
+	'department_name',
+	'department_description',
+	'manager',
+	'users',
+	'actionBy',
+	'actionAt',
+	'_id',
+];
+
+const DEPARTMENT_SORT_FIELD_MAP: Record<string, string> = {
+	users: 'userCount',
+};
 
 const DEPARTMENT_FILTER_FIELDS: Record<string, ListFilterField> = {
 	department_name: { path: 'department_name', type: 'text' },
@@ -74,8 +86,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			isArchive = isArchiveParam.toLowerCase() === 'true';
 		}
 
+		const sortField = DEPARTMENT_SORT_FIELD_MAP[sort] ?? sort;
 		const sortObj: { [key: string]: 1 | -1 } = {};
-		sortObj[sort] = order === 'desc' ? -1 : 1;
+		sortObj[sortField] = order === 'desc' ? -1 : 1;
 
 		const filter = isArchive
 			? { isArchived: true, workspace_id: new ObjectId(workspaceId) }
@@ -108,6 +121,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				$addFields: {
 					actionBy: { $arrayElemAt: ['$auditLogs.actionBy', 0] },
 					actionAt: { $arrayElemAt: ['$auditLogs.actionAt', 0] },
+					userCount: { $size: { $ifNull: ['$users', []] } },
 				},
 			},
 		];
