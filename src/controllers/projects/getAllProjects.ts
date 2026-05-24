@@ -9,7 +9,22 @@ import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 import { enrichProjectsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 
-const ALLOWED_SORT_FIELDS = ['project_name', 'project_description', 'project_manager', '_id', 'actionAt'];
+const ALLOWED_SORT_FIELDS = [
+	'project_number',
+	'project_name',
+	'project_description',
+	'project_manager',
+	'users',
+	'createdOn',
+	'modifiedOn',
+	'actionBy',
+	'actionAt',
+	'_id',
+];
+
+const PROJECT_SORT_FIELD_MAP: Record<string, string> = {
+	users: 'userCount',
+};
 
 const PROJECT_FILTER_FIELDS: Record<string, ListFilterField> = {
 	project_name: { path: 'project_name', type: 'text' },
@@ -61,6 +76,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (listQueryResult.error) return listQueryResult.error;
 
 		const { limit, page, skip, sort, order, filters } = listQueryResult.value!;
+		const sortField = PROJECT_SORT_FIELD_MAP[sort] ?? sort;
 		const workspaceId = event.queryStringParameters?.workspaceId;
 		const isArchiveParam = event.queryStringParameters?.isArchive || 'false';
 		const departmentId = event.queryStringParameters?.departmentId;
@@ -85,7 +101,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (departmentId) filter.department_id = new ObjectId(departmentId);
 
 		const sortObj: { [key: string]: 1 | -1 } = {};
-		sortObj[sort] = order === 'desc' ? -1 : 1;
+		sortObj[sortField] = order === 'desc' ? -1 : 1;
 
 		const pipeline = [
 			{ $match: filter },
@@ -114,6 +130,31 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				$addFields: {
 					actionBy: { $arrayElemAt: ['$auditLogs.actionBy', 0] },
 					actionAt: { $arrayElemAt: ['$auditLogs.actionAt', 0] },
+					createdAudit: {
+						$first: {
+							$filter: {
+								input: '$auditLogs',
+								as: 'auditLog',
+								cond: { $eq: ['$$auditLog.action', 'create'] },
+							},
+						},
+					},
+					modifiedAudit: {
+						$first: {
+							$filter: {
+								input: '$auditLogs',
+								as: 'auditLog',
+								cond: { $eq: ['$$auditLog.action', 'update'] },
+							},
+						},
+					},
+					userCount: { $size: { $ifNull: ['$users', []] } },
+				},
+			},
+			{
+				$addFields: {
+					createdOn: '$createdAudit.actionAt',
+					modifiedOn: '$modifiedAudit.actionAt',
 				},
 			},
 		];
