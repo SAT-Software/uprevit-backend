@@ -16,11 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Updated
 
 - Updated department retrieval to run related lookups concurrently with `Promise.all`.
+- Updated TypeScript build config to ignore TypeScript 6 deprecations during compilation.
 - Updated package versions to `0.3.0`.
 
 ### Fixed
 
 - Fixed legacy audit action determination logic for product data changes.
+- Fixed project list sorting to support workspace table header sort fields.
+- Fixed archive list sorting for departments and products, including `users` and `actionBy` mappings.
+- Fixed workspace list status filtering so `statusValues` stays aligned with `filter.status`.
 
 ## [0.2.0] - 2026-05-04
 
