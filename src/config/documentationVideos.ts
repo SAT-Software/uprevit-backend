@@ -18,7 +18,7 @@ export const DOCUMENTATION_VIDEOS = {
 export type DocumentationVideoKey = keyof typeof DOCUMENTATION_VIDEOS;
 
 export const isDocumentationVideoKey = (value: string): value is DocumentationVideoKey =>
-	Object.hasOwn(DOCUMENTATION_VIDEOS, value);
+	Object.prototype.hasOwnProperty.call(DOCUMENTATION_VIDEOS, value);
 
 export const getDocumentationVideoObjectKey = (
 	videoKey: string,
