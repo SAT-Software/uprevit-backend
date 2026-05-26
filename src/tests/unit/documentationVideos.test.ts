@@ -16,4 +16,9 @@ describe("documentationVideos allowlist", () => {
 		expect(isDocumentationVideoKey("not.a.video")).toBe(false);
 		expect(getDocumentationVideoObjectKey("not.a.video")).toBeNull();
 	});
+
+	it("rejects inherited prototype property names", () => {
+		expect(isDocumentationVideoKey("toString")).toBe(false);
+		expect(getDocumentationVideoObjectKey("toString")).toBeNull();
+	});
 });
