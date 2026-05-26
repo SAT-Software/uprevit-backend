@@ -6,16 +6,22 @@ const region = process.env.AWS_REGION;
 const uploadsBucket = process.env.UPLOADS_BUCKET;
 const exportsBucket = process.env.EXPORTS_BUCKET;
 const standardSymbolsBucket = process.env.STANDARD_SYMBOLS_BUCKET;
-
-if (!region) throw new Error("Missing required environment variable: AWS_REGION");
-if (!uploadsBucket) throw new Error("Missing required environment variable: UPLOADS_BUCKET");
-if (!exportsBucket) throw new Error("Missing required environment variable: EXPORTS_BUCKET");
+const documentationFilesBucket = process.env.DOCUMENTATION_FILES_BUCKET;
 
 const parsePositiveInteger = (value: string | undefined, fallback: number): number => {
 	const parsed = Number.parseInt(value ?? "", 10);
 	if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
 	return parsed;
 };
+
+const DOCS_FILE_URL_EXPIRES_IN_SECONDS = parsePositiveInteger(
+	process.env.DOCS_VIDEO_URL_EXPIRES_IN_SECONDS,
+	900,
+);
+
+if (!region) throw new Error("Missing required environment variable: AWS_REGION");
+if (!uploadsBucket) throw new Error("Missing required environment variable: UPLOADS_BUCKET");
+if (!exportsBucket) throw new Error("Missing required environment variable: EXPORTS_BUCKET");
 
 const VIEW_URL_EXPIRES_IN_SECONDS = parsePositiveInteger(process.env.S3_VIEW_URL_EXPIRES_IN_SECONDS, 43200);
 const SIGNING_CONCURRENCY = parsePositiveInteger(process.env.S3_SIGNING_CONCURRENCY, 25);
@@ -193,6 +199,30 @@ export const createStandardSymbolPresignedGetUrl = async (key: string): Promise<
 	});
 
 	return getSignedUrl(client, command, { expiresIn: VIEW_URL_EXPIRES_IN_SECONDS });
+};
+
+export type DocumentationFilePresignedUrl = {
+	url: string;
+	expiresAt: string;
+};
+
+export const createDocumentationFilePresignedGetUrl = async (
+	key: string,
+): Promise<DocumentationFilePresignedUrl> => {
+	if (!documentationFilesBucket) {
+		throw new Error("Missing required environment variable: DOCUMENTATION_FILES_BUCKET");
+	}
+
+	const command = new GetObjectCommand({
+		Bucket: documentationFilesBucket,
+		Key: key,
+	});
+
+	const expiresIn = DOCS_FILE_URL_EXPIRES_IN_SECONDS;
+	const url = await getSignedUrl(client, command, { expiresIn });
+	const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+
+	return { url, expiresAt };
 };
 
 const normalizeKey = (key: unknown): string | null => {

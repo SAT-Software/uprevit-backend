@@ -18,6 +18,7 @@ The required runtime keys are:
 - `CLIENT_ID`: The Cognito App Client ID
 - `UPLOADS_BUCKET`: The S3 bucket used for uploaded files
 - `EXPORTS_BUCKET`: The S3 bucket used for generated exports
+- `DOCUMENTATION_FILES_BUCKET`: The S3 bucket for documentation media (`uprevit-documentation-files`)
 - `EXPORT_JOB_QUEUE_URL`: The SQS queue URL used by export jobs
 
 AWS SAM `--env-vars` expects Lambda environment variable names, not CloudFormation parameter names like `MongoDbUri` or `UserPoolId`.
@@ -136,6 +137,23 @@ uprevit-backend$ sam logs -n HelloWorldFunction --stack-name uprevit-backend --t
 ```
 
 You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
+
+## Documentation videos (S3 seed)
+
+Place `.mp4` files under `src/scripts/documentation-videos-input/` (folder layout matches the product team's export).
+
+From the repo root (or `src/`):
+
+```bash
+cd src && npm install   # installs @aws-sdk/client-s3 (required by the seed script)
+npm run seed:documentation-videos -- --scan-dir
+npm run seed:documentation-videos -- --dry-run
+npm run seed:documentation-videos
+```
+
+From the repo root: `npm run seed:documentation-videos -- --dry-run` (forwards flags to `src/`).
+
+Requires `AWS_REGION` and credentials with `s3:PutObject` on `DOCUMENTATION_FILES_BUCKET` (default `uprevit-documentation-files`).
 
 ## Unit Tests
 

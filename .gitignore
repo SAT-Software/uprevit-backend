@@ -210,5 +210,5 @@ env.json
 .sam-local-env.json
 
 .vscode
-src/tests/unit/**
+src/scripts/documentation-videos-input/
 src/tests/unit/test-handler.test.ts

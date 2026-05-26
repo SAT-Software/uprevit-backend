@@ -140,4 +140,5 @@ jobs:
           "UploadsBucket=$UPLOADS_BUCKET"
           "ExportsBucket=$EXPORTS_BUCKET"
           "StandardSymbolsBucket=uprevit-standard-symbols"
+          "DocumentationFilesBucket=uprevit-documentation-files"
           "ExportJobQueueUrl=$EXPORT_JOB_QUEUE_URL"

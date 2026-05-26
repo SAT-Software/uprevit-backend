@@ -33,6 +33,10 @@ Parameters:
     Type: String
     Description: "S3 bucket name for standard symbol library images"
     Default: "uprevit-standard-symbols"
+  DocumentationFilesBucket:
+    Type: String
+    Description: "S3 bucket name for documentation media (videos, future images/PDFs)"
+    Default: "uprevit-documentation-files"
   ExportJobQueueUrl:
     Type: String
     Description: "Optional explicit SQS queue URL override for local/dev"
@@ -69,6 +73,7 @@ Globals:
         UPLOADS_BUCKET: !Ref UploadsBucket
         EXPORTS_BUCKET: !Ref ExportsBucket
         STANDARD_SYMBOLS_BUCKET: !Ref StandardSymbolsBucket
+        DOCUMENTATION_FILES_BUCKET: !Ref DocumentationFilesBucket
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
@@ -654,6 +659,29 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/standardSymbols/getAllStandardSymbols.ts]
+
+  GetDocumentationVideoSignedUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/docs/getDocumentationVideoSignedUrl.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${DocumentationFilesBucket}/videos/*"
+      Events:
+        GetDocumentationVideoSignedUrl:
+          Type: Api
+          Properties:
+            Path: /docs/videos/{videoKey}/signed-url
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/docs/getDocumentationVideoSignedUrl.ts]
 
   CreateProductVersionFunction:
     Type: AWS::Serverless::Function
