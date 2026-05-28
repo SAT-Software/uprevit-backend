@@ -1,7 +1,14 @@
 {
   "version": "0.3.0",
   "scripts": {
-    "dev": "sam sync --watch --build-in-source --stack-name uprevit-test --region us-east-1",
+    "install:src": "npm ci --prefix src --no-audit --no-fund",
+    "reinstall:src": "rm -rf src/node_modules && npm run install:src",
+    "predev": "npm run install:src",
+    "dev": "sam sync --code --watch --build-in-source --stack-name uprevit-test --region us-east-1",
+    "dev:infra": "sam sync --no-build-in-source --stack-name uprevit-test --region us-east-1; status=$?; npm run install:src; exit $status",
+    "dev:infra:watch": "sam sync --watch --no-build-in-source --stack-name uprevit-test --region us-east-1; status=$?; npm run install:src; exit $status",
+    "sync:infra": "npm run dev:infra",
+    "deploy": "sam deploy --stack-name uprevit-test --region us-east-1 --no-confirm-changeset",
     "prepare:sam-env": "node scripts/prepare-sam-env.mjs",
     "start:local": "npm run prepare:sam-env && AWS_PROFILE=uprevit-amit sam local start-api --env-vars .sam-local-env.json",
     "seed:documentation-videos": "npm --prefix src run seed:documentation-videos --"
