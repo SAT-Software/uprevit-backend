@@ -48,12 +48,21 @@ To run the application locally:
    npm install
    ```
 
-2. For live cloud sync during development, use the root dev script:
+2. For live code sync during development, use the root dev script:
    ```bash
    npm run dev
    ```
 
-   This script uses `sam sync --watch --build-in-source`, so make sure your local AWS SAM CLI version is `>= 1.104.0` before running it.
+   This script uses `sam sync --code --watch --build-in-source` for Lambda code changes.
+
+   For template changes such as new routes or environment variables, run a one-shot infrastructure sync:
+   ```bash
+   npm run dev:infra
+   ```
+
+   Infrastructure sync builds outside `src/`, and SAM builds are configured to run nonparallel because all functions share that source directory. The script restores local dev dependencies when sync exits, including after a failed sync. Use `npm run dev:infra:watch` only when you intentionally need to watch template changes.
+
+   Make sure your local AWS SAM CLI version is `>= 1.104.0` before running these commands.
 
 3. Build and run with SAM:
    ```bash
