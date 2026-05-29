@@ -106,7 +106,7 @@ ${lines.join("\n")}
 export type DocumentationVideoKey = keyof typeof DOCUMENTATION_VIDEOS;
 
 export const isDocumentationVideoKey = (value: string): value is DocumentationVideoKey =>
-\tvalue in DOCUMENTATION_VIDEOS;
+\tObject.prototype.hasOwnProperty.call(DOCUMENTATION_VIDEOS, value);
 
 export const getDocumentationVideoObjectKey = (
 \tvideoKey: string,
