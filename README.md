@@ -18,6 +18,7 @@ The required runtime keys are:
 - `CLIENT_ID`: The Cognito App Client ID
 - `UPLOADS_BUCKET`: The S3 bucket used for uploaded files
 - `EXPORTS_BUCKET`: The S3 bucket used for generated exports
+- `DOCUMENTATION_FILES_BUCKET`: The S3 bucket for documentation media (`uprevit-documentation-files`)
 - `EXPORT_JOB_QUEUE_URL`: The SQS queue URL used by export jobs
 
 AWS SAM `--env-vars` expects Lambda environment variable names, not CloudFormation parameter names like `MongoDbUri` or `UserPoolId`.
@@ -30,8 +31,10 @@ Production deployment is handled by GitHub Actions, not by running `sam deploy -
 Branch to environment mapping:
 
 - `develop` -> GitHub environment `develop`
-- `release/**` -> GitHub environment `stage`
+- `demo` -> GitHub environment `demo`
 - `main` -> GitHub environment `prod`
+
+Release branches (for example `release/x.y.z`) do not trigger deployment. Deployments happen when the release is merged to `main` (prod) or back to `develop` (develop).
 
 The deploy workflow reads non-secret configuration from GitHub environment variables and loads `MONGODB_URI` from AWS Systems Manager Parameter Store using `MONGODB_URI_PARAM`.
 
@@ -47,12 +50,21 @@ To run the application locally:
    npm install
    ```
 
-2. For live cloud sync during development, use the root dev script:
+2. For live code sync during development, use the root dev script:
    ```bash
    npm run dev
    ```
 
-   This script uses `sam sync --watch --build-in-source`, so make sure your local AWS SAM CLI version is `>= 1.104.0` before running it.
+   This script uses `sam sync --code --watch --build-in-source` for Lambda code changes.
+
+   For template changes such as new routes or environment variables, run a one-shot infrastructure sync:
+   ```bash
+   npm run dev:infra
+   ```
+
+   Infrastructure sync builds outside `src/`, and SAM builds are configured to run nonparallel because all functions share that source directory. The script restores local dev dependencies when sync exits, including after a failed sync. Use `npm run dev:infra:watch` only when you intentionally need to watch template changes.
+
+   Make sure your local AWS SAM CLI version is `>= 1.104.0` before running these commands.
 
 3. Build and run with SAM:
    ```bash
@@ -71,7 +83,7 @@ To run the application locally:
 
 Recommended release flow:
 
-1. Finalize changes on `release/x.y.z`
+1. Finalize changes on `release/x.y.z` (pushes to the release branch do not deploy)
 2. Merge the release branch into `main`
 3. Let GitHub Actions deploy `main` to the `prod` environment
 4. Verify the deployed API and stack outputs
@@ -136,6 +148,23 @@ uprevit-backend$ sam logs -n HelloWorldFunction --stack-name uprevit-backend --t
 ```
 
 You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
+
+## Documentation videos (S3 seed)
+
+Place `.mp4` files under `src/scripts/documentation-videos-input/` (folder layout matches the product team's export).
+
+From the repo root (or `src/`):
+
+```bash
+cd src && npm install   # installs @aws-sdk/client-s3 (required by the seed script)
+npm run seed:documentation-videos -- --scan-dir
+npm run seed:documentation-videos -- --dry-run
+npm run seed:documentation-videos
+```
+
+From the repo root: `npm run seed:documentation-videos -- --dry-run` (forwards flags to `src/`).
+
+Requires `AWS_REGION` and credentials with `s3:PutObject` on `DOCUMENTATION_FILES_BUCKET` (default `uprevit-documentation-files`).
 
 ## Unit Tests
 

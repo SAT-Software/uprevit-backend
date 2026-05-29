@@ -1,5 +1,5 @@
 {
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"scripts": {
 		"prepare:sam-env": "node ../scripts/prepare-sam-env.mjs",
 		"start:local": "npm run prepare:sam-env && AWS_PROFILE=uprevit-amit sam local start-api -t ../template.yaml --env-vars ../.sam-local-env.json",
@@ -7,7 +7,8 @@
     "lint": "eslint controllers/**/*.ts utils/**/*.ts models/*.ts types/**/*.ts db/*.ts app.ts --no-ignore",
     "lint:fix": "eslint controllers/**/*.ts utils/**/*.ts models/*.ts types/**/*.ts db/*.ts app.ts --no-ignore --fix",
     "type-check": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "seed:documentation-videos": "node scripts/seedDocumentationVideos.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.679.0",

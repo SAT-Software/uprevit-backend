@@ -1,5 +1,9 @@
 version = 0.1
 
+[default.build.parameters]
+parallel = false
+cached = true
+
 [default.deploy.parameters]
 stack_name = "uprevit-test"
 resolve_s3 = true
