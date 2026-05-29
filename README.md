@@ -31,8 +31,10 @@ Production deployment is handled by GitHub Actions, not by running `sam deploy -
 Branch to environment mapping:
 
 - `develop` -> GitHub environment `develop`
-- `release/**` -> GitHub environment `stage`
+- `demo` -> GitHub environment `demo`
 - `main` -> GitHub environment `prod`
+
+Release branches (for example `release/x.y.z`) do not trigger deployment. Deployments happen when the release is merged to `main` (prod) or back to `develop` (develop).
 
 The deploy workflow reads non-secret configuration from GitHub environment variables and loads `MONGODB_URI` from AWS Systems Manager Parameter Store using `MONGODB_URI_PARAM`.
 
@@ -81,7 +83,7 @@ To run the application locally:
 
 Recommended release flow:
 
-1. Finalize changes on `release/x.y.z`
+1. Finalize changes on `release/x.y.z` (pushes to the release branch do not deploy)
 2. Merge the release branch into `main`
 3. Let GitHub Actions deploy `main` to the `prod` environment
 4. Verify the deployed API and stack outputs
