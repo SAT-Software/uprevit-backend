@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from "../../utils/authUtils";
+import { assertWorkspaceMatch, requireTenantContext, tenantObjectIdFilter } from "../../utils/tenantContext";
 import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { ObjectId } from "mongodb";
@@ -14,23 +14,37 @@ import { enrichItemsWithSignedUrls } from "../../utils/s3-storage";
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if(!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
-		const workspaceId = event.queryStringParameters?.workspaceId;
-		if (!workspaceId) return ResponseWrapper.badRequest('Missing required query parameter: workspace_id');
-
+		const { context } = tenantResult;
+		const requestedWorkspaceId = event.queryStringParameters?.workspaceId;
 		const parentId = event.queryStringParameters?.parentId;
+
 		if (!parentId) return ResponseWrapper.badRequest('Missing required query parameter: parentId');
 
-		const validationError = validateAllObjectIds({ workspaceId, parentId });
+		const validationError = validateAllObjectIds({ parentId });
 		if (validationError) return validationError;
+
+		if (requestedWorkspaceId) {
+			if (!ObjectId.isValid(requestedWorkspaceId)) {
+				return ResponseWrapper.badRequest('Invalid workspaceId');
+			}
+
+			const workspaceMismatch = assertWorkspaceMatch(requestedWorkspaceId, context.workspaceId);
+			if (workspaceMismatch) return workspaceMismatch;
+		}
 
 		const db = await getDb();
 		const sourceFilesCollection = db.collection<SourceFile>('sourceFiles');
 
-		const query: any = {
-			workspace_id: new ObjectId(workspaceId),
+		const parentFolder = await sourceFilesCollection.findOne(
+			tenantObjectIdFilter(parentId, context.workspaceId),
+		);
+		if (!parentFolder) return ResponseWrapper.notFound('Parent folder not found.');
+
+		const query = {
+			workspace_id: context.workspaceId,
 			parentId: new ObjectId(parentId),
 		};
 

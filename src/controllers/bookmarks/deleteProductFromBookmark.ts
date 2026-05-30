@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from "../../utils/authUtils";
+import { requireTenantContext } from "../../utils/tenantContext";
 import { validateAllObjectIds, validateMissingFields } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
 import { UserBookmarks } from "../../models/bookmarks";
@@ -16,8 +16,10 @@ import { AuditLogAction } from "../../models/auditLog";
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context, auth } = tenantResult;
 
 		const folderIdParam = event.pathParameters?.folderId;
 		if (!folderIdParam) return ResponseWrapper.badRequest("Folder ID is missing from path parameters.");
@@ -27,19 +29,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const input = JSON.parse(event.body);
 
 		const missingFieldsResult = validateMissingFields({
-			user_id: input.user_id,
 			product_id: input.product_id,
 		});
 		if (missingFieldsResult) return missingFieldsResult;
 
 		const objectIdValidation = validateAllObjectIds({
-			user_id: input.user_id,
 			folderId: folderIdParam,
 			productId: input.product_id,
 		});
 		if (objectIdValidation) return objectIdValidation;
 
-		const userId = ObjectId.createFromHexString(input.user_id);
+		const userId = context.userId;
 		const folderId = ObjectId.createFromHexString(folderIdParam);
 		const productId = ObjectId.createFromHexString(input.product_id);
 
@@ -48,6 +48,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const updateResult = await db.collection<UserBookmarks>("bookmarks").findOneAndUpdate(
 			{
 				user_id: userId,
+				workspace_id: context.workspaceId,
 				"product_folders._id": folderId
 			},
 			{
