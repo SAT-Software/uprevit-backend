@@ -5,9 +5,9 @@ import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
-import { authenticateWithRole } from '../../utils/authUtils';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 
 /**
  * Update a department
@@ -17,10 +17,13 @@ import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
-		const auth = await authenticateWithRole(event, 'admin');
-		if(!auth.isValid) {
-			return auth.error;
+		const { context, auth } = tenantResult;
+
+		if (!isWorkspaceAdmin(context.cognitoGroups)) {
+			return ResponseWrapper.forbidden('Insufficient permissions');
 		}
 
 		if (!event.body) {
@@ -33,7 +36,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			'department_name': input.department_name,
 			'department_description': input.department_description,
 			'admin_id': input.admin_id.toString(),
-			'workspace_id': input.workspace_id.toString(),
 			'_id': input._id!.toString(),
 		});
 
@@ -41,10 +43,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return missingFieldsResult;
 		}
 
+		if (input.workspace_id) {
+			const workspaceMismatch = assertWorkspaceMatch(input.workspace_id, context.workspaceId);
+			if (workspaceMismatch) return workspaceMismatch;
+		}
+
 		const objectIdValidation = validateAllObjectIds({
 			'_id': input._id!,
 			'admin_id': input.admin_id,
-			'workspace_id': input.workspace_id,
 		}, {
 			'users': input.users,
 		});
@@ -54,24 +60,20 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const db = await getDb();
+		const departmentFilter = tenantObjectIdFilter(input._id!, context.workspaceId);
 
-		const departmentRecord: Department | null = await db.collection<Department>('departments').findOne({
-			_id: new ObjectId(input._id),
-		});
+		const departmentRecord: Department | null = await db.collection<Department>('departments').findOne(departmentFilter);
 
 		if (!departmentRecord) {
 			return ResponseWrapper.badRequest('Department not found');
 		}
 
 		const adminObjectId = new ObjectId(input.admin_id);
-		const workspaceObjectId = new ObjectId(input.workspace_id);
 		const userObjectIds = input.users ? input.users.map((userId) => new ObjectId(userId)) : [];
 		const normalizedDepartmentImage = normalizePersistedAssetReference(input.image, departmentRecord.image ?? '');
 
 		const department = await db.collection<Department>('departments').updateOne(
-			{
-				_id: new ObjectId(departmentRecord._id as ObjectId),
-			},
+			departmentFilter,
 			{
 				$set: {
 					department_name: input.department_name,
@@ -79,14 +81,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					image: normalizedDepartmentImage,
 					manager: input.manager,
 					admin_id: adminObjectId,
-					workspace_id: workspaceObjectId,
 					users: userObjectIds,
 				},
 			},
 		);
 
 		await recordAuditEvent({
-			workspaceId: workspaceObjectId.toString(),
+			workspaceId: context.workspaceId.toString(),
 			scope: { type: 'department', id: (departmentRecord._id as ObjectId).toString() },
 			entity: { type: 'department', id: (departmentRecord._id as ObjectId).toString() },
 			action: 'update',

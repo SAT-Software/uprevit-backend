@@ -3,11 +3,11 @@ import { CognitoIdentityProviderClient, AdminCreateUserCommand, AdminUpdateUserA
 import { getDb } from "../../utils/db";
 import { User } from "../../models/user";
 import { ObjectId } from "mongodb";
-import { authenticateWithRole } from "../../utils/authUtils";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
 import { validateUserArray } from "../../utils/validationUtils";
 import { Workspace } from "../../models/workspace";
+import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext } from "../../utils/tenantContext";
 
 const cognito = new CognitoIdentityProviderClient({ region: 'us-east-1' });
 
@@ -17,13 +17,24 @@ const cognito = new CognitoIdentityProviderClient({ region: 'us-east-1' });
  */
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateWithRole(event, 'admin');
-		if (!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
+		const { context } = tenantResult;
+
+		if (!isWorkspaceAdmin(context.cognitoGroups)) {
+			return ResponseWrapper.forbidden('Insufficient permissions');
+		}
 
 		const workspaceId = event.pathParameters?.workspaceId;
 		if (!workspaceId) return ResponseWrapper.badRequest("Workspace ID is required in path parameters");
 
+		if (!ObjectId.isValid(workspaceId)) {
+			return ResponseWrapper.badRequest('Invalid workspace ID format. Must be a valid MongoDB ObjectId.');
+		}
+
+		const workspaceMismatch = assertWorkspaceMatch(workspaceId, context.workspaceId);
+		if (workspaceMismatch) return workspaceMismatch;
 
 		if (!event.body) return ResponseWrapper.badRequest("Request body is required.");
 
@@ -32,6 +43,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 		if(validationError) return validationError;
 
 		const db = await getDb();
+		const workspaceObjectId = context.workspaceId;
 		const results = [];
 
 		for (const user of users) {
@@ -56,7 +68,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 					email: email,
 					name: name,
 					cognitoSub: cognitoSub,
-					workspaceId: new ObjectId(workspaceId),
+					workspaceId: workspaceObjectId,
 					userType: "user",
 					status: "invited",
 				};
@@ -64,7 +76,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 				const dbUserId = userResult.insertedId.toString();
 
 				await db.collection<Workspace>("workspaces").updateOne(
-					{ _id: new ObjectId(workspaceId) },
+					{ _id: workspaceObjectId },
 					{ $push: { userIds: new ObjectId(dbUserId) } }
 				);
 		      
@@ -73,7 +85,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 					Username: email,
 					UserAttributes: [
 						{ Name: "custom:userId", Value: dbUserId },
-						{ Name: "custom:workspaceId", Value: workspaceId },
+						{ Name: "custom:workspaceId", Value: workspaceObjectId.toString() },
 						{ Name: "custom:status", Value: "invited" }
 					],
 				}));

@@ -5,9 +5,9 @@ import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
-import { authenticateWithRole } from '../../utils/authUtils';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
 
 /**
  * Create a project
@@ -17,10 +17,14 @@ import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateWithRole(event, 'admin');
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
-		if(!auth.isValid) return auth.error;
+		const { context, auth } = tenantResult;
 
+		if (!isWorkspaceAdmin(context.cognitoGroups)) {
+			return ResponseWrapper.forbidden('Insufficient permissions');
+		}
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
 	
@@ -29,7 +33,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 	
 
 		const missingFieldsResult = validateMissingFields({
-			'workspace_id': input.workspace_id.toString(),
 			'department_id': input.department_id.toString(),
 			'project_name': input.project_name,
 			'project_number': input.project_number,
@@ -41,8 +44,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return missingFieldsResult;
 		}
 
+		if (input.workspace_id) {
+			const workspaceMismatch = assertWorkspaceMatch(input.workspace_id, context.workspaceId);
+			if (workspaceMismatch) return workspaceMismatch;
+		}
+
 		const objectIdValidation = validateAllObjectIds({
-			'workspace_id': input.workspace_id,
 			'department_id': input.department_id,
 			'admin_id': input.admin_id,
 		}, {
@@ -55,16 +62,25 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const db = await getDb();
 		
-		const workspaceObjectId = new ObjectId(input.workspace_id);
+		const workspaceObjectId = context.workspaceId;
 		const departmentObjectId = new ObjectId(input.department_id);
 		const adminObjectId = new ObjectId(input.admin_id);
 		const userObjectIds = input.users ? input.users.map((userId: string) => new ObjectId(userId)) : [];
 		const normalizedProjectImage = normalizePersistedAssetReference(input.image, '');
 
-		// Check if project_number already exists
+		const departmentInWorkspace = await db.collection('departments').findOne({
+			_id: departmentObjectId,
+			workspace_id: workspaceObjectId,
+		});
+
+		if (!departmentInWorkspace) {
+			return ResponseWrapper.badRequest('Department not found in this workspace');
+		}
+
 		const existingProject = await db.collection<Project>('projects').findOne({
 			project_number: input.project_number,
-			isArchived: { $ne: true }
+			workspace_id: workspaceObjectId,
+			isArchived: { $ne: true },
 		});
 
 		if (existingProject) {
