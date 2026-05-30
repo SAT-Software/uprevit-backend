@@ -5,7 +5,7 @@ import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateEnum } from '../../utils/validationUtils';
-import { authenticateRequest } from '../../utils/authUtils';
+import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 import { createPresignedGetUrlMap, createStandardSymbolPresignedGetUrlMap, enrichItemsWithSignedUrls } from '../../utils/s3-storage';
 
@@ -90,11 +90,10 @@ const enrichLabelTagsWithSignedUrls = async (
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
-		if(!auth.isValid) {
-			return auth.error;
-		}
+		const { context } = tenantResult;
 
 		const productId = event.queryStringParameters?.id;
 		const tab = event.queryStringParameters?.tab;
@@ -132,10 +131,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const db = await getDb();
-		const productObjectId = new ObjectId(productId);
 
 		const pipeline = [
-			{ $match: { _id: productObjectId } },
+			{ $match: tenantObjectIdFilter(productId, context.workspaceId) },
 			buildLegacyAuditLookupStage({
 				scopeType: 'product',
 				updateActions: ['update', 'submit', 'delete', 'move', 'link', 'unlink', 'restore'],

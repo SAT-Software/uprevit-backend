@@ -4,7 +4,7 @@ import type { Project } from '../../models/project';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from '../../utils/authUtils';
+import { requireTenantContext } from '../../utils/tenantContext';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 import { enrichProjectsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 
@@ -29,11 +29,10 @@ type ProjectWithUsers = Omit<Project, 'users'> & {
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		
-		if(!auth.isValid) {
-			return auth.error;
-		}
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context } = tenantResult;
 
 		if (!event.pathParameters?.id) {
 			return ResponseWrapper.badRequest('Missing required fields: id is required');
@@ -45,8 +44,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			{
 				$match: {
 					_id: new ObjectId(event.pathParameters.id),
-					isArchived: { $ne: true }
-				}
+					workspace_id: context.workspaceId,
+					isArchived: { $ne: true },
+				},
 			},
 			{
 				$lookup: {

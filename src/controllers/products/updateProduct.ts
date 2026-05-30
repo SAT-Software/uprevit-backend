@@ -4,7 +4,8 @@ import type { Product } from '../../models/product';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { authenticateRequest, authenticateWithRole } from '../../utils/authUtils';
+import { authenticateWithRole } from '../../utils/authUtils';
+import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 
 /**
@@ -14,9 +15,10 @@ import { recordAuditEvent } from '../../utils/auditLogV2';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if(!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
+		const { context, auth } = tenantResult;
 
 		if (!event.body) {
 			return ResponseWrapper.badRequest('Request body is required');
@@ -39,12 +41,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 
 		const db = await getDb();
-		const productObjectId = new ObjectId(productId);
+		const productFilter = tenantObjectIdFilter(productId, context.workspaceId);
 
 
-		const existingProduct = await db.collection<Product>('products').findOne({
-			_id: productObjectId,
-		});
+		const existingProduct = await db.collection<Product>('products').findOne(productFilter);
 
 		if (!existingProduct) return ResponseWrapper.notFound('Product not found');
 
@@ -97,15 +97,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const result = await db
 			.collection<Product>('products')
-			.updateOne({ _id: productObjectId }, { $set: updateData });
+			.updateOne(productFilter, { $set: updateData });
 
 		if (result.matchedCount === 0) {
 			return ResponseWrapper.notFound('Product not found');
 		}
 
-		const updatedProduct = await db.collection<Product>('products').findOne({
-			_id: productObjectId,
-		});
+		const updatedProduct = await db.collection<Product>('products').findOne(productFilter);
 
 		let eventKey = 'product.updated';
 		let auditAction: 'update' | 'submit' | 'archive' | 'restore' = 'update';
