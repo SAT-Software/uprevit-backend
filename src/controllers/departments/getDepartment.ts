@@ -78,8 +78,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Department not found');
 		}
 
+		const signingOptions = {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		};
+
 		const usersWithSignedAvatars = department.users?.length
-			? await enrichUsersWithProfileAvatarUrls(department.users)
+			? await enrichUsersWithProfileAvatarUrls(department.users, signingOptions)
 			: department.users;
 
 		const [departmentWithSignedImage] = await enrichDepartmentsWithImageUrls([
@@ -87,7 +92,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				...department,
 				users: usersWithSignedAvatars,
 			},
-		]);
+		], signingOptions);
 
 		return ResponseWrapper.success({
 			message: 'Department retrieved successfully',

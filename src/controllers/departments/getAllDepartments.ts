@@ -148,7 +148,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			departments.map(async (department) => {
 				if (!department.users?.length) return department;
 
-				const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(department.users);
+				const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(department.users, {
+					workspaceId: context.workspaceId,
+					pendingOwnerId: context.cognitoSub,
+				});
 
 				return {
 					...department,
@@ -157,7 +160,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}),
 		);
 
-		const departmentsWithSignedUrls = await enrichDepartmentsWithImageUrls(departmentsWithSignedAvatars);
+		const departmentsWithSignedUrls = await enrichDepartmentsWithImageUrls(departmentsWithSignedAvatars, {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		});
 
 		const totalPages = Math.ceil(totalCount / limit);
 

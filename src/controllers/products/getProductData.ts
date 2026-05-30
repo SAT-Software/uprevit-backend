@@ -7,13 +7,20 @@ import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateEnum } from '../../utils/validationUtils';
 import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
-import { createPresignedGetUrlMap, createStandardSymbolPresignedGetUrlMap, enrichItemsWithSignedUrls } from '../../utils/s3-storage';
+import {
+	createPresignedGetUrlMap,
+	createStandardSymbolPresignedGetUrlMap,
+	enrichItemsWithSignedUrls,
+	type TenantUploadSigningOptions,
+} from '../../utils/s3-storage';
 
 const enrichLabelComponentsWithSignedUrls = async (
 	labelComponents: LabelComponents['data'],
+	signingOptions: TenantUploadSigningOptions,
 ): Promise<LabelComponents['data']> => {
 	return enrichItemsWithSignedUrls({
 		items: labelComponents,
+		signingOptions,
 		getKey: (item) => item.key,
 		setSignedUrl: (item, signedUrl) => ({
 			...item,
@@ -24,6 +31,7 @@ const enrichLabelComponentsWithSignedUrls = async (
 
 const enrichSymbolsGraphicsWithSignedUrls = async (
 	symbolsGraphics: SymbolsGraphics['data'],
+	signingOptions: TenantUploadSigningOptions,
 ): Promise<SymbolsGraphics['data']> => {
 	if (!symbolsGraphics.length) return symbolsGraphics;
 
@@ -39,7 +47,7 @@ const enrichSymbolsGraphicsWithSignedUrls = async (
 		.filter((key): key is string => Boolean(key));
 
 	const [uploadUrlMap, standardSymbolUrlMap] = await Promise.all([
-		createPresignedGetUrlMap(uploadKeys),
+		createPresignedGetUrlMap(uploadKeys, signingOptions),
 		createStandardSymbolPresignedGetUrlMap(standardSymbolKeys),
 	]);
 
@@ -62,9 +70,11 @@ const enrichSymbolsGraphicsWithSignedUrls = async (
 
 const enrichLabelTagsWithSignedUrls = async (
 	labelTags: LabelTags['data'],
+	signingOptions: TenantUploadSigningOptions,
 ): Promise<LabelTags['data']> => {
 	const withImageUrls = await enrichItemsWithSignedUrls({
 		items: labelTags,
+		signingOptions,
 		getKey: (item) => item.key,
 		setSignedUrl: (item, signedUrl) => ({
 			...item,
@@ -74,6 +84,7 @@ const enrichLabelTagsWithSignedUrls = async (
 
 	return enrichItemsWithSignedUrls({
 		items: withImageUrls,
+		signingOptions,
 		getKey: (item) => item.tagged_image_key,
 		setSignedUrl: (item, signedUrl) => ({
 			...item,
@@ -151,15 +162,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const shouldEnrichLabelComponents = tab === 'all-tabs' || tab === 'label-components';
 		const shouldEnrichSymbolsGraphics = tab === 'all-tabs' || tab === 'symbols-graphics';
 		const shouldEnrichLabelTags = tab === 'all-tabs' || tab === 'label-tags';
+		const signingOptions: TenantUploadSigningOptions = {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		};
 
 		const labelComponentsData = shouldEnrichLabelComponents
-			? await enrichLabelComponentsWithSignedUrls(product.label_components.data)
+			? await enrichLabelComponentsWithSignedUrls(product.label_components.data, signingOptions)
 			: product.label_components.data;
 		const symbolsGraphicsData = shouldEnrichSymbolsGraphics
-			? await enrichSymbolsGraphicsWithSignedUrls(product.symbols_graphics.data)
+			? await enrichSymbolsGraphicsWithSignedUrls(product.symbols_graphics.data, signingOptions)
 			: product.symbols_graphics.data;
 		const labelTagsData = shouldEnrichLabelTags
-			? await enrichLabelTagsWithSignedUrls(product.label_tags.data)
+			? await enrichLabelTagsWithSignedUrls(product.label_tags.data, signingOptions)
 			: product.label_tags.data;
 
 		// Create product_data object once - reused across all tabs

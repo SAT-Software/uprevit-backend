@@ -48,7 +48,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		if (sourceFileOrFolder.type === 'file' && sourceFileOrFolder.key) {
 			try {
-				sourceFileOrFolder.url = await createPresignedGetUrl(sourceFileOrFolder.key);
+				sourceFileOrFolder.url = await createPresignedGetUrl(sourceFileOrFolder.key, {
+					workspaceId: context.workspaceId,
+					pendingOwnerId: context.cognitoSub,
+				});
 			} catch (error) {
 				logError('Failed to generate signed URL for source file', error);
 			}

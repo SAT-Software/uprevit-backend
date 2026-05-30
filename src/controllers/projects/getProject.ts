@@ -78,8 +78,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.notFound('Project not found');
 		}
 
+		const signingOptions = {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		};
+
 		const usersWithSignedAvatars = project.users?.length
-			? await enrichUsersWithProfileAvatarUrls(project.users)
+			? await enrichUsersWithProfileAvatarUrls(project.users, signingOptions)
 			: project.users;
 
 		const [projectWithSignedImage] = await enrichProjectsWithImageUrls([
@@ -87,7 +92,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				...project,
 				users: usersWithSignedAvatars,
 			},
-		]);
+		], signingOptions);
 
 		return ResponseWrapper.success({
 			message: 'Project retrieved successfully',

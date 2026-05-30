@@ -36,7 +36,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.notFound('Workspace not found');
 		}
 
-		const workspaceWithSignedLogo = await enrichWorkspaceWithLogoUrl(workspace);
+		const workspaceWithSignedLogo = await enrichWorkspaceWithLogoUrl(workspace, {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		});
 
 		return ResponseWrapper.success({
 			message: 'Workspace retrieved successfully',

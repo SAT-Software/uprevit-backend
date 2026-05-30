@@ -59,6 +59,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const sourceFilesAndFoldersWithSignedUrls = await enrichItemsWithSignedUrls({
 			items: sourceFilesAndFolders,
+			signingOptions: {
+				workspaceId: context.workspaceId,
+				pendingOwnerId: context.cognitoSub,
+			},
 			getKey: (item) => (item.type === 'file' ? item.key : undefined),
 			setSignedUrl: (item, signedUrl) => ({
 				...item,

@@ -66,7 +66,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			collection.countDocuments(queryFilter),
 		]);
 
-		const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(users);
+		const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(users, {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		});
 		const totalPages = Math.ceil(totalCount / limit);
 
 		return ResponseWrapper.success({

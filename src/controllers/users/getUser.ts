@@ -37,7 +37,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.notFound('User not found');
 		}
 
-		const [userWithSignedAvatar] = await enrichUsersWithProfileAvatarUrls([user]);
+		const [userWithSignedAvatar] = await enrichUsersWithProfileAvatarUrls([user], {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		});
 
 		return ResponseWrapper.success({
 			message: 'User retrieved successfully',

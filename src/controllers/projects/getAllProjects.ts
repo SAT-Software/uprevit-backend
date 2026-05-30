@@ -178,7 +178,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			projects.map(async (project) => {
 				if (!project.users?.length) return project;
 
-				const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(project.users);
+				const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(project.users, {
+					workspaceId: context.workspaceId,
+					pendingOwnerId: context.cognitoSub,
+				});
 
 				return {
 					...project,
@@ -187,7 +190,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}),
 		);
 
-		const projectsWithSignedUrls = await enrichProjectsWithImageUrls(projectsWithSignedAvatars);
+		const projectsWithSignedUrls = await enrichProjectsWithImageUrls(projectsWithSignedAvatars, {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		});
 
 		const totalCount = countResult.length > 0 ? countResult[0].total : 0;
 		const totalPages = Math.ceil(totalCount / limit);

@@ -1,6 +1,19 @@
 import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { ObjectId } from "mongodb";
 import crypto from "node:crypto";
+
+export type TenantUploadSigningOptions = {
+	workspaceId: string | ObjectId;
+	pendingOwnerId?: string;
+};
+
+export class TenantUploadKeyError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "TenantUploadKeyError";
+	}
+}
 
 const region = process.env.AWS_REGION;
 const uploadsBucket = process.env.UPLOADS_BUCKET;
@@ -87,10 +100,62 @@ export const createPresignedUrl = async (
 	return {uploadUrl, key};
 };
 
-export const createPresignedGetUrl = async (key: string) => {
+const toWorkspaceIdString = (workspaceId: string | ObjectId): string => {
+	return workspaceId instanceof ObjectId ? workspaceId.toString() : workspaceId;
+};
+
+const normalizeKey = (key: unknown): string | null => {
+	if (typeof key !== "string") return null;
+	const trimmed = key.trim();
+	return trimmed.length > 0 ? trimmed : null;
+};
+
+/**
+ * Returns true when the uploads-bucket key is scoped to the workspace or an allowed pending path.
+ */
+export const isTenantUploadKeyAllowed = (
+	key: string,
+	{ workspaceId, pendingOwnerId }: TenantUploadSigningOptions,
+): boolean => {
+	const normalizedKey = normalizeKey(key);
+	if (!normalizedKey || !normalizedKey.startsWith("uploads/")) return false;
+
+	const workspacePrefix = `uploads/${toWorkspaceIdString(workspaceId)}/`;
+	if (normalizedKey.startsWith(workspacePrefix)) return true;
+
+	if (pendingOwnerId) {
+		const pendingPrefix = `uploads/pending/${pendingOwnerId}/`;
+		if (normalizedKey.startsWith(pendingPrefix)) return true;
+	}
+
+	return false;
+};
+
+export const assertTenantUploadKeyAllowed = (
+	key: string,
+	signingOptions: TenantUploadSigningOptions,
+): void => {
+	if (!isTenantUploadKeyAllowed(key, signingOptions)) {
+		throw new TenantUploadKeyError(
+			`Upload key is not allowed for workspace ${toWorkspaceIdString(signingOptions.workspaceId)}`,
+		);
+	}
+};
+
+export const createPresignedGetUrl = async (
+	key: string,
+	signingOptions: TenantUploadSigningOptions,
+) => {
+	const normalizedKey = normalizeKey(key);
+	if (!normalizedKey) {
+		throw new TenantUploadKeyError("Upload key is required");
+	}
+
+	assertTenantUploadKeyAllowed(normalizedKey, signingOptions);
+
 	const command = new GetObjectCommand({
 		Bucket: uploadsBucket,
-		Key: key,
+		Key: normalizedKey,
 	});
 
 	const url = await getSignedUrl(client, command, { expiresIn: VIEW_URL_EXPIRES_IN_SECONDS });
@@ -225,13 +290,10 @@ export const createDocumentationFilePresignedGetUrl = async (
 	return { url, expiresAt };
 };
 
-const normalizeKey = (key: unknown): string | null => {
-	if (typeof key !== "string") return null;
-	const trimmed = key.trim();
-	return trimmed.length > 0 ? trimmed : null;
-};
-
-export const createPresignedGetUrlMap = async (keys: string[]): Promise<Map<string, string>> => {
+export const createPresignedGetUrlMap = async (
+	keys: string[],
+	signingOptions: TenantUploadSigningOptions,
+): Promise<Map<string, string>> => {
 	const uniqueKeys = [...new Set(keys.map(normalizeKey).filter((key): key is string => Boolean(key)))];
 	const signedUrlMap = new Map<string, string>();
 
@@ -240,7 +302,7 @@ export const createPresignedGetUrlMap = async (keys: string[]): Promise<Map<stri
 		const chunkResults = await Promise.all(
 			keyChunk.map(async (key) => {
 				try {
-					const url = await createPresignedGetUrl(key);
+					const url = await createPresignedGetUrl(key, signingOptions);
 					return { key, url };
 				} catch {
 					return null;
@@ -288,12 +350,14 @@ type EnrichItemsWithSignedUrlParams<T> = {
 	items: T[];
 	getKey: (item: T) => string | undefined | null;
 	setSignedUrl: (item: T, signedUrl: string) => T;
+	signingOptions: TenantUploadSigningOptions;
 };
 
 export const enrichItemsWithSignedUrls = async <T>({
 	items,
 	getKey,
 	setSignedUrl,
+	signingOptions,
 }: EnrichItemsWithSignedUrlParams<T>): Promise<T[]> => {
 	if (!items.length) return items;
 
@@ -303,7 +367,7 @@ export const enrichItemsWithSignedUrls = async <T>({
 
 	if (!keys.length) return items;
 
-	const signedUrlMap = await createPresignedGetUrlMap(keys);
+	const signedUrlMap = await createPresignedGetUrlMap(keys, signingOptions);
 
 	return items.map((item) => {
 		const key = normalizeKey(getKey(item));
@@ -392,9 +456,11 @@ export const normalizePersistedAssetReference = (
 
 export const enrichUsersWithProfileAvatarUrls = async <T extends UserAvatarShape>(
 	users: T[],
+	signingOptions: TenantUploadSigningOptions,
 ): Promise<T[]> => {
 	return enrichItemsWithSignedUrls({
 		items: users,
+		signingOptions,
 		getKey: (item) => extractS3AssetKey(item.profileAvatar),
 		setSignedUrl: (item, signedUrl) => ({
 			...item,
@@ -405,11 +471,15 @@ export const enrichUsersWithProfileAvatarUrls = async <T extends UserAvatarShape
 
 export const enrichWorkspaceWithLogoUrl = async <T extends WorkspaceLogoShape>(
 	workspace: T | null,
+	signingOptions: TenantUploadSigningOptions,
 ): Promise<T | null> => {
 	if (!workspace) return workspace;
 
+	const resolvedSigningOptions = signingOptions;
+
 	const [workspaceWithSignedLogo] = await enrichItemsWithSignedUrls({
 		items: [workspace],
+		signingOptions: resolvedSigningOptions,
 		getKey: (item) => extractS3AssetKey(item.logo),
 		setSignedUrl: (item, signedUrl) => ({
 			...item,
@@ -422,9 +492,11 @@ export const enrichWorkspaceWithLogoUrl = async <T extends WorkspaceLogoShape>(
 
 export const enrichProjectsWithImageUrls = async <T extends ProjectImageShape>(
 	projects: T[],
+	signingOptions: TenantUploadSigningOptions,
 ): Promise<T[]> => {
 	return enrichItemsWithSignedUrls({
 		items: projects,
+		signingOptions,
 		getKey: (item) => extractS3AssetKey(item.image),
 		setSignedUrl: (item, signedUrl) => ({
 			...item,
@@ -435,9 +507,11 @@ export const enrichProjectsWithImageUrls = async <T extends ProjectImageShape>(
 
 export const enrichDepartmentsWithImageUrls = async <T extends DepartmentImageShape>(
 	departments: T[],
+	signingOptions: TenantUploadSigningOptions,
 ): Promise<T[]> => {
 	return enrichItemsWithSignedUrls({
 		items: departments,
+		signingOptions,
 		getKey: (item) => extractS3AssetKey(item.image),
 		setSignedUrl: (item, signedUrl) => ({
 			...item,
