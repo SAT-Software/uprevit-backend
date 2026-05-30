@@ -1,0 +1,42 @@
+---
+alwaysApply: true
+---
+---
+alwaysApply: false
+---
+
+Gitflow and `demo` branch (uprevit-ui & uprevit-backend)
+
+## Branches
+
+- `develop` — integration (features merge here)
+- `release/x.y.z` — release fixes only
+- `main` — production (deploy prod)
+- `demo` — demo environment; must be the **same commit as `main`**, not `develop`
+
+## Release flow
+
+1. Merge `release/x.y.z` → `main`, tag `vx.y.z` on `main`.
+2. **One PR:** `main` → `develop` (back-merge).
+3. Sync `demo` to `main` with a ref push — **no PR:**
+
+```bash
+git fetch origin
+git push origin origin/main:demo
+If rejected:
+
+git diff origin/main origin/demo --stat   # must be empty
+git push origin origin/main:demo --force-with-lease
+Local: git fetch origin && git checkout demo && git reset --hard origin/demo
+
+Verify:
+git rev-parse origin/main origin/demo    # identical SHA
+git rev-list --left-right --count origin/main...origin/demo   # 0 0
+
+Never
+Do not open a PR main → demo (adds a merge commit; demo looks ahead of main).
+Do not git push origin origin/develop:demo for releases (demo must match main, not develop).
+Expected graph
+main, demo, origin/demo — same commit (release merge).
+develop — one commit ahead of main (back-merge only). That is normal; do not try to align develop with main on the graph.
+```
