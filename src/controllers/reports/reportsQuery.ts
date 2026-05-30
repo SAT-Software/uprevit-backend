@@ -6,7 +6,7 @@ import { Department } from '../../models/department';
 import { Project } from '../../models/project';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from '../../utils/authUtils';
+import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
 import { validateConditions, buildAggregationPipeline } from '../../utils/reports/queryBuilder';
 
@@ -16,8 +16,10 @@ import { validateConditions, buildAggregationPipeline } from '../../utils/report
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context } = tenantResult;
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
 
@@ -36,6 +38,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const objectIdValidation = validateObjectIds({ workspaceId: input.workspaceId });
 		if (objectIdValidation) return objectIdValidation;
 
+		const workspaceMismatch = assertWorkspaceMatch(
+			input.workspaceId,
+			context.workspaceId,
+			'You are not authorized to query reports for this workspace',
+		);
+		if (workspaceMismatch) return workspaceMismatch;
+
 		const page = input.pagination?.page || 1;
 		const limit = Math.min(input.pagination?.limit || 10, 100);
 
@@ -48,8 +57,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (conditionError) return conditionError;
 		}
 
-		const workspaceId = ObjectId.createFromHexString(input.workspaceId);
-		const pipeline = buildAggregationPipeline(input, workspaceId);
+		const pipeline = buildAggregationPipeline(input, context.workspaceId);
 
 		const db = await getDb();
 		const result = await db.collection<Product>('products').aggregate(pipeline).toArray();
