@@ -77,9 +77,21 @@ export const assertWorkspaceMatch = (
 	contextWorkspaceId: ObjectId,
 	message = 'You are not authorized to access resources for this workspace',
 ): APIGatewayProxyResult | null => {
-	const requestedId = requestedWorkspaceId instanceof ObjectId
-		? requestedWorkspaceId
-		: ObjectId.createFromHexString(requestedWorkspaceId.toString());
+	if (!(requestedWorkspaceId instanceof ObjectId)) {
+		const requestedWorkspaceIdString = requestedWorkspaceId.toString().trim();
+		if (!ObjectId.isValid(requestedWorkspaceIdString)) {
+			return ResponseWrapper.badRequest('Invalid workspace id');
+		}
+	}
+
+	let requestedId: ObjectId;
+	try {
+		requestedId = requestedWorkspaceId instanceof ObjectId
+			? requestedWorkspaceId
+			: new ObjectId(requestedWorkspaceId.toString());
+	} catch {
+		return ResponseWrapper.badRequest('Invalid workspace id');
+	}
 
 	if (requestedId.toString() !== contextWorkspaceId.toString()) {
 		return ResponseWrapper.forbidden(message);

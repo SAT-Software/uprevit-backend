@@ -475,11 +475,9 @@ export const enrichWorkspaceWithLogoUrl = async <T extends WorkspaceLogoShape>(
 ): Promise<T | null> => {
 	if (!workspace) return workspace;
 
-	const resolvedSigningOptions = signingOptions;
-
 	const [workspaceWithSignedLogo] = await enrichItemsWithSignedUrls({
 		items: [workspace],
-		signingOptions: resolvedSigningOptions,
+		signingOptions,
 		getKey: (item) => extractS3AssetKey(item.logo),
 		setSignedUrl: (item, signedUrl) => ({
 			...item,

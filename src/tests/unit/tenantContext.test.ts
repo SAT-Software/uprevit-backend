@@ -98,6 +98,13 @@ describe('tenantContext', () => {
 			expect(mismatch?.statusCode).toBe(403);
 			expect(JSON.parse(mismatch!.body).message).toContain('not authorized');
 		});
+
+		it('returns bad request when workspace id is malformed', () => {
+			const mismatch = assertWorkspaceMatch('not-an-objectid', workspaceId);
+
+			expect(mismatch?.statusCode).toBe(400);
+			expect(JSON.parse(mismatch!.body).message).toContain('Invalid workspace id');
+		});
 	});
 
 	describe('tenantObjectIdFilter', () => {
