@@ -13,6 +13,7 @@ import { deleteObjectByKey } from "../../utils/s3-storage";
  * Recursively finds all descendant node IDs for a given parent folder.
  * @param {Collection<SourceFile>} collection The MongoDB collection to search.
  * @param {ObjectId} parentId The ID of the parent folder.
+ * @param {ObjectId} workspaceId The workspace scope for descendant lookup.
  * @return {Promise<ObjectId[]>} A promise that resolves to an array of descendant IDs.
  */
 async function findDescendantIds(

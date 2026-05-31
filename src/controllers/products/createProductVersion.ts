@@ -3,7 +3,6 @@ import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
 import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { getDb } from "../../utils/db";
-import { ObjectId } from "mongodb";
 import { Product } from "../../models/product";
 import { deepCopyWithFreshIds } from "../../utils/deepCopy";
 import { recordAuditEvent } from "../../utils/auditLogV2";
