@@ -1,7 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { ExcelData, LabelTags, Product, SymbolsGraphics, ProductInformation, ComplianceInformation, LabelComponents, ProductData, LanguagesInformation } from '../../models/product';
-import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateEnum } from '../../utils/validationUtils';
