@@ -1,11 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from "../../utils/authUtils";
+import { assertWorkspaceMatch, requireTenantContext, tenantObjectIdFilter } from "../../utils/tenantContext";
 import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { ObjectId } from "mongodb";
 import { SourceFile } from "../../models/sourceFiles";
+import type { Product } from "../../models/product";
 
 /**
  * @param {APIGatewayProxyEvent} event 
@@ -13,27 +14,41 @@ import { SourceFile } from "../../models/sourceFiles";
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if(!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
-		const workspaceId = event.queryStringParameters?.workspaceId;
-		if (!workspaceId) return ResponseWrapper.badRequest('Missing required query parameter: workspace_id');
-
+		const { context } = tenantResult;
+		const requestedWorkspaceId = event.queryStringParameters?.workspaceId;
 		const productId = event.queryStringParameters?.productId;
 
-		const  validateWorkspaceId = validateAllObjectIds({
-			workspaceId,
-			...(productId && { productId })
-		});
-		if (validateWorkspaceId) return validateWorkspaceId;
+		if (requestedWorkspaceId) {
+			if (!ObjectId.isValid(requestedWorkspaceId)) {
+				return ResponseWrapper.badRequest('Invalid workspaceId');
+			}
+
+			const workspaceMismatch = assertWorkspaceMatch(requestedWorkspaceId, context.workspaceId);
+			if (workspaceMismatch) return workspaceMismatch;
+		}
+
+		if (productId) {
+			const validateProductId = validateAllObjectIds({ productId });
+			if (validateProductId) return validateProductId;
+		}
 
 		const db = await getDb();
 		const sourceFilesCollection = db.collection<SourceFile>('sourceFiles');
 
-		const query: any = {
-			workspace_id: new ObjectId(workspaceId),
+		if (productId) {
+			const product = await db.collection<Product>('products').findOne(
+				tenantObjectIdFilter(productId, context.workspaceId),
+			);
+			if (!product) return ResponseWrapper.notFound('Product not found.');
+		}
+
+		const query: Record<string, unknown> = {
+			workspace_id: context.workspaceId,
 			type: 'folder',
-			parentId: { $eq: null }
+			parentId: { $eq: null },
 		};
 
 		if (productId) {

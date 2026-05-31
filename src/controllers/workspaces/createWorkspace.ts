@@ -11,9 +11,15 @@ import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 
 /**
- * API endpoint to create a workspace - only admin can create a workspace
+ * Platform provisioning: creates a new tenant workspace.
+ *
+ * Not scoped to the caller's existing workspace — intentional for onboarding.
+ * Cognito `admin` here means workspace admin during first-time setup, not a
+ * cross-tenant platform operator. Before exposing broadly, gate with a dedicated
+ * platform role (e.g. `platform-admin`) or restrict to internal-only callers.
+ *
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
- * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format 
+ * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {

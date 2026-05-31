@@ -1,7 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { getDb } from "../../utils/db";
-import { ObjectId } from "mongodb";
-import { authenticateRequest } from "../../utils/authUtils";
+import { requireTenantContext } from "../../utils/tenantContext";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
 import { validateMissingFields } from "../../utils/validationUtils";
@@ -15,24 +14,24 @@ import { normalizePersistedAssetReference } from '../../utils/s3-storage';
  */
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return ResponseWrapper.unauthorized("Invalid authentication payload");
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
+		const { context } = tenantResult;
 
 		if (!event.body) return ResponseWrapper.badRequest("Request body is required.");
 
 
 		const input = JSON.parse(event.body);
 
-		const validationResult = validateMissingFields({ name: input.name, userId: input.user_id });
+		const validationResult = validateMissingFields({ name: input.name });
 		if (validationResult) return validationResult;
 
 
 		const db = await getDb();
 
-		// 2. Update user profile in MongoDB
 		const updateResult = await db.collection("users").updateOne(
-			{ _id: new ObjectId(input.user_id as string) },
+			{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
 			{
 				$set: {
 					name: input.name,
@@ -44,13 +43,13 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 			}
 		);
 
-		if (updateResult.modifiedCount === 0) {
+		if (updateResult.matchedCount === 0) {
 			return ResponseWrapper.notFound("User not found or no changes were made.");
 		}
         
 		await updateAuditLog({
 			entity: 'user',
-			entityId: input.user_id as string,
+			entityId: context.userId.toString(),
 			action: AuditLogAction.UPDATE,
 			actionBy: input.name,
 			actionAt: new Date(),

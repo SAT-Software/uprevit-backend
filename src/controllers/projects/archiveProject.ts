@@ -4,9 +4,9 @@ import type { Project } from '../../models/project';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { authenticateWithRole } from '../../utils/authUtils';
 import { validateBoolean } from '../../utils/validationUtils';
 import { recordAuditEvent } from '../../utils/auditLogV2';
+import { isWorkspaceAdmin, requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 
 /**
  * Archive a project
@@ -16,10 +16,13 @@ import { recordAuditEvent } from '../../utils/auditLogV2';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateWithRole(event, 'admin');
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
-		if(!auth.isValid) {
-			return auth.error;
+		const { context, auth } = tenantResult;
+
+		if (!isWorkspaceAdmin(context.cognitoGroups)) {
+			return ResponseWrapper.forbidden('Insufficient permissions');
 		}
 
 		if (!event.pathParameters?.id) {
@@ -42,18 +45,16 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const isBoolean = validateBoolean(isArchived, 'isArchived');
 		if (isBoolean) return isBoolean;
 
-		const projectRecord: Project | null = await db.collection<Project>('projects').findOne({
-			_id: new ObjectId(event.pathParameters.id),
-		});
+		const projectFilter = tenantObjectIdFilter(event.pathParameters.id, context.workspaceId);
+
+		const projectRecord: Project | null = await db.collection<Project>('projects').findOne(projectFilter);
 
 		if (!projectRecord) {
 			return ResponseWrapper.notFound('Project not found');
 		}
 
 		const project = await db.collection<Project>('projects').updateOne(
-			{
-				_id: new ObjectId(event.pathParameters.id),
-			},
+			projectFilter,
 			{
 				$set: {
 					isArchived: isArchived,
@@ -62,7 +63,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		);
 
 		await recordAuditEvent({
-			workspaceId: projectRecord.workspace_id.toString(),
+			workspaceId: context.workspaceId.toString(),
 			scope: { type: 'project', id: event.pathParameters.id },
 			entity: { type: 'project', id: event.pathParameters.id },
 			action: isArchived ? 'archive' : 'restore',

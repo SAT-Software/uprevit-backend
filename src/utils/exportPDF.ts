@@ -188,7 +188,7 @@ const loadSignedUrlMap = async (productData: Product): Promise<Map<string, strin
 	if (!s3Keys.length) return new Map<string, string>();
 
 	try {
-		return await createPresignedGetUrlMap(s3Keys);
+		return await createPresignedGetUrlMap(s3Keys, { workspaceId: productData.workspace_id });
 	} catch (error) {
 		logError("Failed to sign product image URLs for PDF export", error);
 		return new Map<string, string>();

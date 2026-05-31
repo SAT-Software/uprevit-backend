@@ -7,8 +7,8 @@ import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
-import { authenticateWithRole } from '../../utils/authUtils';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
 
 /**
  * Update a workspace
@@ -18,10 +18,13 @@ import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateWithRole(event, 'admin');
-		
-		if(!auth.isValid) {
-			return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context, auth } = tenantResult;
+
+		if (!isWorkspaceAdmin(context.cognitoGroups)) {
+			return ResponseWrapper.forbidden('Insufficient permissions');
 		}
 
 		if (!event.body) {
@@ -53,7 +56,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return objectIdsResult;
 		}
 
-		// Validate user IDs if provided
+		const workspaceMismatch = assertWorkspaceMatch(input._id!, context.workspaceId);
+		if (workspaceMismatch) return workspaceMismatch;
+
 		if (input.userIds && input.userIds.length > 0) {
 			const invalidUserIds = input.userIds.filter((userId) => !ObjectId.isValid(userId));
 			if (invalidUserIds.length > 0) {
@@ -66,7 +71,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const db = await getDb();
 
 		const workspaceRecord: Workspace | null = await db.collection<Workspace>('workspaces').findOne({
-			_id: new ObjectId(input._id),
+			_id: context.workspaceId,
 		});
 
 		if (!workspaceRecord) {
@@ -77,7 +82,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const workspace = await db.collection<Workspace>('workspaces').updateOne(
 			{
-				_id: new ObjectId(workspaceRecord._id as ObjectId),
+				_id: context.workspaceId,
 			},
 			{
 				$set: {
@@ -97,7 +102,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const auditRecord: AuditLog = {
 			entity: 'workspace',
-			entityId: (workspaceRecord._id as ObjectId).toString(),
+			entityId: context.workspaceId.toString(),
 			action: AuditLogAction.UPDATE,
 			actionBy: auth.payload?.name?.toString()!,
 			actionAt: new Date(),

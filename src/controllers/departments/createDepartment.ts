@@ -5,9 +5,9 @@ import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
-import { authenticateWithRole } from '../../utils/authUtils';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
 
 /**
  * Create a department
@@ -17,8 +17,14 @@ import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateWithRole(event, 'admin');
-		if(!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context, auth } = tenantResult;
+
+		if (!isWorkspaceAdmin(context.cognitoGroups)) {
+			return ResponseWrapper.forbidden('Insufficient permissions');
+		}
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
 
@@ -30,14 +36,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			'department_name': input.department_name,
 			'department_description': input.department_description,
 			'admin_id': input.admin_id.toString(),
-			'workspace_id': input.workspace_id.toString(),
 		});
 		if (missingFieldsResult) return missingFieldsResult;
+
+		if (input.workspace_id) {
+			const workspaceMismatch = assertWorkspaceMatch(input.workspace_id, context.workspaceId);
+			if (workspaceMismatch) return workspaceMismatch;
+		}
 
 		
 		const objectIdValidation = validateAllObjectIds({
 			'admin_id': input.admin_id,
-			'workspace_id': input.workspace_id,
 		}, {
 			'users': input.users,
 		});
@@ -47,7 +56,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const db = await getDb();
 		
 		const adminObjectId = new ObjectId(input.admin_id);
-		const workspaceObjectId = new ObjectId(input.workspace_id);
+		const workspaceObjectId = context.workspaceId;
 		const userObjectIds = input.users ? input.users.map((userId: string) => new ObjectId(userId)) : [];
 		const normalizedDepartmentImage = normalizePersistedAssetReference(input.image, '');
 

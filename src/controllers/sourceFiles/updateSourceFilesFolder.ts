@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from "../../utils/authUtils";
+import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { ObjectId } from "mongodb";
@@ -14,8 +14,10 @@ import { recordAuditEvent } from "../../utils/auditLogV2";
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if(!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context, auth } = tenantResult;
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is missing.');
 
@@ -43,7 +45,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const db = await getDb();
 		const sourceFilesCollection = db.collection<SourceFile>('sourceFiles');
-		const folderObjectId = new ObjectId(folderId);
+		const folderFilter = {
+			...tenantObjectIdFilter(folderId, context.workspaceId),
+			type: 'folder' as const,
+		};
 		const updateFields: Partial<SourceFile> = {};
 
 		if (hasName) {
@@ -53,7 +58,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		if (hasProductId) {
-			const folder = await sourceFilesCollection.findOne({ _id: folderObjectId, type: 'folder' });
+			const folder = await sourceFilesCollection.findOne(folderFilter);
 			if (!folder) {
 				return ResponseWrapper.notFound('Folder not found.');
 			}
@@ -65,12 +70,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				: null;
 		}
 
-		const beforeFolder = await sourceFilesCollection.findOne({ _id: folderObjectId, type: 'folder' });
+		const beforeFolder = await sourceFilesCollection.findOne(folderFilter);
 
 		const updatedFolder = await sourceFilesCollection.findOneAndUpdate(
-			{ _id: folderObjectId, type: 'folder' },
+			folderFilter,
 			{ $set: updateFields },
-			{ returnDocument: 'after' }
+			{ returnDocument: 'after' },
 		);
 
 		if (!updatedFolder) {

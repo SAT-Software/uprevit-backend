@@ -38,11 +38,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const job = await getProductExportJobByIdForUser({
 			jobId: new ObjectId(jobId),
+			workspaceId: userContext.workspaceId,
 			requestedBySub: cognitoSub,
 			target: 'product',
 		});
 
-		if (!job || job.workspaceId.toString() !== userContext.workspaceId.toString()) {
+		if (!job) {
 			return ResponseWrapper.notFound('Product export job not found');
 		}
 

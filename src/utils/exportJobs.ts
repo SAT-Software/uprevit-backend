@@ -252,19 +252,23 @@ export const markExportJobFailed = async ({
 
 export const getExportJobById = async ({
 	jobId,
+	workspaceId,
 }: {
 	jobId: ObjectId;
+	workspaceId: ObjectId;
 }): Promise<ExportJobDocument | null> => {
 	const collection = await getCollection();
-	return collection.findOne({ _id: jobId });
+	return collection.findOne({ _id: jobId, workspaceId });
 };
 
 export const getExportJobByIdForUser = async ({
 	jobId,
+	workspaceId,
 	requestedBySub,
 	target,
 }: {
 	jobId: ObjectId;
+	workspaceId: ObjectId;
 	requestedBySub: string;
 	target?: ExportJobTarget;
 }): Promise<ExportJobDocument | null> => {
@@ -272,10 +276,12 @@ export const getExportJobByIdForUser = async ({
 
 	const query: {
 		_id: ObjectId;
+		workspaceId: ObjectId;
 		requestedBySub: string;
 		target?: ExportJobTarget;
 	} = {
 		_id: jobId,
+		workspaceId,
 		requestedBySub,
 	};
 

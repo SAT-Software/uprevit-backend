@@ -3,8 +3,8 @@ import { getDb } from '../../utils/db';
 import { User } from '../../models/user';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from '../../utils/authUtils';
 import { ObjectId } from 'mongodb';
+import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 import { enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 
@@ -23,11 +23,10 @@ const USER_FILTER_FIELDS: Record<string, ListFilterField> = {
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
-		if (!auth.isValid) {
-			return auth.error;
-		}
+		const { context } = tenantResult;
 
 		const listQueryResult = parseListQuery({
 			query: event.queryStringParameters,
@@ -37,15 +36,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (listQueryResult.error) return listQueryResult.error;
 
 		const { limit, page, skip, sort, order, filters } = listQueryResult.value!;
-		const workspaceId = event.queryStringParameters?.workspaceId;
+		const requestedWorkspaceId = event.queryStringParameters?.workspaceId;
 
-		if (!workspaceId) return ResponseWrapper.badRequest('Valid workspace is required.');
-		if (!ObjectId.isValid(workspaceId)) return ResponseWrapper.badRequest('Invalid workspace');
+		if (requestedWorkspaceId) {
+			if (!ObjectId.isValid(requestedWorkspaceId)) return ResponseWrapper.badRequest('Invalid workspace');
+
+			const workspaceMismatch = assertWorkspaceMatch(requestedWorkspaceId, context.workspaceId);
+			if (workspaceMismatch) return workspaceMismatch;
+		}
 
 		const sortObj: { [key: string]: 1 | -1 } = {};
 		sortObj[sort] = order === 'desc' ? -1 : 1;
 
-		const baseMatch = { workspaceId: new ObjectId(workspaceId) };
+		const baseMatch = { workspaceId: context.workspaceId };
 
 		const filtersMatch = buildListFiltersMatch(filters, USER_FILTER_FIELDS);
 		if (filtersMatch.error) return filtersMatch.error;
@@ -63,7 +66,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			collection.countDocuments(queryFilter),
 		]);
 
-		const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(users);
+		const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(users, {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		});
 		const totalPages = Math.ceil(totalCount / limit);
 
 		return ResponseWrapper.success({

@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from "../../utils/authUtils";
+import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { getDb } from "../../utils/db";
 import { ObjectId } from "mongodb";
 import { Product } from "../../models/product";
@@ -17,15 +17,23 @@ import { recordAuditEvent } from "../../utils/auditLogV2";
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);	
-		if(!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context, auth } = tenantResult;
 
 		const productId = event.pathParameters?.productId;
 		if(!productId) return ResponseWrapper.badRequest('Product ID is required');
 
 		const db = await getDb();
 
-		const currentProduct = await db.collection<Product>('products').findOne({ _id: new ObjectId(productId), status: 'submitted', is_latest: true });
+		const productFilter = {
+			...tenantObjectIdFilter(productId, context.workspaceId),
+			status: 'submitted' as const,
+			is_latest: true,
+		};
+
+		const currentProduct = await db.collection<Product>('products').findOne(productFilter);
 
 		if(!currentProduct) return ResponseWrapper.notFound('Product not found or not submitted to create new version');
 
@@ -33,7 +41,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const revisedUpdatedProduct =  {...revisedProduct, is_latest: true, parent_id: currentProduct._id, version: currentProduct.version + 1, status: 'draft' as const, complete_count: 0, target_date: null, actual_completion_date: null, product_information: {...revisedProduct.product_information, tab_completed: false}, compliance_information: {...revisedProduct.compliance_information, tab_completed: false}, languages_information: revisedProduct.languages_information || { data: [] }, label_components: {...revisedProduct.label_components, tab_completed: false}, symbols_graphics: {...revisedProduct.symbols_graphics, tab_completed: false}, product_data: {...revisedProduct.product_data, tab_completed: false}, operational_parameters: {...revisedProduct.operational_parameters, tab_completed: false}, label_tags: {...revisedProduct.label_tags, tab_completed: false}};
 
-		await db.collection<Product>('products').findOneAndUpdate({ _id: currentProduct._id }, { $set: { is_latest: false } });
+		await db.collection<Product>('products').findOneAndUpdate(
+			tenantObjectIdFilter(currentProduct._id!, context.workspaceId),
+			{ $set: { is_latest: false } },
+		);
        
 		const insertedProduct = await db.collection<Product>('products').insertOne(revisedUpdatedProduct);
 		

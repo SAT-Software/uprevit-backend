@@ -21,8 +21,15 @@ const resolveAdminName = (name: unknown, email: string): string => {
 };
 
 /**
- * @param {APIGatewayProxyEvent} event 
- * @return  {Promise<APIGatewayProxyResult>}
+ * Platform provisioning: onboarding flow that creates a new workspace and binds
+ * the authenticated admin user to it.
+ *
+ * Not tenant-scoped to an existing workspace — creates a new tenant. Same
+ * platform-role caveat as {@link createWorkspace}; do not treat Cognito `admin`
+ * as authorization to mutate arbitrary workspaces.
+ *
+ * @param {APIGatewayProxyEvent} event
+ * @return {Promise<APIGatewayProxyResult>}
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
