@@ -1,6 +1,8 @@
 export const DOCUMENTATION_VIDEOS = {
 	"department.departments-tab": "videos/department/departments-tab.mp4",
 	"getting-started.welcome-dashboard": "videos/getting-started/welcome-dashboard.mp4",
+	"product.compare-versions-redline-view":
+		"videos/product/compare-versions-redline-view.mp4",
 	"product.compliance-tab": "videos/product/compliance-tab.mp4",
 	"product.label-components": "videos/product/label-components.mp4",
 	"product.label-tags": "videos/product/label-tags.mp4",

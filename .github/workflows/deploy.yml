@@ -122,22 +122,32 @@ jobs:
         run: sam build --use-container
 
       - name: Deploy SAM Application
-        run: >-
-          sam deploy
-          --stack-name "$STACK_NAME"
-          --region "${{ env.AWS_REGION }}"
-          --resolve-s3
-          --s3-prefix "$STACK_NAME"
-          --capabilities CAPABILITY_IAM
-          --no-confirm-changeset
-          --no-fail-on-empty-changeset
-          --parameter-overrides
-          "MongoDbUri=$MONGODB_URI"
-          "DbName=$DB_NAME"
-          "UserPoolId=$USER_POOL_ID"
-          "ClientId=$CLIENT_ID"
-          "UploadsBucket=$UPLOADS_BUCKET"
-          "ExportsBucket=$EXPORTS_BUCKET"
-          "StandardSymbolsBucket=uprevit-standard-symbols"
-          "DocumentationFilesBucket=uprevit-documentation-files"
-          "ExportJobQueueUrl=$EXPORT_JOB_QUEUE_URL"
+        env:
+          DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY: ${{ secrets.DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY }}
+        run: |
+          CF_PRIVATE_KEY_PARAM=""
+          if [ -n "${DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY:-}" ]; then
+            CF_PRIVATE_KEY_PARAM="${DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY//$'\n'/\\n}"
+          fi
+
+          sam deploy \
+            --stack-name "$STACK_NAME" \
+            --region "${{ env.AWS_REGION }}" \
+            --resolve-s3 \
+            --s3-prefix "$STACK_NAME" \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+            "MongoDbUri=$MONGODB_URI" \
+            "DbName=$DB_NAME" \
+            "UserPoolId=$USER_POOL_ID" \
+            "ClientId=$CLIENT_ID" \
+            "UploadsBucket=$UPLOADS_BUCKET" \
+            "ExportsBucket=$EXPORTS_BUCKET" \
+            "StandardSymbolsBucket=uprevit-standard-symbols" \
+            "DocumentationFilesBucket=uprevit-documentation-files" \
+            "DocumentationCloudFrontDomain=${{ vars.DOCUMENTATION_CLOUDFRONT_DOMAIN }}" \
+            "DocumentationCloudFrontKeyPairId=${{ vars.DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID }}" \
+            "DocumentationCloudFrontPrivateKey=$CF_PRIVATE_KEY_PARAM" \
+            "ExportJobQueueUrl=$EXPORT_JOB_QUEUE_URL"
