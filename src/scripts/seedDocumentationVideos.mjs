@@ -6,6 +6,20 @@ import { fileURLToPath } from "node:url";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 
 const INPUT_FILE_TO_VIDEO_KEY = {
+	"departments-tab.mp4": "department.departments-tab",
+	"welcome-dashboard.mp4": "getting-started.welcome-dashboard",
+	"compare-versions-redline-view.mp4": "product.compare-versions-redline-view",
+	"compliance-tab.mp4": "product.compliance-tab",
+	"label-components.mp4": "product.label-components",
+	"label-tags.mp4": "product.label-tags",
+	"product-information.mp4": "product.product-information",
+	"product-plan-review-overview.mp4": "product.product-plan-review-overview",
+	"product-specifications.mp4": "product.product-specifications",
+	"products-intro.mp4": "product.products-intro",
+	"symbols-graphics.mp4": "product.symbols-graphics",
+	"projects-tab.mp4": "projects.projects-tab",
+	"overview.mp4": "reports-analytics.overview",
+	"source-files-archive-bookmarks.mp4": "working-with-files.source-files-archive-bookmarks",
 	"Department/Departments Tab.mp4": "department.departments-tab",
 	"Workspace/Welcome Dashboard Video.mp4": "getting-started.welcome-dashboard",
 	"Product/Compliance Tab.mp4": "product.compliance-tab",

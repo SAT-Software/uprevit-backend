@@ -37,6 +37,19 @@ Parameters:
     Type: String
     Description: "S3 bucket name for documentation media (videos, future images/PDFs)"
     Default: "uprevit-documentation-files"
+  DocumentationCloudFrontDomain:
+    Type: String
+    Description: "CloudFront distribution domain for documentation videos (e.g. d123.cloudfront.net)"
+    Default: ""
+  DocumentationCloudFrontKeyPairId:
+    Type: String
+    Description: "CloudFront key pair id for signed documentation video URLs"
+    Default: ""
+  DocumentationCloudFrontPrivateKey:
+    Type: String
+    NoEcho: true
+    Description: "CloudFront signing private key PEM (from GitHub secret at deploy)"
+    Default: ""
   ExportJobQueueUrl:
     Type: String
     Description: "Optional explicit SQS queue URL override for local/dev"
@@ -665,6 +678,11 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/docs/getDocumentationVideoSignedUrl.lambdaHandler
+      Environment:
+        Variables:
+          DOCUMENTATION_CLOUDFRONT_DOMAIN: !Ref DocumentationCloudFrontDomain
+          DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID: !Ref DocumentationCloudFrontKeyPairId
+          DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY: !Ref DocumentationCloudFrontPrivateKey
       Policies:
         - Statement:
             - Effect: Allow

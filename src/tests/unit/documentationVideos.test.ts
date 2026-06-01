@@ -10,6 +10,10 @@ describe("documentationVideos allowlist", () => {
 		expect(getDocumentationVideoObjectKey("product.products-intro")).toBe(
 			"videos/product/products-intro.mp4",
 		);
+		expect(isDocumentationVideoKey("product.compare-versions-redline-view")).toBe(true);
+		expect(getDocumentationVideoObjectKey("product.compare-versions-redline-view")).toBe(
+			"videos/product/compare-versions-redline-view.mp4",
+		);
 	});
 
 	it("rejects unknown keys", () => {
