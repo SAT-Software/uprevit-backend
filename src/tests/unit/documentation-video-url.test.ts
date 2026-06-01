@@ -77,4 +77,32 @@ describe("documentation-video-url", () => {
 		);
 		expect(mockCreateDocumentationFilePresignedGetUrl).not.toHaveBeenCalled();
 	});
+
+	it("normalizes a private key that was flattened with spaces", async () => {
+		process.env = {
+			...ORIGINAL_ENV,
+			AWS_REGION: "us-east-1",
+			DOCUMENTATION_CLOUDFRONT_DOMAIN: "d123.cloudfront.net",
+			DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID: "KTESTKEY",
+			DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY:
+				"-----BEGIN PRIVATE KEY----- abc def ghi -----END PRIVATE KEY-----",
+		};
+
+		mockGetSignedUrl.mockReturnValue(
+			"https://d123.cloudfront.net/videos/foo.mp4?Expires=1&Signature=abc",
+		);
+
+		let createDocumentationVideoSignedUrl: typeof import("../../utils/documentation-video-url").createDocumentationVideoSignedUrl;
+		jest.isolateModules(() => {
+			({ createDocumentationVideoSignedUrl } = require("../../utils/documentation-video-url"));
+		});
+
+		await createDocumentationVideoSignedUrl!("videos/foo.mp4");
+
+		expect(mockGetSignedUrl).toHaveBeenCalledWith(
+			expect.objectContaining({
+				privateKey: "-----BEGIN PRIVATE KEY-----\nabcdefghi\n-----END PRIVATE KEY-----",
+			}),
+		);
+	});
 });

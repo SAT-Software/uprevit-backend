@@ -195,6 +195,7 @@ const main = async () => {
 				Key: item.objectKey,
 				Body: body,
 				ContentType: "video/mp4",
+				CacheControl: "public, max-age=31536000, immutable",
 			}),
 		);
 		uploaded += 1;
