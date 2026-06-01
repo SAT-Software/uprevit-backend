@@ -24,7 +24,23 @@ const CLOUDFRONT_URL_EXPIRES_IN_SECONDS = parsePositiveInteger(
 const isCloudFrontSigningConfigured = (): boolean =>
 	Boolean(cloudFrontDomain && cloudFrontKeyPairId && cloudFrontPrivateKeyEnv);
 
-const normalizePrivateKey = (raw: string): string => raw.replace(/\\n/g, "\n").trim();
+const wrapPemBody = (body: string): string => {
+	const compactBody = body.replace(/\s+/g, "");
+	const chunks = compactBody.match(/.{1,64}/g) ?? [];
+	return chunks.join("\n");
+};
+
+const normalizePrivateKey = (raw: string): string => {
+	const normalizedNewlines = raw.replace(/\\n/g, "\n").trim();
+	const pemMatch = normalizedNewlines.match(
+		/^(-----BEGIN (?:RSA )?PRIVATE KEY-----)\s+([\s\S]+?)\s+(-----END (?:RSA )?PRIVATE KEY-----)$/,
+	);
+
+	if (!pemMatch) return normalizedNewlines;
+
+	const [, header, body, footer] = pemMatch;
+	return `${header}\n${wrapPemBody(body)}\n${footer}`;
+};
 
 const buildCloudFrontObjectUrl = (objectKey: string): string => {
 	if (!cloudFrontDomain) {

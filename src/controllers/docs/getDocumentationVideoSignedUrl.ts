@@ -2,6 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { getDocumentationVideoObjectKey } from "../../config/documentationVideos";
 import { authenticateRequest } from "../../utils/authUtils";
 import { createDocumentationVideoSignedUrl } from "../../utils/documentation-video-url";
+import { logError } from "../../utils/logger";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 
 /**
@@ -34,7 +35,8 @@ export const lambdaHandler = async (
 			message: "Documentation video URL generated",
 			result: { url, expiresAt },
 		});
-	} catch {
+	} catch (error) {
+		logError("Failed to generate documentation video URL", error);
 		return ResponseWrapper.internalServerError("Failed to generate documentation video URL");
 	}
 };

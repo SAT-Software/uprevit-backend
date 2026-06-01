@@ -177,7 +177,7 @@ Requires `AWS_REGION` and credentials with `s3:PutObject` on `DOCUMENTATION_FILE
 
 `GET /docs/videos/{videoKey}/signed-url` returns a **CloudFront signed URL** when domain, key pair id, and private key PEM are set.
 
-**GitHub (per environment):** variables `DOCUMENTATION_CLOUDFRONT_DOMAIN`, `DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID`; secret `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY` (full PEM).
+**GitHub (per environment):** variables `DOCUMENTATION_CLOUDFRONT_DOMAIN`, `DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID`; secret `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY` (full private PEM, including `BEGIN PRIVATE KEY` / `END PRIVATE KEY`). The key pair id must be the CloudFront public key ID for the public key generated from that exact private key. Paste the secret as multiline PEM when possible; the backend also normalizes JSON-style `\n` and space-flattened PEMs.
 
 **Local:** copy `GetDocumentationVideoSignedUrlFunction` from `env.example.json` into `env.json` with the same three values.
 
