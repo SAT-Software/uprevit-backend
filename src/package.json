@@ -8,7 +8,8 @@
 		"lint:fix": "eslint controllers/**/*.ts utils/**/*.ts models/*.ts types/**/*.ts db/*.ts app.ts --no-ignore --fix",
 		"type-check": "tsc --noEmit",
 		"test": "jest",
-		"seed:documentation-videos": "node scripts/seedDocumentationVideos.mjs"
+		"seed:documentation-videos": "node scripts/seedDocumentationVideos.mjs",
+		"bootstrap:platform-admin": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/bootstrapPlatformAdmin.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-cognito-identity-provider": "^3.679.0",
