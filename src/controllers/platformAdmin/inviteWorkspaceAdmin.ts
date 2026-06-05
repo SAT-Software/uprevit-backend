@@ -15,6 +15,7 @@ import {
 import {
 	assertEmailAvailableForWorkspaceAdminInvite,
 	createInvitedCognitoUser,
+	deleteCognitoInviteUser,
 	InviteEmailConflictError,
 	normalizeInviteEmail,
 } from '../../utils/platformInviteUtils';
@@ -78,13 +79,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			status: 'invited',
 		};
 
-		const userResult = await db.collection<User>('users').insertOne(newUserDoc);
-		const dbUserId = userResult.insertedId.toString();
+		let userResult;
+		try {
+			userResult = await db.collection<User>('users').insertOne(newUserDoc);
+			await db.collection<Workspace>('workspaces').updateOne(
+				{ _id: workspaceObjectId },
+				{ $push: { userIds: userResult.insertedId } },
+			);
+		} catch (dbError) {
+			await deleteCognitoInviteUser(normalizedEmail);
+			throw dbError;
+		}
 
-		await db.collection<Workspace>('workspaces').updateOne(
-			{ _id: workspaceObjectId },
-			{ $push: { userIds: userResult.insertedId } },
-		);
+		const dbUserId = userResult.insertedId.toString();
 
 		await cognito.send(new AdminUpdateUserAttributesCommand({
 			UserPoolId: process.env.USER_POOL_ID!,

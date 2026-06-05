@@ -48,10 +48,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const filterMatch = buildListFiltersMatch(filters, LIST_FILTER_FIELDS);
+		if (filterMatch.error) return filterMatch.error;
 		if (filterMatch.match) {
 			Object.assign(match, filterMatch.match);
-		} else {
-			return ResponseWrapper.badRequest('Invalid filters');
 		}
 
 		const sortDirection = order === 'asc' ? 1 : -1;

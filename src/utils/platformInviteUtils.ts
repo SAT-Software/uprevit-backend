@@ -1,6 +1,7 @@
 import {
 	AdminGetUserCommand,
 	AdminCreateUserCommand,
+	AdminDeleteUserCommand,
 	AdminUpdateUserAttributesCommand,
 	AdminAddUserToGroupCommand,
 	CognitoIdentityProviderClient,
@@ -66,7 +67,14 @@ export const assertEmailAvailableForWorkspaceAdminInvite = async (
 	workspaceId: ObjectId,
 ): Promise<void> => {
 	const existingUser = await db.collection<User>('users').findOne({ email });
-	if (!existingUser) return;
+	if (!existingUser) {
+		if (await cognitoUserExists(email)) {
+			throw new InviteEmailConflictError(
+				'This email is reserved for organization provisioning and cannot be invited to a workspace yet.',
+			);
+		}
+		return;
+	}
 
 	if (!existingUser.workspaceId) {
 		throw new InviteEmailConflictError(
@@ -128,4 +136,19 @@ export const createInvitedCognitoUser = async (
 	}));
 
 	return { cognitoSub };
+};
+
+/**
+ * Removes a Cognito user created during an invite flow (best-effort rollback).
+ */
+export const deleteCognitoInviteUser = async (email: string): Promise<void> => {
+	try {
+		await cognito.send(new AdminDeleteUserCommand({
+			UserPoolId: process.env.USER_POOL_ID!,
+			Username: email,
+		}));
+	} catch (error) {
+		if (error instanceof UserNotFoundException) return;
+		throw error;
+	}
 };
