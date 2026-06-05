@@ -10,7 +10,8 @@
     "deploy": "sam deploy --stack-name uprevit-test --region us-east-1 --no-confirm-changeset",
     "prepare:sam-env": "node scripts/prepare-sam-env.mjs",
     "start:local": "npm run prepare:sam-env && AWS_PROFILE=uprevit-amit sam local start-api --env-vars .sam-local-env.json",
-    "seed:documentation-videos": "npm --prefix src run seed:documentation-videos --"
+    "seed:documentation-videos": "npm --prefix src run seed:documentation-videos --",
+    "bootstrap:platform-admin": "npm --prefix src run bootstrap:platform-admin --"
   },
   "devDependencies": {
     "esbuild": "^0.25.5"
