@@ -7,6 +7,8 @@ import { validateMissingFields } from "../../utils/validationUtils";
 import { updateAuditLog } from "../../utils/auditLog";
 import { AuditLogAction } from "../../models/auditLog";
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { assertSeatActivationAllowed } from '../../utils/billing/enforcement';
+import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 
 /**
  * @param {APIGatewayProxyEvent} event
@@ -30,12 +32,27 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 		const db = await getDb();
 
+		const existingUser = await db.collection('users').findOne({
+			cognitoSub: context.cognitoSub,
+			workspaceId: context.workspaceId,
+		});
+
+		const normalizedAvatar = normalizePersistedAssetReference(
+			input.profileAvatar,
+			typeof existingUser?.profileAvatar === 'string' ? existingUser.profileAvatar : '',
+		);
+
+		if (existingUser?.status !== 'active') {
+			const seatCheck = await assertSeatActivationAllowed(context.workspaceId, 1);
+			if (!seatCheck.allowed) return ResponseWrapper.forbidden(seatCheck.reason);
+		}
+
 		const updateResult = await db.collection("users").updateOne(
 			{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
 			{
 				$set: {
 					name: input.name,
-					profileAvatar: normalizePersistedAssetReference(input.profileAvatar, ''),
+					profileAvatar: normalizedAvatar,
 					designation: input.designation || '',
 					location: input.location || '',
 					status: 'active',
@@ -51,9 +68,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 			entity: 'user',
 			entityId: context.userId.toString(),
 			action: AuditLogAction.UPDATE,
-			actionBy: input.name,
 			actionAt: new Date(),
 			active: true,
+			actionBy: input.name,
+		});
+
+		await recordCommittedUploadIfNew({
+			workspaceId: context.workspaceId,
+			previousKey: typeof existingUser?.profileAvatar === 'string' ? existingUser.profileAvatar : '',
+			newKey: normalizedAvatar,
+			sizeBytes: input.profileAvatarSizeBytes ?? input.sizeBytes,
+			metadata: { assetType: 'profile_avatar' },
 		});
 
 		return ResponseWrapper.success({ message: "Profile updated successfully." });

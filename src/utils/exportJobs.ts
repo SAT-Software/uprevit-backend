@@ -10,6 +10,7 @@ import {
 } from '../models/exportJob';
 import type { PersistedReportExportRequest } from '../types/reports';
 import { getDb } from './db';
+import { recordCompletedExport } from './billing/usageRecording';
 
 const DEFAULT_EXPORT_FILE_TTL_HOURS = 24;
 const EXPORT_JOBS_PAGE_LIMIT = 10;
@@ -195,7 +196,7 @@ export const markExportJobCompleted = async ({
 	const collection = await getCollection();
 	const now = completedAt ?? new Date();
 
-	return collection.findOneAndUpdate(
+	const completedJob = await collection.findOneAndUpdate(
 		{
 			_id: jobId,
 			status: { $nin: TERMINAL_EXPORT_JOB_STATUSES },
@@ -216,6 +217,16 @@ export const markExportJobCompleted = async ({
 		},
 		{ returnDocument: 'after' },
 	);
+
+	if (completedJob?.workspaceId) {
+		await recordCompletedExport({
+			workspaceId: completedJob.workspaceId,
+			jobId,
+			occurredAt: now,
+		});
+	}
+
+	return completedJob;
 };
 
 export const markExportJobFailed = async ({

@@ -12,6 +12,7 @@ import { validateConditions } from '../../utils/reports/queryBuilder';
 import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
 import type { PersistedReportExportRequest, QueryCondition } from '../../types/reports';
 import { ALLOWED_SORT_FIELDS } from '../../types/reports';
+import { assertUsageActionAllowed } from '../../utils/billing/enforcement';
 
 type RequestBody = {
 	workspaceId?: string;
@@ -110,6 +111,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (requestedWorkspaceId.toString() !== userContext.workspaceId.toString()) {
 			return ResponseWrapper.forbidden('You are not authorized to export reports for this workspace');
 		}
+
+		const exportCheck = await assertUsageActionAllowed(userContext.workspaceId, 'export', 1);
+		if (!exportCheck.allowed) return ResponseWrapper.forbidden(exportCheck.reason);
 
 		const reportParams: PersistedReportExportRequest = {
 			conditions,

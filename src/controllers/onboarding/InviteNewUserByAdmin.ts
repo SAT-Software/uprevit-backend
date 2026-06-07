@@ -8,8 +8,21 @@ import { logError } from '../../utils/logger';
 import { validateUserArray } from "../../utils/validationUtils";
 import { Workspace } from "../../models/workspace";
 import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext } from "../../utils/tenantContext";
+import { assertUsageActionAllowed } from "../../utils/billing/enforcement";
+import {
+	assertEmailAvailableForWorkspaceMemberInvite,
+	InviteEmailConflictError,
+	normalizeInviteEmail,
+} from "../../utils/platformInviteUtils";
+import { findInactiveWorkspaceUserByEmail, reactivateWorkspaceUser } from "../../utils/userRemoval";
 
 const cognito = new CognitoIdentityProviderClient({ region: 'us-east-1' });
+
+type InviteResult = {
+	email: string;
+	status: 'Success' | 'Failed' | 'Reactivated';
+	reason?: string;
+};
 
 /**
  * @param {APIGatewayProxyEvent} event 
@@ -42,22 +55,41 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 		const validationError = validateUserArray(users, "users");
 		if(validationError) return validationError;
 
+		const inviteCheck = await assertUsageActionAllowed(context.workspaceId, 'invite');
+		if (!inviteCheck.allowed) return ResponseWrapper.forbidden(inviteCheck.reason);
+
 		const db = await getDb();
 		const workspaceObjectId = context.workspaceId;
-		const results = [];
+		const results: InviteResult[] = [];
 
 		for (const user of users) {
 			const { email, name } = user;
+			const normalizedEmail = normalizeInviteEmail(email);
 			try {
+				await assertEmailAvailableForWorkspaceMemberInvite(db, normalizedEmail, workspaceObjectId);
+
+				const inactiveUser = await findInactiveWorkspaceUserByEmail(db, normalizedEmail, workspaceObjectId);
+				if (inactiveUser) {
+					await reactivateWorkspaceUser({
+						email: normalizedEmail,
+						name,
+						workspaceId: workspaceObjectId,
+						actorUserId: context.userId,
+						userType: inactiveUser.userType ?? 'user',
+					});
+					results.push({ email: normalizedEmail, status: 'Reactivated' });
+					continue;
+				}
+
 				const createUserResponse = await cognito.send(new AdminCreateUserCommand({
 					UserPoolId: process.env.USER_POOL_ID,
-					Username: email,
+					Username: normalizedEmail,
 					UserAttributes: [{ Name: "name", Value: name }],
 					DesiredDeliveryMediums: [ "EMAIL"],
 				}));
 		      
 				const newCognitoUser = createUserResponse.User;
-				if (!newCognitoUser) throw new Error(`Failed to create Cognito user for ${email}`);
+				if (!newCognitoUser) throw new Error(`Failed to create Cognito user for ${normalizedEmail}`);
 
 
 				const cognitoSub = newCognitoUser.Attributes?.find(attr => attr.Name === "sub")?.Value;
@@ -65,7 +97,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 
 				const newUserDoc: User = {
-					email: email,
+					email: normalizedEmail,
 					name: name,
 					cognitoSub: cognitoSub,
 					workspaceId: workspaceObjectId,
@@ -82,7 +114,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 		      
 				await cognito.send(new AdminUpdateUserAttributesCommand({
 					UserPoolId: process.env.USER_POOL_ID,
-					Username: email,
+					Username: normalizedEmail,
 					UserAttributes: [
 						{ Name: "custom:userId", Value: dbUserId },
 						{ Name: "custom:workspaceId", Value: workspaceObjectId.toString() },
@@ -92,14 +124,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 				await cognito.send(new AdminAddUserToGroupCommand({
 					UserPoolId: process.env.USER_POOL_ID!,
-					Username: email,
+					Username: normalizedEmail,
 					GroupName: "user",
 				}));
 
-				results.push({ email, status: "Success" });
-			} catch (error: any) {
-				logError(`Failed to invite user: ${email}`, error);
-				results.push({ email, status: "Failed", reason: error.message || 'Invitation failed' });
+				results.push({ email: normalizedEmail, status: "Success" });
+			} catch (error: unknown) {
+				if (error instanceof InviteEmailConflictError) {
+					results.push({ email: normalizedEmail, status: "Failed", reason: error.message });
+					continue;
+				}
+
+				const message = error instanceof Error ? error.message : 'Invitation failed';
+				logError(`Failed to invite user: ${normalizedEmail}`, error);
+				results.push({ email: normalizedEmail, status: "Failed", reason: message });
 			}
 		}
 
