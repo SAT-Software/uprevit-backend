@@ -9,6 +9,7 @@ import type { Product } from "../../models/product";
 import { ObjectId } from "mongodb";
 import { recordAuditEvent } from "../../utils/auditLogV2";
 import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
+import { getBillingAccountByWorkspaceId } from "../../utils/billing/billingAccounts";
 import { recordCommittedUploadBytes } from "../../utils/billing/uploadCommit";
 
 /**
@@ -52,6 +53,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (input.type === 'file') {
 			const uploadCheck = await assertUsageActionAllowed(context.workspaceId, 'upload');
 			if (!uploadCheck.allowed) return ResponseWrapper.forbidden(uploadCheck.reason);
+
+			const billingAccount = await getBillingAccountByWorkspaceId(context.workspaceId);
+			if (billingAccount?.meteringEnabled && !sizeBytes) {
+				return ResponseWrapper.badRequest('sizeBytes is required for file uploads when usage limits are enabled');
+			}
 
 			if (sizeBytes) {
 				const limitCheck = await checkUploadWouldExceedLimit(context.workspaceId, sizeBytes);

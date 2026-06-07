@@ -3,6 +3,7 @@ import type { Workspace } from '../../models/workspace';
 import { getDb } from '../db';
 import { getBillingAccountByWorkspaceId, normalizeUsageLimits } from './billingAccounts';
 import { bytesToGb, gbToBytes, resolveBillingPeriod } from './billingPeriod';
+import { countActiveExportJobs } from '../exportJobs';
 import { aggregateUsageForPeriod, countActiveWorkspaceSeats } from './usageRecording';
 
 type EnforceableUsageMetric = 'completed_export' | 'upload_bytes';
@@ -94,7 +95,8 @@ export const checkMetricLimit = async (
 	let limit = 0;
 
 	if (metric === 'completed_export') {
-		used = usage.exports;
+		const pendingExports = await countActiveExportJobs({ workspaceId, periodStart, periodEnd });
+		used = usage.exports + pendingExports;
 		limit = usageLimits.exports;
 	} else {
 		used = usage.uploadBytes;
@@ -181,6 +183,24 @@ export const assertSeatActivationAllowed = async (
 
 	// Every future path that changes a workspace member to active must run this guard first.
 	if (projectedActiveSeats > usageLimits.seats) {
+		return { allowed: false, reason: 'Seat limit reached for this workspace' };
+	}
+
+	return { allowed: true };
+};
+
+export const verifySeatLimitAfterActivation = async (
+	workspaceId: ObjectId,
+): Promise<{ allowed: true } | { allowed: false; reason: string }> => {
+	const account = await getBillingAccountByWorkspaceId(workspaceId);
+	if (!account) return { allowed: true };
+	if (!account.meteringEnabled || account.workspacePreferences.enforcementMode === 'overage') {
+		return { allowed: true };
+	}
+
+	const usageLimits = normalizeUsageLimits(account);
+	const activeSeats = await countActiveWorkspaceSeats(workspaceId);
+	if (activeSeats > usageLimits.seats) {
 		return { allowed: false, reason: 'Seat limit reached for this workspace' };
 	}
 

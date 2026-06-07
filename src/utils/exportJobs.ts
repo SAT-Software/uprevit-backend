@@ -15,7 +15,7 @@ import { recordCompletedExport } from './billing/usageRecording';
 const DEFAULT_EXPORT_FILE_TTL_HOURS = 24;
 const EXPORT_JOBS_PAGE_LIMIT = 10;
 const TERMINAL_EXPORT_JOB_STATUSES: ExportJobStatus[] = ['completed', 'failed'];
-const ACTIVE_EXPORT_JOB_STATUSES: ExportJobStatus[] = ['queued', 'processing'];
+export const ACTIVE_EXPORT_JOB_STATUSES: ExportJobStatus[] = ['queued', 'processing'];
 
 let hasEnsuredExportJobIndexes = false;
 
@@ -259,6 +259,23 @@ export const markExportJobFailed = async ({
 		},
 		{ returnDocument: 'after' },
 	);
+};
+
+export const countActiveExportJobs = async ({
+	workspaceId,
+	periodStart,
+	periodEnd,
+}: {
+	workspaceId: ObjectId;
+	periodStart: Date;
+	periodEnd: Date;
+}): Promise<number> => {
+	const collection = await getCollection();
+	return collection.countDocuments({
+		workspaceId,
+		status: { $in: ACTIVE_EXPORT_JOB_STATUSES },
+		createdAt: { $gte: periodStart, $lte: periodEnd },
+	});
 };
 
 export const getExportJobById = async ({
