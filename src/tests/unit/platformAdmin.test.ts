@@ -50,6 +50,8 @@ const { lambdaHandler: getSessionHandler } = require('../../controllers/platform
 const { lambdaHandler: provisionInviteHandler } = require('../../controllers/platformAdmin/provisionInvite');
 const { lambdaHandler: inviteWorkspaceAdminHandler } = require('../../controllers/platformAdmin/inviteWorkspaceAdmin');
 const { lambdaHandler: listAuditLogsHandler } = require('../../controllers/platformAdmin/listAuditLogs');
+const { lambdaHandler: updateBillingAccountHandler } = require('../../controllers/platformAdmin/updateBillingAccount');
+const { lambdaHandler: createUsageAdjustmentHandler } = require('../../controllers/platformAdmin/createUsageAdjustment');
 const { serializeWorkspaceListItem, serializePlatformAuditLog } = require('../../utils/platformAdminSerializers');
 
 const activeOperator = {
@@ -103,6 +105,8 @@ type CollectionMocks = Record<string, {
 	find: ReturnType<typeof jest.fn>;
 	aggregate: ReturnType<typeof jest.fn>;
 	countDocuments: ReturnType<typeof jest.fn>;
+	createIndex: ReturnType<typeof jest.fn>;
+	findOneAndUpdate: ReturnType<typeof jest.fn>;
 }>;
 
 const createDb = () => {
@@ -117,6 +121,8 @@ const createDb = () => {
 				find: jest.fn(),
 				aggregate: jest.fn(),
 				countDocuments: jest.fn(),
+				createIndex: jest.fn().mockResolvedValue(undefined as never),
+				findOneAndUpdate: jest.fn(),
 			};
 		}
 		return collections[name];
@@ -373,6 +379,98 @@ describe('platformAdmin', () => {
 			expect(response.statusCode).toBe(400);
 			const body = JSON.parse(response.body);
 			expect(body.message).toContain('different workspace');
+		});
+	});
+
+	describe('billing account updates', () => {
+		it('rejects enabling SSO when usage limits do not allow it', async () => {
+			const workspaceId = new ObjectId();
+			const billingAccountId = new ObjectId();
+			mockValidOperatorAuth();
+
+			getCollection('workspaces').findOne.mockResolvedValue({
+				_id: workspaceId,
+				workspaceName: 'Acme',
+			});
+			getCollection('billingAccounts').findOne.mockResolvedValue({
+				_id: billingAccountId,
+				workspaceId,
+				status: 'active',
+				meteringEnabled: true,
+				billingCadence: 'monthly',
+				currency: 'USD',
+				netTermDays: 30,
+				paymentMode: 'offline_wire',
+				periodStart: new Date(),
+				periodEnd: new Date(),
+				usageLimits: { seats: 5, exports: 100, uploadGb: 10, ssoAllowed: false },
+				workspacePreferences: { enforcementMode: 'block' },
+				sso: { enabled: false },
+				pastDue: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			});
+
+			const response = await updateBillingAccountHandler(buildEvent({
+				httpMethod: 'PUT',
+				pathParameters: { workspaceId: workspaceId.toString() },
+				body: JSON.stringify({ ssoEnabled: true }),
+			}));
+
+			expect(response.statusCode).toBe(400);
+			expect(getCollection('billingAccounts').findOneAndUpdate).not.toHaveBeenCalled();
+		});
+
+		it('rejects fractional seat limits', async () => {
+			const workspaceId = new ObjectId();
+			mockValidOperatorAuth();
+
+			getCollection('workspaces').findOne.mockResolvedValue({
+				_id: workspaceId,
+				workspaceName: 'Acme',
+			});
+			getCollection('billingAccounts').findOne.mockResolvedValue({
+				_id: new ObjectId(),
+				workspaceId,
+				status: 'active',
+				meteringEnabled: true,
+				billingCadence: 'monthly',
+				currency: 'USD',
+				netTermDays: 30,
+				paymentMode: 'offline_wire',
+				usageLimits: { seats: 5, exports: 100, uploadGb: 10, ssoAllowed: false },
+				workspacePreferences: { enforcementMode: 'block' },
+				sso: { enabled: false },
+				pastDue: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			});
+
+			const response = await updateBillingAccountHandler(buildEvent({
+				httpMethod: 'PUT',
+				pathParameters: { workspaceId: workspaceId.toString() },
+				body: JSON.stringify({ usageLimits: { seats: 2.5 } }),
+			}));
+
+			expect(response.statusCode).toBe(400);
+			const body = JSON.parse(response.body);
+			expect(body.message).toContain('whole number');
+		});
+	});
+
+	describe('usage adjustments', () => {
+		it('rejects legacy seat-month adjustments', async () => {
+			const workspaceId = new ObjectId();
+			mockValidOperatorAuth();
+
+			const response = await createUsageAdjustmentHandler(buildEvent({
+				httpMethod: 'POST',
+				pathParameters: { workspaceId: workspaceId.toString() },
+				body: JSON.stringify({ metric: 'activated_seat_month', quantityDelta: 1 }),
+			}));
+
+			expect(response.statusCode).toBe(400);
+			expect(getCollection('usageAdjustments').insertOne).not.toHaveBeenCalled();
 		});
 	});
 });
