@@ -48,10 +48,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const sortObj: { [key: string]: 1 | -1 } = {};
 		sortObj[sort] = order === 'desc' ? -1 : 1;
 
-		const baseMatch = { workspaceId: context.workspaceId };
+		const baseMatch: Record<string, unknown> = { workspaceId: context.workspaceId };
 
 		const filtersMatch = buildListFiltersMatch(filters, USER_FILTER_FIELDS);
 		if (filtersMatch.error) return filtersMatch.error;
+
+		const hasStatusFilter = filters.some((filter) => filter.field === 'status');
+		const includeInactive = event.queryStringParameters?.includeInactive === 'true';
+
+		if (!hasStatusFilter && !includeInactive) {
+			baseMatch.status = { $ne: 'inactive' };
+		}
 
 		const queryFilter =
 			filtersMatch.match != null
