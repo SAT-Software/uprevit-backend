@@ -7,6 +7,8 @@ import { runBillingReconciliation } from '../../utils/billing/reconciliation';
 
 /**
  * Runs billing reconciliation across all workspaces or a single workspace.
+ * @param {APIGatewayProxyEvent} event API Gateway request event
+ * @return {Promise<APIGatewayProxyResult>} Reconciliation run summary payload
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {

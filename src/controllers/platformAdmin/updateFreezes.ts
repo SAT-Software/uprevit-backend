@@ -15,6 +15,8 @@ type FreezeInput = {
 
 /**
  * Updates workspace usage and access freeze flags.
+ * @param {APIGatewayProxyEvent} event API Gateway request event
+ * @return {Promise<APIGatewayProxyResult>} Updated workspace freeze state payload
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {

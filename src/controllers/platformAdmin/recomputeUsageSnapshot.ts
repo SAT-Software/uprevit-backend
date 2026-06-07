@@ -11,6 +11,8 @@ import { serializeUsageSnapshot } from '../../utils/billing/serializers';
 
 /**
  * Recomputes the current billing period usage snapshot for a workspace.
+ * @param {APIGatewayProxyEvent} event API Gateway request event
+ * @return {Promise<APIGatewayProxyResult>} Recomputed usage snapshot payload
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {

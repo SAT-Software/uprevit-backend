@@ -9,6 +9,8 @@ import { serializeUsageEvent } from '../../utils/billing/serializers';
 
 /**
  * Lists usage events for a workspace.
+ * @param {APIGatewayProxyEvent} event API Gateway request event
+ * @return {Promise<APIGatewayProxyResult>} Paginated usage events payload
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
