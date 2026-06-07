@@ -9,6 +9,10 @@ jest.mock('../../utils/authenticatedUser', () => ({
 	getAuthenticatedUserContext: jest.fn(),
 }));
 
+jest.mock('../../utils/billing/enforcement', () => ({
+	assertWorkspaceAccessAllowed: jest.fn(async () => ({ allowed: true })),
+}));
+
 const authUtils = jest.requireMock('../../utils/authUtils') as any;
 const authenticatedUser = jest.requireMock('../../utils/authenticatedUser') as any;
 
