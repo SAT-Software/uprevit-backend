@@ -17,6 +17,7 @@ jest.mock('../../utils/auditLog', () => ({
 jest.mock('../../utils/billing/enforcement', () => ({
 	assertWorkspaceAccessAllowed: jest.fn(async () => ({ allowed: true })),
 	assertSeatActivationAllowed: jest.fn(async () => ({ allowed: true })),
+	verifySeatLimitAfterActivation: jest.fn(async () => ({ allowed: true })),
 }));
 
 const cognitoSend = jest.fn(async () => ({}));
@@ -51,6 +52,7 @@ const {
 	countActiveWorkspaceAdmins,
 	reactivateWorkspaceUser,
 	UserRemovalError,
+	UserReactivationError,
 } = require('../../utils/userRemoval');
 const { getAuthenticatedUserContext } = require('../../utils/authenticatedUser');
 const { lambdaHandler: deleteUserHandler } = require('../../controllers/users/deleteUser');
@@ -227,7 +229,69 @@ describe('userRemoval', () => {
 
 		expect(result.reactivated).toBe(true);
 		expect(billingEnforcement.assertSeatActivationAllowed).toHaveBeenCalledWith(workspaceId, 1);
+		expect(billingEnforcement.verifySeatLimitAfterActivation).toHaveBeenCalledWith(workspaceId);
 		expect(collections.workspaces.updateOne).toHaveBeenCalled();
+	});
+
+	it('rolls back Cognito when database activation fails after enabling an existing user', async () => {
+		const { collections, primeCollections } = createDb();
+		primeCollections('users', 'workspaces');
+		const inactiveUser = {
+			_id: targetUserId,
+			email: 'member@example.com',
+			name: 'Member',
+			status: 'inactive',
+			userType: 'user',
+			cognitoSub: 'sub-1',
+			workspaceId,
+		};
+
+		collections.users.find.mockReturnValue({
+			toArray: jest.fn(async () => [inactiveUser]),
+		});
+		collections.users.updateOne.mockRejectedValueOnce(new Error('Database write failed'));
+
+		await expect(reactivateWorkspaceUser({
+			email: 'member@example.com',
+			name: 'Member',
+			workspaceId,
+			actorUserId,
+		})).rejects.toBeInstanceOf(UserReactivationError);
+
+		expect(cognitoSend).toHaveBeenCalled();
+		expect(collections.users.updateOne).toHaveBeenCalled();
+	});
+
+	it('rejects reactivation when post-activation seat verification fails', async () => {
+		const { collections, primeCollections } = createDb();
+		primeCollections('users', 'workspaces');
+		const inactiveUser = {
+			_id: targetUserId,
+			email: 'member@example.com',
+			name: 'Member',
+			status: 'inactive',
+			userType: 'user',
+			cognitoSub: 'sub-1',
+			workspaceId,
+		};
+
+		collections.users.find.mockReturnValue({
+			toArray: jest.fn(async () => [inactiveUser]),
+		});
+		billingEnforcement.verifySeatLimitAfterActivation.mockResolvedValueOnce({
+			allowed: false,
+			reason: 'Seat limit reached for this workspace',
+		});
+
+		await expect(reactivateWorkspaceUser({
+			email: 'member@example.com',
+			name: 'Member',
+			workspaceId,
+			actorUserId,
+		})).rejects.toBeInstanceOf(UserReactivationError);
+
+		expect(collections.users.updateOne).toHaveBeenCalledTimes(2);
+		expect(collections.workspaces.updateOne).toHaveBeenCalledTimes(2);
 	});
 
 	it('rejects inactive users in authenticated user context', async () => {

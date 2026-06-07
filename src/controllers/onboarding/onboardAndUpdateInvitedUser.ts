@@ -7,7 +7,7 @@ import { validateMissingFields } from "../../utils/validationUtils";
 import { updateAuditLog } from "../../utils/auditLog";
 import { AuditLogAction } from "../../models/auditLog";
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
-import { assertSeatActivationAllowed } from '../../utils/billing/enforcement';
+import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from '../../utils/billing/enforcement';
 import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 
 /**
@@ -42,7 +42,10 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 			typeof existingUser?.profileAvatar === 'string' ? existingUser.profileAvatar : '',
 		);
 
-		if (existingUser?.status !== 'active') {
+		const previousStatus = existingUser?.status ?? 'invited';
+		const activatingUser = previousStatus !== 'active';
+
+		if (activatingUser) {
 			const seatCheck = await assertSeatActivationAllowed(context.workspaceId, 1);
 			if (!seatCheck.allowed) return ResponseWrapper.forbidden(seatCheck.reason);
 		}
@@ -62,6 +65,17 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 		if (updateResult.matchedCount === 0) {
 			return ResponseWrapper.notFound("User not found or no changes were made.");
+		}
+
+		if (activatingUser) {
+			const postActivationCheck = await verifySeatLimitAfterActivation(context.workspaceId);
+			if (!postActivationCheck.allowed) {
+				await db.collection("users").updateOne(
+					{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
+					{ $set: { status: previousStatus } },
+				);
+				return ResponseWrapper.forbidden(postActivationCheck.reason);
+			}
 		}
         
 		await updateAuditLog({

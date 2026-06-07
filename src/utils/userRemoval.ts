@@ -18,7 +18,7 @@ import {
 	deleteCognitoInviteUser,
 	normalizeInviteEmail,
 } from './platformInviteUtils';
-import { assertSeatActivationAllowed } from './billing/enforcement';
+import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from './billing/enforcement';
 
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
@@ -239,60 +239,123 @@ export const reactivateWorkspaceUser = async (
 
 	let cognitoSub = existingUser.cognitoSub;
 	const hasCognitoAccount = await cognitoUserExists(normalizedEmail);
+	let createdNewCognito = false;
 
-	if (!cognitoSub || !hasCognitoAccount) {
-		const created = await createInvitedCognitoUser({
-			email: normalizedEmail,
-			name: input.name,
-			groupName,
-			customAttributes: [
-				{ Name: 'custom:userId', Value: userId.toString() },
-				{ Name: 'custom:workspaceId', Value: workspaceId.toString() },
-				{ Name: 'custom:status', Value: 'active' },
-			],
-		});
-		cognitoSub = created.cognitoSub;
-	} else {
-		await enableCognitoUser(normalizedEmail);
-		await cognito.send(new AdminUpdateUserAttributesCommand({
-			UserPoolId: process.env.USER_POOL_ID!,
-			Username: normalizedEmail,
-			UserAttributes: [
-				{ Name: 'name', Value: input.name },
-				{ Name: 'custom:userId', Value: userId.toString() },
-				{ Name: 'custom:workspaceId', Value: workspaceId.toString() },
-				{ Name: 'custom:status', Value: 'active' },
-			],
-		}));
+	const rollbackCognito = async (): Promise<void> => {
+		if (createdNewCognito) {
+			await deleteCognitoInviteUser(normalizedEmail);
+			return;
+		}
 
-		await cognito.send(new AdminAddUserToGroupCommand({
-			UserPoolId: process.env.USER_POOL_ID!,
-			Username: normalizedEmail,
-			GroupName: groupName,
-		}));
-	}
+		if (hasCognitoAccount) {
+			await disableCognitoUser(normalizedEmail);
+			await setCognitoStatus(normalizedEmail, 'inactive');
+			await removeCognitoGroup(normalizedEmail, groupName);
+		}
+	};
 
-	await db.collection<User>('users').updateOne(
-		{ _id: userId },
-		{
-			$set: {
-				name: input.name,
+	const rollbackDbActivation = async (): Promise<void> => {
+		await db.collection<User>('users').updateOne(
+			{ _id: userId },
+			{
+				$set: {
+					name: existingUser.name,
+					email: existingUser.email,
+					status: 'inactive',
+					userType: existingUser.userType ?? userType,
+					removedAt: existingUser.removedAt ?? new Date(),
+					removedByUserId: existingUser.removedByUserId ?? input.actorUserId,
+					...(existingUser.cognitoSub ? { cognitoSub: existingUser.cognitoSub } : {}),
+				},
+				...(createdNewCognito && !existingUser.cognitoSub ? { $unset: { cognitoSub: '' } } : {}),
+			},
+		);
+		await db.collection<Workspace>('workspaces').updateOne(
+			{ _id: workspaceId },
+			{ $pull: { userIds: userId } },
+		);
+	};
+
+	try {
+		if (!cognitoSub || !hasCognitoAccount) {
+			const created = await createInvitedCognitoUser({
 				email: normalizedEmail,
-				cognitoSub,
-				status: 'active',
-				userType,
-			},
-			$unset: {
-				removedAt: '',
-				removedByUserId: '',
-			},
-		},
-	);
+				name: input.name,
+				groupName,
+				customAttributes: [
+					{ Name: 'custom:userId', Value: userId.toString() },
+					{ Name: 'custom:workspaceId', Value: workspaceId.toString() },
+					{ Name: 'custom:status', Value: 'active' },
+				],
+			});
+			cognitoSub = created.cognitoSub;
+			createdNewCognito = true;
+		} else {
+			await enableCognitoUser(normalizedEmail);
+			await cognito.send(new AdminUpdateUserAttributesCommand({
+				UserPoolId: process.env.USER_POOL_ID!,
+				Username: normalizedEmail,
+				UserAttributes: [
+					{ Name: 'name', Value: input.name },
+					{ Name: 'custom:userId', Value: userId.toString() },
+					{ Name: 'custom:workspaceId', Value: workspaceId.toString() },
+					{ Name: 'custom:status', Value: 'active' },
+				],
+			}));
 
-	await db.collection<Workspace>('workspaces').updateOne(
-		{ _id: workspaceId },
-		{ $addToSet: { userIds: userId } },
-	);
+			await cognito.send(new AdminAddUserToGroupCommand({
+				UserPoolId: process.env.USER_POOL_ID!,
+				Username: normalizedEmail,
+				GroupName: groupName,
+			}));
+		}
 
-	return { userId, reactivated: true };
+		await db.collection<User>('users').updateOne(
+			{ _id: userId },
+			{
+				$set: {
+					name: input.name,
+					email: normalizedEmail,
+					cognitoSub,
+					status: 'active',
+					userType,
+				},
+				$unset: {
+					removedAt: '',
+					removedByUserId: '',
+				},
+			},
+		);
+
+		await db.collection<Workspace>('workspaces').updateOne(
+			{ _id: workspaceId },
+			{ $addToSet: { userIds: userId } },
+		);
+
+		const postActivationCheck = await verifySeatLimitAfterActivation(workspaceId);
+		if (!postActivationCheck.allowed) {
+			await rollbackDbActivation();
+			await rollbackCognito();
+			throw new UserReactivationError(postActivationCheck.reason);
+		}
+
+		return { userId, reactivated: true };
+	} catch (error) {
+		if (!(error instanceof UserReactivationError)) {
+			try {
+				await rollbackDbActivation();
+			} catch {
+				// Best-effort DB rollback after a partial activation.
+			}
+			try {
+				await rollbackCognito();
+			} catch {
+				// Best-effort Cognito rollback after a partial activation.
+			}
+			throw new UserReactivationError(
+				error instanceof Error ? error.message : 'Failed to reactivate workspace user',
+			);
+		}
+		throw error;
+	}
 };
