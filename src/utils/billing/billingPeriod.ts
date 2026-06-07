@@ -6,20 +6,43 @@ export const bytesToGb = (bytes: number): number => bytes / BYTES_PER_GB;
 
 export const gbToBytes = (gb: number): number => gb * BYTES_PER_GB;
 
+const daysInUtcMonth = (year: number, month: number): number =>
+	new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+
 export const addUtcMonths = (date: Date, months: number): Date => {
 	const year = date.getUTCFullYear();
 	const month = date.getUTCMonth();
 	const day = date.getUTCDate();
+	const totalMonths = month + months;
+	const targetYear = year + Math.floor(totalMonths / 12);
+	const targetMonth = ((totalMonths % 12) + 12) % 12;
+	const clampedDay = Math.min(day, daysInUtcMonth(targetYear, targetMonth));
 
 	return new Date(Date.UTC(
-		year,
-		month + months,
-		day,
+		targetYear,
+		targetMonth,
+		clampedDay,
 		date.getUTCHours(),
 		date.getUTCMinutes(),
 		date.getUTCSeconds(),
 		date.getUTCMilliseconds(),
 	));
+};
+
+export const parseOptionalIsoDate = (
+	value: unknown,
+	fieldName: string,
+): { ok: true; date: Date } | { ok: false; message: string } => {
+	if (typeof value !== 'string' || !value.trim()) {
+		return { ok: false, message: `${fieldName} must be a valid ISO date string` };
+	}
+
+	const date = new Date(value);
+	if (!Number.isFinite(date.getTime())) {
+		return { ok: false, message: `${fieldName} must be a valid ISO date string` };
+	}
+
+	return { ok: true, date };
 };
 
 const cadenceMonths = (cadence: BillingCadence): number => (cadence === 'yearly' ? 12 : 1);

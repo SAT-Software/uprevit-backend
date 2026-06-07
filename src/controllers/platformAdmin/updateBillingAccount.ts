@@ -20,6 +20,7 @@ import {
 	usageLimitsToIncluded,
 } from '../../utils/billing/billingAccounts';
 import { recordSsoAddOnEvent } from '../../utils/billing/usageRecording';
+import { parseOptionalIsoDate } from '../../utils/billing/billingPeriod';
 import { serializeBillingAccount } from '../../utils/billing/serializers';
 
 const ACCOUNT_STATUSES: BillingAccountStatus[] = ['draft', 'pilot', 'active', 'past_due', 'cancelled'];
@@ -104,8 +105,16 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			updates.paymentMode = input.paymentMode;
 		}
 		if (typeof input.pastDue === 'boolean') updates.pastDue = input.pastDue;
-		if (input.periodStart) updates.periodStart = new Date(input.periodStart);
-		if (input.periodEnd) updates.periodEnd = new Date(input.periodEnd);
+		if (input.periodStart !== undefined) {
+			const parsedPeriodStart = parseOptionalIsoDate(input.periodStart, 'periodStart');
+			if (!parsedPeriodStart.ok) return ResponseWrapper.badRequest(parsedPeriodStart.message);
+			updates.periodStart = parsedPeriodStart.date;
+		}
+		if (input.periodEnd !== undefined) {
+			const parsedPeriodEnd = parseOptionalIsoDate(input.periodEnd, 'periodEnd');
+			if (!parsedPeriodEnd.ok) return ResponseWrapper.badRequest(parsedPeriodEnd.message);
+			updates.periodEnd = parsedPeriodEnd.date;
+		}
 
 		const usageLimits = normalizeUsageLimits(existing);
 		let usageLimitsChanged = false;

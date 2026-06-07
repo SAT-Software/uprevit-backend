@@ -7,16 +7,25 @@ jest.mock('../../utils/db', () => ({
 
 const dbModule = jest.requireMock('../../utils/db') as any;
 
+const defaultCollectionFallback = () => ({
+	countDocuments: jest.fn(async () => 0),
+	createIndex: jest.fn(async () => undefined),
+	findOne: jest.fn(async () => null),
+	find: jest.fn(() => ({ toArray: jest.fn(async () => []) })),
+});
+
 const {
 	assertSeatActivationAllowed,
 	assertUsageActionAllowed,
 	checkMetricLimit,
 	isWorkspaceAccessFrozen,
 	isWorkspaceUsageFrozen,
+	verifySeatLimitAfterActivation,
 } = require('../../utils/billing/enforcement');
 const {
 	bytesToGb,
 	gbToBytes,
+	addUtcMonths,
 	calendarMonthKey,
 	computeBillingPeriodFromAnchor,
 	defaultPeriodForCadence,
@@ -90,6 +99,25 @@ describe('billing period helpers', () => {
 		expect(fromAnchor.periodStart.toISOString()).toBe(createdAt.toISOString());
 		expect(fromCreatedAt.periodStart.toISOString()).toBe(createdAt.toISOString());
 	});
+
+	it('clamps month-end anchors when advancing monthly periods', () => {
+		const jan31 = new Date('2026-01-31T12:00:00.000Z');
+		const febAnchor = addUtcMonths(jan31, 1);
+		const mar31 = new Date('2026-03-31T12:00:00.000Z');
+		const aprAnchor = addUtcMonths(mar31, 1);
+
+		expect(febAnchor.toISOString()).toBe('2026-02-28T12:00:00.000Z');
+		expect(aprAnchor.toISOString()).toBe('2026-04-30T12:00:00.000Z');
+	});
+
+	it('advances monthly periods from a Jan 31 anchor without skipping February', () => {
+		const anchor = new Date('2026-01-31T12:00:00.000Z');
+		const now = new Date('2026-03-15T12:00:00.000Z');
+		const { periodStart, periodEnd } = computeBillingPeriodFromAnchor(anchor, 'monthly', now);
+
+		expect(periodStart.toISOString()).toBe('2026-02-28T12:00:00.000Z');
+		expect(periodEnd.toISOString()).toBe('2026-03-28T11:59:59.999Z');
+	});
 });
 
 describe('workspace freezes', () => {
@@ -141,7 +169,7 @@ describe('metric enforcement', () => {
 						findOne: jest.fn(async () => null),
 					};
 				}
-				return {};
+				return defaultCollectionFallback();
 			}),
 		});
 
@@ -189,7 +217,7 @@ describe('metric enforcement', () => {
 						findOne: jest.fn(async () => null),
 					};
 				}
-				return {};
+				return defaultCollectionFallback();
 			}),
 		});
 
@@ -237,13 +265,63 @@ describe('metric enforcement', () => {
 						countDocuments: jest.fn(async () => 1),
 					};
 				}
-				return {};
+				return defaultCollectionFallback();
 			}),
 		});
 
 		const result = await assertUsageActionAllowed(workspaceId, 'export');
 
 		expect(result.allowed).toBe(false);
+	});
+
+	it('blocks a new export when completed and queued exports reach the limit', async () => {
+		dbModule.getDb.mockResolvedValue({
+			collection: jest.fn((name: string) => {
+				if (name === 'billingAccounts') {
+					return {
+						findOne: jest.fn(async () => ({
+							_id: new ObjectId(),
+							workspaceId,
+							meteringEnabled: true,
+							billingCadence: 'monthly',
+							periodStart: new Date('2026-06-01T00:00:00.000Z'),
+							periodEnd: new Date('2026-06-30T23:59:59.999Z'),
+							createdAt: new Date('2026-06-01T00:00:00.000Z'),
+							workspacePreferences: { enforcementMode: 'block' },
+							usageLimits: { seats: 5, exports: 5, uploadGb: 10, ssoAllowed: false },
+						})),
+						createIndex: jest.fn(async () => undefined),
+					};
+				}
+				if (name === 'usageEvents') {
+					return {
+						find: jest.fn(() => ({
+							toArray: jest.fn(async () => [
+								{ metric: 'completed_export', quantity: 3 },
+							]),
+						})),
+						createIndex: jest.fn(async () => undefined),
+					};
+				}
+				if (name === 'exportJobs') {
+					return {
+						countDocuments: jest.fn(async () => 3),
+						createIndex: jest.fn(async () => undefined),
+					};
+				}
+				if (name === 'users') {
+					return {
+						countDocuments: jest.fn(async () => 0),
+					};
+				}
+				return defaultCollectionFallback();
+			}),
+		});
+
+		const result = await checkMetricLimit(workspaceId, 'completed_export', 1);
+
+		expect(result.allowed).toBe(false);
+		expect(result.used).toBe(6);
 	});
 
 	it('does not block workspace-member invites at the seat limit', async () => {
@@ -284,7 +362,7 @@ describe('metric enforcement', () => {
 						findOne: jest.fn(async () => null),
 					};
 				}
-				return {};
+				return defaultCollectionFallback();
 			}),
 		});
 
@@ -322,7 +400,7 @@ describe('metric enforcement', () => {
 						countDocuments: jest.fn(async () => 2),
 					};
 				}
-				return {};
+				return defaultCollectionFallback();
 			}),
 		});
 
@@ -358,7 +436,7 @@ describe('metric enforcement', () => {
 						countDocuments: jest.fn(async () => 2),
 					};
 				}
-				return {};
+				return defaultCollectionFallback();
 			}),
 		});
 
@@ -394,7 +472,7 @@ describe('metric enforcement', () => {
 						countDocuments: jest.fn(async () => 2),
 					};
 				}
-				return {};
+				return defaultCollectionFallback();
 			}),
 		});
 
@@ -430,13 +508,45 @@ describe('metric enforcement', () => {
 						countDocuments: jest.fn(async () => 4),
 					};
 				}
-				return {};
+				return defaultCollectionFallback();
 			}),
 		});
 
 		const result = await assertSeatActivationAllowed(workspaceId, 1);
 
 		expect(result.allowed).toBe(true);
+	});
+
+	it('rejects post-activation verification when concurrent activations exceed the seat limit', async () => {
+		dbModule.getDb.mockResolvedValue({
+			collection: jest.fn((name: string) => {
+				if (name === 'billingAccounts') {
+					return {
+						findOne: jest.fn(async () => ({
+							_id: new ObjectId(),
+							workspaceId,
+							meteringEnabled: true,
+							billingCadence: 'monthly',
+							createdAt: new Date(),
+							workspacePreferences: { enforcementMode: 'block' },
+							usageLimits: { seats: 1, exports: 10, uploadGb: 10, ssoAllowed: false },
+						})),
+						createIndex: jest.fn(async () => undefined),
+					};
+				}
+				if (name === 'users') {
+					return {
+						countDocuments: jest.fn(async () => 2),
+					};
+				}
+				return defaultCollectionFallback();
+			}),
+		});
+
+		const result = await verifySeatLimitAfterActivation(workspaceId);
+
+		expect(result.allowed).toBe(false);
+		expect(result.reason).toContain('Seat limit reached');
 	});
 
 	it('enforces legacy-only included limits for export checks', async () => {
@@ -469,7 +579,7 @@ describe('metric enforcement', () => {
 						countDocuments: jest.fn(async () => 0),
 					};
 				}
-				return {};
+				return defaultCollectionFallback();
 			}),
 		});
 

@@ -456,6 +456,43 @@ describe('platformAdmin', () => {
 			const body = JSON.parse(response.body);
 			expect(body.message).toContain('whole number');
 		});
+
+		it('rejects invalid billing period date strings', async () => {
+			const workspaceId = new ObjectId();
+			mockValidOperatorAuth();
+
+			getCollection('workspaces').findOne.mockResolvedValue({
+				_id: workspaceId,
+				workspaceName: 'Acme',
+			});
+			getCollection('billingAccounts').findOne.mockResolvedValue({
+				_id: new ObjectId(),
+				workspaceId,
+				status: 'active',
+				meteringEnabled: true,
+				billingCadence: 'monthly',
+				currency: 'USD',
+				netTermDays: 30,
+				paymentMode: 'offline_wire',
+				usageLimits: { seats: 5, exports: 100, uploadGb: 10, ssoAllowed: false },
+				workspacePreferences: { enforcementMode: 'block' },
+				sso: { enabled: false },
+				pastDue: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			});
+
+			const response = await updateBillingAccountHandler(buildEvent({
+				httpMethod: 'PUT',
+				pathParameters: { workspaceId: workspaceId.toString() },
+				body: JSON.stringify({ periodStart: 'not-a-date' }),
+			}));
+
+			expect(response.statusCode).toBe(400);
+			const body = JSON.parse(response.body);
+			expect(body.message).toContain('periodStart');
+			expect(getCollection('billingAccounts').findOneAndUpdate).not.toHaveBeenCalled();
+		});
 	});
 
 	describe('usage adjustments', () => {
