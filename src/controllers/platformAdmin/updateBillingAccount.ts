@@ -50,6 +50,8 @@ type UpdateBillingInput = {
 
 /**
  * Updates billing account fields for platform operators.
+ * @param {APIGatewayProxyEvent} event API Gateway request event
+ * @return {Promise<APIGatewayProxyResult>} Updated billing account payload
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
