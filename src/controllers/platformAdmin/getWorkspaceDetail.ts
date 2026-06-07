@@ -13,10 +13,11 @@ import {
 import { Workspace } from '../../models/workspace';
 import { User } from '../../models/user';
 import {
-	emptyBillingPreview,
 	serializePlatformAuditLog,
 	serializeWorkspaceAdmin,
 } from '../../utils/platformAdminSerializers';
+import { getBillingAccountByWorkspaceId } from '../../utils/billing/billingAccounts';
+import { serializeWorkspaceBillingPreview, serializeWorkspaceFreezes } from '../../utils/billing/serializers';
 
 /**
  * Returns workspace profile, admin list, billing preview, and recent platform audit events.
@@ -39,7 +40,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const workspace = await db.collection<Workspace>('workspaces').findOne({ _id: workspaceObjectId });
 		if (!workspace) return ResponseWrapper.notFound('Workspace not found');
 
-		const [admins, memberCount, activeCount, invitedCount, recentAuditLogs] = await Promise.all([
+		const [admins, memberCount, activeCount, invitedCount, recentAuditLogs, billingAccount] = await Promise.all([
 			db.collection<User>('users').find({
 				workspaceId: workspaceObjectId,
 				userType: 'admin',
@@ -55,6 +56,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				.sort({ occurredAt: -1 })
 				.limit(20)
 				.toArray(),
+			getBillingAccountByWorkspaceId(workspaceObjectId),
 		]);
 
 		const { auth, operator } = operatorResult.context;
@@ -87,7 +89,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					admins: admins.length,
 				},
 				admins: admins.map((admin) => serializeWorkspaceAdmin(admin as User & { _id: ObjectId })),
-				billing: emptyBillingPreview(),
+				billing: serializeWorkspaceBillingPreview(billingAccount),
+				freezes: serializeWorkspaceFreezes(workspace),
 				recentAuditLogs: recentAuditLogs.map(serializePlatformAuditLog),
 			},
 		});

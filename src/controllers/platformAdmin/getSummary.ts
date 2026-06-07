@@ -3,6 +3,7 @@ import { getDb } from '../../utils/db';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { requirePlatformOperator } from '../../utils/platformAdminContext';
+import { BILLING_ACCOUNTS_COLLECTION } from '../../models/billing';
 
 /**
  * Returns platform-wide dashboard summary counts.
@@ -21,11 +22,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			activeUsers,
 			invitedUsers,
 			workspaceAdmins,
+			billingAccounts,
+			pastDueWorkspaces,
+			meteringEnabledWorkspaces,
 		] = await Promise.all([
 			db.collection('workspaces').countDocuments({}),
 			db.collection('users').countDocuments({ status: 'active', workspaceId: { $ne: null } }),
 			db.collection('users').countDocuments({ status: 'invited', workspaceId: { $ne: null } }),
 			db.collection('users').countDocuments({ userType: 'admin', workspaceId: { $ne: null } }),
+			db.collection(BILLING_ACCOUNTS_COLLECTION).countDocuments({}),
+			db.collection(BILLING_ACCOUNTS_COLLECTION).countDocuments({ pastDue: true }),
+			db.collection(BILLING_ACCOUNTS_COLLECTION).countDocuments({ meteringEnabled: true }),
 		]);
 
 		return ResponseWrapper.success({
@@ -36,9 +43,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				invitedUsers,
 				workspaceAdmins,
 				billing: {
-					accountsLinked: null,
-					pastDueWorkspaces: null,
-					meteringEnabledWorkspaces: null,
+					accountsLinked: billingAccounts,
+					pastDueWorkspaces,
+					limitsEnabledWorkspaces: meteringEnabledWorkspaces,
+					meteringEnabledWorkspaces,
 				},
 			},
 		});

@@ -1,24 +1,12 @@
 import { ObjectId } from 'mongodb';
 import type { PlatformAdmin } from '../models/platformAdmin';
 import type { PlatformAuditLog } from '../models/platformAuditLog';
+import type { BillingAccount } from '../models/billing';
 import type { Workspace } from '../models/workspace';
 import type { User } from '../models/user';
+import { serializeWorkspaceBillingPreview } from './billing/serializers';
 
-export type WorkspaceBillingPreview = {
-	status: 'not_set';
-	meteringEnabled: null;
-	billingCadence: null;
-	currency: null;
-	pastDue: null;
-};
-
-export const emptyBillingPreview = (): WorkspaceBillingPreview => ({
-	status: 'not_set',
-	meteringEnabled: null,
-	billingCadence: null,
-	currency: null,
-	pastDue: null,
-});
+export type WorkspaceBillingPreview = ReturnType<typeof serializeWorkspaceBillingPreview>;
 
 export const serializePlatformOperator = (operator: PlatformAdmin) => ({
 	id: operator._id?.toString(),
@@ -31,6 +19,7 @@ export const serializePlatformOperator = (operator: PlatformAdmin) => ({
 
 export const serializeWorkspaceListItem = (
 	workspace: Workspace & { _id: ObjectId; memberCount?: number },
+	billingAccount?: BillingAccount | null,
 ) => ({
 	id: workspace._id.toString(),
 	workspaceName: workspace.workspaceName,
@@ -38,7 +27,7 @@ export const serializeWorkspaceListItem = (
 	logo: workspace.logo || null,
 	planName: workspace.planName || null,
 	memberCount: workspace.memberCount ?? workspace.userIds?.length ?? 0,
-	billing: emptyBillingPreview(),
+	billing: serializeWorkspaceBillingPreview(billingAccount ?? null),
 });
 
 export const serializeWorkspaceAdmin = (user: User & { _id: ObjectId }) => ({
