@@ -1,19 +1,18 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { getDb } from '../../utils/db';
-import { User } from '../../models/user';
+import { ObjectId } from 'mongodb';
 import { AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
-import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { isWorkspaceAdmin, requireTenantContext, tenantUserIdFilter } from '../../utils/tenantContext';
+import { ResponseWrapper } from '../../utils/responseWrapper';
+import { isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
 import { validateAllObjectIds } from '../../utils/validationUtils';
+import { deactivateWorkspaceUser, UserRemovalError } from '../../utils/userRemoval';
 
 /**
- * Delete a user
+ * Remove a user from the workspace (soft deactivation).
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
@@ -33,22 +32,27 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (objectIdValidation) return objectIdValidation;
 
 		if (event.pathParameters.id === context.userId.toString()) {
-			return ResponseWrapper.badRequest('You cannot delete your own user account. Please contact your workspace admin to delete your account.');
+			return ResponseWrapper.badRequest(
+				'You cannot remove your own user account. Please contact another workspace admin.',
+			);
 		}
 
-		const db = await getDb();
-
-		const user = await db.collection<User>('users').deleteOne(
-			tenantUserIdFilter(event.pathParameters.id, context.workspaceId),
-		);
-
-		if (user.deletedCount === 0) {
-			return ResponseWrapper.notFound('User not found');
+		let targetUserId: ObjectId;
+		try {
+			targetUserId = new ObjectId(event.pathParameters.id);
+		} catch {
+			return ResponseWrapper.badRequest('Invalid user ID');
 		}
+
+		const deactivatedUser = await deactivateWorkspaceUser({
+			targetUserId,
+			workspaceId: context.workspaceId,
+			actorUserId: context.userId,
+		});
 
 		const auditRecord: AuditLog = {
 			entity: 'user',
-			entityId: (event.pathParameters.id).toString(),
+			entityId: event.pathParameters.id,
 			action: AuditLogAction.DELETE,
 			actionBy: context.userId.toString(),
 			actionAt: new Date(),
@@ -58,12 +62,18 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		await updateAuditLog(auditRecord);
 
 		return ResponseWrapper.success({
-			message: 'User deleted successfully',
-			user: user,
+			message: 'User removed from workspace successfully',
+			user: deactivatedUser,
 		});
-
 	} catch (err) {
-		logError('Delete user handler failed', err);
-		return ResponseWrapper.internalServerError('Failed to delete user');
+		if (err instanceof UserRemovalError) {
+			if (err.code === 'not_found') {
+				return ResponseWrapper.notFound(err.message);
+			}
+			return ResponseWrapper.badRequest(err.message);
+		}
+
+		logError('Remove user handler failed', err);
+		return ResponseWrapper.internalServerError('Failed to remove user');
 	}
 };

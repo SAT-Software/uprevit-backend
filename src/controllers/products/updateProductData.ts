@@ -22,6 +22,10 @@ import { addOperationalParameters, deleteOperationalParameters, updateOperationa
 import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion, updateLabelTagTaggedImage, updateLabelTagLegend } from './productData/label-tags';
 import { SymbolsGraphics } from '../../types/products/symbols-graphics';
 import { recordAuditEvent } from '../../utils/auditLogV2';
+import {
+	assertNewUploadCommitsAllowed,
+	recordUploadCommitsFromPayload,
+} from '../../utils/billing/uploadCommit';
 
 const validTabs = [
 	'product-information',
@@ -633,6 +637,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			});
 		}
 
+		const uploadCommitCheck = await assertNewUploadCommitsAllowed(context.workspaceId, input.data);
+		if (!uploadCommitCheck.allowed) {
+			return ResponseWrapper.forbidden(uploadCommitCheck.reason);
+		}
+
 		const options: { arrayFilters?: any[] } = {};
 		if ('arrayFilters' in updateQuery) {
 			options.arrayFilters = (updateQuery as any).arrayFilters;
@@ -678,6 +687,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				meta: payloadMeta,
 			});
 		}
+
+		await recordUploadCommitsFromPayload(context.workspaceId, input.data);
 
 		return ResponseWrapper.success({
 			message: 'Product updated successfully',

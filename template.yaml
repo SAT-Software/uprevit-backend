@@ -1492,6 +1492,176 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/platformAdmin/inviteWorkspaceAdmin.ts]
 
+  BillingGetSummaryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/getSummary.lambdaHandler
+      Events:
+        BillingGetSummary:
+          Type: Api
+          Properties:
+            Path: /billing/summary
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/billing/getSummary.ts]
+
+  BillingUpdatePreferencesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/updatePreferences.lambdaHandler
+      Events:
+        BillingUpdatePreferences:
+          Type: Api
+          Properties:
+            Path: /billing/preferences
+            Method: put
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/billing/updatePreferences.ts]
+
+  PlatformAdminGetBillingAccountFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/getBillingAccount.lambdaHandler
+      Events:
+        PlatformAdminGetBillingAccount:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/billing-account
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/getBillingAccount.ts]
+
+  PlatformAdminUpdateBillingAccountFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/updateBillingAccount.lambdaHandler
+      Events:
+        PlatformAdminUpdateBillingAccount:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/billing-account
+            Method: put
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/updateBillingAccount.ts]
+
+  PlatformAdminCreateBillingAccountFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/createBillingAccount.lambdaHandler
+      Events:
+        PlatformAdminCreateBillingAccount:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/billing-account
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/createBillingAccount.ts]
+
+  PlatformAdminCreateUsageAdjustmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/createUsageAdjustment.lambdaHandler
+      Events:
+        PlatformAdminCreateUsageAdjustment:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/usage-adjustments
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/createUsageAdjustment.ts]
+
+  PlatformAdminRecomputeUsageSnapshotFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/recomputeUsageSnapshot.lambdaHandler
+      Events:
+        PlatformAdminRecomputeUsageSnapshot:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/usage-snapshots/recompute
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/recomputeUsageSnapshot.ts]
+
+  PlatformAdminUpdateFreezesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/updateFreezes.lambdaHandler
+      Events:
+        PlatformAdminUpdateFreezes:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/freezes
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/updateFreezes.ts]
+
+  PlatformAdminRunReconciliationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/runReconciliation.lambdaHandler
+      Events:
+        PlatformAdminRunReconciliation:
+          Type: Api
+          Properties:
+            Path: /platform-admin/billing/reconciliation-runs
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/runReconciliation.ts]
+
+  PlatformAdminListUsageEventsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/listUsageEvents.lambdaHandler
+      Events:
+        PlatformAdminListUsageEvents:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/usage-events
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/listUsageEvents.ts]
+
   # ──────────────────────────────────────────────────────────────────────────
   # S3 STORAGE
   # ──────────────────────────────────────────────────────────────────────────

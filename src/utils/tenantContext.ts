@@ -2,6 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
 import { authenticateRequest, type AuthResult } from './authUtils';
 import { getAuthenticatedUserContext } from './authenticatedUser';
+import { assertWorkspaceAccessAllowed } from './billing/enforcement';
 import { ResponseWrapper } from './responseWrapper';
 
 export type TenantContext = {
@@ -32,8 +33,14 @@ const parseCognitoGroups = (groups: unknown): string[] => {
  * @param {APIGatewayProxyEvent} event - API Gateway event
  * @return {Promise<TenantContextResult>} Tenant context result
 */
+export type RequireTenantContextOptions = {
+	/** Allow read-only access when workspace access is frozen (e.g. billing summary). */
+	allowAccessFrozen?: boolean;
+};
+
 export const requireTenantContext = async (
 	event: APIGatewayProxyEvent,
+	options: RequireTenantContextOptions = {},
 ): Promise<TenantContextResult> => {
 	const auth = await authenticateRequest(event);
 	if (!auth.isValid) {
@@ -51,6 +58,16 @@ export const requireTenantContext = async (
 			ok: false,
 			response: ResponseWrapper.unauthorized('Unable to resolve authenticated user context'),
 		};
+	}
+
+	if (!options.allowAccessFrozen) {
+		const accessCheck = await assertWorkspaceAccessAllowed(userContext.workspaceId);
+		if (!accessCheck.allowed) {
+			return {
+				ok: false,
+				response: ResponseWrapper.forbidden(accessCheck.reason),
+			};
+		}
 	}
 
 	return {

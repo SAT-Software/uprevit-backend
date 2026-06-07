@@ -20,10 +20,14 @@ export const getAuthenticatedUserContext = async (
 	const db = await getDb();
 	const user = await db.collection<User>('users').findOne(
 		{ cognitoSub },
-		{ projection: { _id: 1, workspaceId: 1 } },
+		{ projection: { _id: 1, workspaceId: 1, status: 1 } },
 	);
 
 	if (!user?._id || !(user.workspaceId instanceof ObjectId)) {
+		return null;
+	}
+
+	if (user.status === 'inactive') {
 		return null;
 	}
 

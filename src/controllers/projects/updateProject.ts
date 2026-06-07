@@ -7,6 +7,7 @@ import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 
 /**
@@ -145,6 +146,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			meta: {
 				projectName: input.project_name,
 			},
+		});
+
+		await recordCommittedUploadIfNew({
+			workspaceId: context.workspaceId,
+			previousKey: projectRecord.image,
+			newKey: normalizedProjectImage,
+			sizeBytes: (input as { imageSizeBytes?: number; sizeBytes?: number }).imageSizeBytes
+				?? (input as { sizeBytes?: number }).sizeBytes,
+			metadata: { assetType: 'project_image' },
 		});
 
 		return ResponseWrapper.success({

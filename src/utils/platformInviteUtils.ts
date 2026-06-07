@@ -95,6 +95,53 @@ export const assertEmailAvailableForWorkspaceAdminInvite = async (
 	throw new InviteEmailConflictError('This email is already a member of this workspace.');
 };
 
+/**
+ * Rejects emails tied to a different workspace for member invites.
+ * Inactive members in the same workspace are allowed (reactivation path).
+ */
+export const assertEmailAvailableForWorkspaceMemberInvite = async (
+	db: Db,
+	email: string,
+	workspaceId: ObjectId,
+): Promise<void> => {
+	const normalizedEmail = normalizeInviteEmail(email);
+	const existingUser = await db.collection<User>('users').findOne({ email: normalizedEmail })
+		?? await db.collection<User>('users').findOne({
+			email: { $regex: new RegExp(`^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+		});
+
+	if (!existingUser) {
+		if (await cognitoUserExists(normalizedEmail)) {
+			throw new InviteEmailConflictError(
+				'This email is reserved for organization provisioning and cannot be invited to a workspace yet.',
+			);
+		}
+		return;
+	}
+
+	if (!existingUser.workspaceId) {
+		throw new InviteEmailConflictError(
+			'This email is reserved for organization provisioning and cannot be invited to a workspace yet.',
+		);
+	}
+
+	if (!existingUser.workspaceId.equals(workspaceId)) {
+		throw new InviteEmailConflictError(
+			'This email belongs to a different workspace and cannot be invited here.',
+		);
+	}
+
+	if (existingUser.status === 'inactive') {
+		return;
+	}
+
+	if (existingUser.userType === 'admin') {
+		throw new InviteEmailConflictError('This email is already a workspace admin in this workspace.');
+	}
+
+	throw new InviteEmailConflictError('This email is already a member of this workspace.');
+};
+
 export type CreateInvitedCognitoUserInput = {
 	email: string;
 	name: string;

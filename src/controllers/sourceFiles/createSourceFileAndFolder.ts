@@ -8,6 +8,9 @@ import { SourceFile } from "../../models/sourceFiles";
 import type { Product } from "../../models/product";
 import { ObjectId } from "mongodb";
 import { recordAuditEvent } from "../../utils/auditLogV2";
+import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
+import { getBillingAccountByWorkspaceId } from "../../utils/billing/billingAccounts";
+import { recordCommittedUploadBytes } from "../../utils/billing/uploadCommit";
 
 /**
  * @param {APIGatewayProxyEvent} event
@@ -42,6 +45,27 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			...(input.product_id && { 'product_id': input.product_id })
 		});
 		if (objectIdValidation) return objectIdValidation;
+
+		const sizeBytes = input.type === 'file' && typeof input.sizeBytes === 'number' && input.sizeBytes > 0
+			? Math.floor(input.sizeBytes)
+			: undefined;
+
+		if (input.type === 'file') {
+			const uploadCheck = await assertUsageActionAllowed(context.workspaceId, 'upload');
+			if (!uploadCheck.allowed) return ResponseWrapper.forbidden(uploadCheck.reason);
+
+			const billingAccount = await getBillingAccountByWorkspaceId(context.workspaceId);
+			if (billingAccount?.meteringEnabled && !sizeBytes) {
+				return ResponseWrapper.badRequest('sizeBytes is required for file uploads when usage limits are enabled');
+			}
+
+			if (sizeBytes) {
+				const limitCheck = await checkUploadWouldExceedLimit(context.workspaceId, sizeBytes);
+				if (!limitCheck.allowed) {
+					return ResponseWrapper.forbidden(limitCheck.reason ?? 'Upload limit reached');
+				}
+			}
+		}
 
 		const db = await getDb();
 		const sourceFilesCollection = db.collection<SourceFile>('sourceFiles');
@@ -94,10 +118,20 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			...(input.type === 'file' && {
 				...(input.url && { url: input.url }),
 				...(input.key && { key: input.key }),
+				...(sizeBytes && { sizeBytes }),
 			}),
 		};
 
 		await sourceFilesCollection.insertOne(newSourceFile);
+
+		if (newSourceFile.type === 'file' && sizeBytes && newSourceFile.key) {
+			await recordCommittedUploadBytes({
+				workspaceId,
+				uploadKey: newSourceFile.key,
+				sizeBytes,
+				metadata: { sourceFileId: newSourceFile._id.toString() },
+			});
+		}
 
 		const isFolder = newSourceFile.type === 'folder';
 		await recordAuditEvent({

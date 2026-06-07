@@ -6,6 +6,7 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 import { isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
 
 /**
@@ -36,10 +37,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const db = await getDb();
+		const normalizedAvatar = normalizePersistedAssetReference(input.profileAvatar, '');
 
 		const user = await db.collection<User>('users').insertOne({
 			name: input.name,
-			profileAvatar: normalizePersistedAssetReference(input.profileAvatar, ''),
+			profileAvatar: normalizedAvatar,
 			designation: input.designation,
 			email: input.email,
 			phone: input.phone,
@@ -57,6 +59,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			actionBy: context.userId.toString(),
 			actionAt: new Date(),
 			active: true,
+		});
+
+		await recordCommittedUploadIfNew({
+			workspaceId: context.workspaceId,
+			previousKey: '',
+			newKey: normalizedAvatar,
+			sizeBytes: (input as { profileAvatarSizeBytes?: number; sizeBytes?: number }).profileAvatarSizeBytes
+				?? (input as { sizeBytes?: number }).sizeBytes,
+			metadata: { assetType: 'profile_avatar' },
 		});
 
 		return ResponseWrapper.created({

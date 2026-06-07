@@ -21,10 +21,15 @@ jest.mock('../../utils/db', () => ({
 	getDb: jest.fn(),
 }));
 
+jest.mock('../../utils/billing/enforcement', () => ({
+	assertUsageActionAllowed: jest.fn(async () => ({ allowed: true })),
+}));
+
 const authUtils = jest.requireMock('../../utils/authUtils') as any;
 const authenticatedUser = jest.requireMock('../../utils/authenticatedUser') as any;
 const exportJobs = jest.requireMock('../../utils/exportJobs') as any;
 const exportQueue = jest.requireMock('../../utils/exportQueue') as any;
+const billingEnforcement = jest.requireMock('../../utils/billing/enforcement') as any;
 
 const authenticateRequest = authUtils.authenticateRequest;
 
@@ -95,6 +100,12 @@ describe('enqueueReportExport', () => {
 				sort: { field: 'product_name', order: 'asc' },
 			},
 		});
+
+		expect(billingEnforcement.assertUsageActionAllowed).toHaveBeenCalledWith(
+			workspaceId,
+			'export',
+			1,
+		);
 
 		expect(enqueueExportJobMessage).toHaveBeenCalledWith({
 			schemaVersion: 1,

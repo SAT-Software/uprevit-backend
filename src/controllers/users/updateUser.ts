@@ -8,6 +8,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateMissingFields } from '../../utils/validationUtils';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 import { isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
 
 /**
@@ -54,6 +55,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.forbidden('You are not authorized to update this user');
 		}
 
+		const normalizedAvatar = normalizePersistedAssetReference(
+			input.profileAvatar,
+			userRecord.profileAvatar ?? '',
+		);
+
 		const user = await db.collection<User>('users').updateOne(
 			{
 				_id: new ObjectId(userRecord._id),
@@ -62,7 +68,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			{
 				$set: {
 					name: input.name,
-					profileAvatar: normalizePersistedAssetReference(input.profileAvatar, userRecord.profileAvatar ?? ''),
+					profileAvatar: normalizedAvatar,
 					email: input.email,
 					designation: input.designation || '',
 					phone: input.phone,
@@ -81,6 +87,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		};
 
 		await updateAuditLog(auditRecord);
+
+		await recordCommittedUploadIfNew({
+			workspaceId: context.workspaceId,
+			previousKey: userRecord.profileAvatar,
+			newKey: normalizedAvatar,
+			sizeBytes: (input as { profileAvatarSizeBytes?: number; sizeBytes?: number }).profileAvatarSizeBytes
+				?? (input as { sizeBytes?: number }).sizeBytes,
+			metadata: { assetType: 'profile_avatar' },
+		});
 
 		return ResponseWrapper.success({
 			message: 'User updated successfully',

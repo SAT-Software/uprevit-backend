@@ -8,6 +8,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
 
 /**
@@ -79,24 +80,31 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const userObjectIds = input.userIds ? input.userIds.map((userId) => new ObjectId(userId)) : [];
+		const normalizedLogo = normalizePersistedAssetReference(input.logo, workspaceRecord.logo ?? '');
+
+		const updateFields: Partial<Workspace> = {
+			workspaceName: input.workspaceName,
+			companyName: input.companyName,
+			description: input.description,
+			logo: normalizedLogo,
+			plan: input.plan,
+			planId: input.planId,
+			planStart: input.planStart,
+			planEnd: input.planEnd,
+			cost: input.cost,
+			userIds: userObjectIds,
+		};
+
+		if (typeof input.memberListIncludeInactive === 'boolean') {
+			updateFields.memberListIncludeInactive = input.memberListIncludeInactive;
+		}
 
 		const workspace = await db.collection<Workspace>('workspaces').updateOne(
 			{
 				_id: context.workspaceId,
 			},
 			{
-				$set: {
-					workspaceName: input.workspaceName,
-					companyName: input.companyName,
-					description: input.description,
-					logo: normalizePersistedAssetReference(input.logo, workspaceRecord.logo ?? ''),
-					plan: input.plan,
-					planId: input.planId,
-					planStart: input.planStart,
-					planEnd: input.planEnd,
-					cost: input.cost,
-					userIds: userObjectIds,
-				},
+				$set: updateFields,
 			},
 		);
 
@@ -110,6 +118,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		};
 
 		await updateAuditLog(auditRecord);
+
+		await recordCommittedUploadIfNew({
+			workspaceId: context.workspaceId,
+			previousKey: workspaceRecord.logo,
+			newKey: normalizedLogo,
+			sizeBytes: (input as { logoSizeBytes?: number; sizeBytes?: number }).logoSizeBytes
+				?? (input as { sizeBytes?: number }).sizeBytes,
+			metadata: { assetType: 'workspace_logo' },
+		});
 
 		return ResponseWrapper.success({
 			message: 'Workspace updated successfully',

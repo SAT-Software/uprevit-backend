@@ -10,4 +10,5 @@ export interface SourceFile {
     product_id?: ObjectId | null
     url?: string
     key?: string
+    sizeBytes?: number
 }

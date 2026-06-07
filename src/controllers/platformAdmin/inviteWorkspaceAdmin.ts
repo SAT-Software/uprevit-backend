@@ -12,6 +12,7 @@ import {
 	AdminUpdateUserAttributesCommand,
 	CognitoIdentityProviderClient,
 } from '@aws-sdk/client-cognito-identity-provider';
+import { assertUsageActionAllowed } from '../../utils/billing/enforcement';
 import {
 	assertEmailAvailableForWorkspaceAdminInvite,
 	createInvitedCognitoUser,
@@ -54,6 +55,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const workspace = await db.collection<Workspace>('workspaces').findOne({ _id: workspaceObjectId });
 		if (!workspace) return ResponseWrapper.notFound('Workspace not found');
+
+		const inviteCheck = await assertUsageActionAllowed(workspaceObjectId, 'invite');
+		if (!inviteCheck.allowed) return ResponseWrapper.forbidden(inviteCheck.reason);
 
 		try {
 			await assertEmailAvailableForWorkspaceAdminInvite(db, normalizedEmail, workspaceObjectId);
