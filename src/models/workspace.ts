@@ -1,5 +1,11 @@
 import { ObjectId } from "mongodb";
 
+export type WorkspaceFreeze = {
+	enabled: boolean;
+	updatedAt: Date;
+	updatedByPlatformAdminId?: ObjectId;
+};
+
 export type Workspace = {
 	_id?: ObjectId;
 	workspaceName: string;
@@ -15,4 +21,7 @@ export type Workspace = {
 	cost: number;
 	adminIds?: ObjectId[];
 	userIds?: ObjectId[];
-}
+	workspaceUsageFreeze?: WorkspaceFreeze;
+	workspaceAccessFreeze?: WorkspaceFreeze;
+	memberListIncludeInactive?: boolean;
+};
