@@ -3,9 +3,13 @@ import { USAGE_EVENTS_COLLECTION } from '../../models/billing';
 import type { UsageEvent } from '../../models/billing';
 import { getDb } from '../db';
 import { getBillingAccountByWorkspaceId } from './billingAccounts';
-import { resolveBillingPeriod } from './billingPeriod';
+import { resolveUsagePeriod } from './billingPeriod';
 import { checkUploadWouldExceedLimit } from './enforcement';
 import { recordUsageEvent } from './usageRecording';
+import {
+	buildChargebeeDeduplicationId,
+	trySyncUsageEventToChargebee,
+} from './usageEventChargebeeSync';
 
 export const normalizeSizeBytes = (value: unknown): number | undefined => {
 	if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
@@ -42,9 +46,10 @@ export const recordCommittedUploadBytes = async ({
 	if (!account) return;
 
 	const now = occurredAt ?? new Date();
-	const { periodStart, periodEnd } = resolveBillingPeriod(account, now);
+	const { periodStart, periodEnd } = resolveUsagePeriod(account, now);
 
-	await recordUsageEvent({
+	const idempotencyKey = `upload:${normalizedKey}`;
+	const insertedEvent = await recordUsageEvent({
 		workspaceId,
 		billingAccountId: account._id,
 		metric: 'upload_bytes',
@@ -52,12 +57,24 @@ export const recordCommittedUploadBytes = async ({
 		unit: 'bytes',
 		source: 'upload_commit',
 		sourceId: normalizedKey,
-		idempotencyKey: `upload:${normalizedKey}`,
+		idempotencyKey,
 		occurredAt: now,
 		billingPeriodStart: periodStart,
 		billingPeriodEnd: periodEnd,
 		metadata,
+		chargebeeSync: {
+			status: 'pending',
+			deduplicationId: buildChargebeeDeduplicationId(idempotencyKey),
+			attempts: 0,
+		},
 	});
+
+	if (insertedEvent?._id) {
+		await trySyncUsageEventToChargebee({
+			event: insertedEvent as UsageEvent & { _id: ObjectId },
+			account,
+		});
+	}
 };
 
 export const recordCommittedUploadIfNew = async ({
