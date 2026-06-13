@@ -68,6 +68,10 @@ jobs:
       UPLOADS_BUCKET: ${{ vars.UPLOADS_BUCKET }}
       EXPORTS_BUCKET: ${{ vars.EXPORTS_BUCKET }}
       EXPORT_JOB_QUEUE_URL: ${{ vars.EXPORT_JOB_QUEUE_URL }}
+      CHARGEBEE_SITE: ${{ vars.CHARGEBEE_SITE }}
+      CHARGEBEE_WEBHOOK_USERNAME: ${{ vars.CHARGEBEE_WEBHOOK_USERNAME }}
+      CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: ${{ vars.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID }}
+      CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: ${{ vars.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID }}
     
     permissions:
       id-token: write
@@ -124,6 +128,8 @@ jobs:
       - name: Deploy SAM Application
         env:
           DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY: ${{ secrets.DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY }}
+          CHARGEBEE_API_KEY: ${{ secrets.CHARGEBEE_API_KEY }}
+          CHARGEBEE_WEBHOOK_PASSWORD: ${{ secrets.CHARGEBEE_WEBHOOK_PASSWORD }}
         run: |
           CF_PRIVATE_KEY_PARAM=""
           if [ -n "${DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY:-}" ]; then
@@ -150,4 +156,10 @@ jobs:
             "DocumentationCloudFrontDomain=${{ vars.DOCUMENTATION_CLOUDFRONT_DOMAIN }}" \
             "DocumentationCloudFrontKeyPairId=${{ vars.DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID }}" \
             "DocumentationCloudFrontPrivateKey=$CF_PRIVATE_KEY_PARAM" \
-            "ExportJobQueueUrl=$EXPORT_JOB_QUEUE_URL"
+            "ExportJobQueueUrl=$EXPORT_JOB_QUEUE_URL" \
+            "ChargebeeSite=$CHARGEBEE_SITE" \
+            "ChargebeeApiKey=$CHARGEBEE_API_KEY" \
+            "ChargebeeWebhookUsername=$CHARGEBEE_WEBHOOK_USERNAME" \
+            "ChargebeeWebhookPassword=$CHARGEBEE_WEBHOOK_PASSWORD" \
+            "ChargebeeSeatAddonItemPriceId=$CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID" \
+            "ChargebeeSsoAddonItemPriceId=$CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID"

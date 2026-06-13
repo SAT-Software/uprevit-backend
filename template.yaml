@@ -54,6 +54,32 @@ Parameters:
     Type: String
     Description: "Optional explicit SQS queue URL override for local/dev"
     Default: ""
+  ChargebeeSite:
+    Type: String
+    Description: "Chargebee site subdomain for usage event ingest"
+    Default: ""
+  ChargebeeApiKey:
+    Type: String
+    NoEcho: true
+    Description: "Chargebee API key for usage event ingest"
+    Default: ""
+  ChargebeeWebhookUsername:
+    Type: String
+    Description: "Basic auth username for Chargebee webhooks"
+    Default: ""
+  ChargebeeWebhookPassword:
+    Type: String
+    NoEcho: true
+    Description: "Basic auth password for Chargebee webhooks"
+    Default: ""
+  ChargebeeSeatAddonItemPriceId:
+    Type: String
+    Description: "Chargebee item price ID for the seat add-on"
+    Default: ""
+  ChargebeeSsoAddonItemPriceId:
+    Type: String
+    Description: "Chargebee item price ID for the SSO add-on"
+    Default: ""
 
 # ──────────────────────────────────────────────────────────────────────────
 # TOP-LEVEL METADATA  – YAML anchor for the build recipe
@@ -87,6 +113,12 @@ Globals:
         EXPORTS_BUCKET: !Ref ExportsBucket
         STANDARD_SYMBOLS_BUCKET: !Ref StandardSymbolsBucket
         DOCUMENTATION_FILES_BUCKET: !Ref DocumentationFilesBucket
+        CHARGEBEE_SITE: !Ref ChargebeeSite
+        CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+        CHARGEBEE_WEBHOOK_USERNAME: !Ref ChargebeeWebhookUsername
+        CHARGEBEE_WEBHOOK_PASSWORD: !Ref ChargebeeWebhookPassword
+        CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+        CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
@@ -851,6 +883,8 @@ Resources:
         Variables:
           EXPORTS_PREFIX: exports
           EXPORT_JOB_MAX_RECEIVE_COUNT: 5
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -1526,6 +1560,58 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/billing/updatePreferences.ts]
 
+  BillingGetChargebeeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/getBillingChargebee.lambdaHandler
+      Events:
+        BillingGetChargebee:
+          Type: Api
+          Properties:
+            Path: /billing/chargebee
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/billing/getBillingChargebee.ts]
+
+  ChargebeeWebhookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/chargebeeWebhook.lambdaHandler
+      Events:
+        ChargebeeWebhook:
+          Type: Api
+          Properties:
+            Path: /billing/webhooks/chargebee
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/billing/chargebeeWebhook.ts]
+
+  BillingRetryUsageEventSyncScheduledFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/retryUsageEventSyncScheduled.lambdaHandler
+      Timeout: 300
+      Events:
+        BillingRetryUsageEventSyncSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(10 minutes)
+            Enabled: true
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/billing/retryUsageEventSyncScheduled.ts]
+
   PlatformAdminGetBillingAccountFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1594,23 +1680,6 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/platformAdmin/createUsageAdjustment.ts]
 
-  PlatformAdminRecomputeUsageSnapshotFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/
-      Handler: controllers/platformAdmin/recomputeUsageSnapshot.lambdaHandler
-      Events:
-        PlatformAdminRecomputeUsageSnapshot:
-          Type: Api
-          Properties:
-            Path: /platform-admin/workspaces/{workspaceId}/usage-snapshots/recompute
-            Method: post
-    Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/recomputeUsageSnapshot.ts]
-
   PlatformAdminUpdateFreezesFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1628,23 +1697,6 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/platformAdmin/updateFreezes.ts]
 
-  PlatformAdminRunReconciliationFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/
-      Handler: controllers/platformAdmin/runReconciliation.lambdaHandler
-      Events:
-        PlatformAdminRunReconciliation:
-          Type: Api
-          Properties:
-            Path: /platform-admin/billing/reconciliation-runs
-            Method: post
-    Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/runReconciliation.ts]
-
   PlatformAdminListUsageEventsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1661,6 +1713,62 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/platformAdmin/listUsageEvents.ts]
+
+  PlatformAdminRetryUsageEventSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/retryUsageEventSync.lambdaHandler
+      Events:
+        PlatformAdminRetryUsageEventSync:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/usage-events/{eventId}/retry-sync
+            Method: post
+        PlatformAdminRetryWorkspaceUsageSync:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/billing/retry-usage-sync
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/retryUsageEventSync.ts]
+
+  PlatformAdminCreateChargebeeCustomerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/createChargebeeCustomer.lambdaHandler
+      Events:
+        PlatformAdminCreateChargebeeCustomer:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/chargebee/customer
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/createChargebeeCustomer.ts]
+
+  PlatformAdminLinkChargebeeSubscriptionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/linkChargebeeSubscription.lambdaHandler
+      Events:
+        PlatformAdminLinkChargebeeSubscription:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/chargebee/subscription/link
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/linkChargebeeSubscription.ts]
 
   # ──────────────────────────────────────────────────────────────────────────
   # S3 STORAGE
