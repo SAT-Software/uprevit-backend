@@ -6,7 +6,8 @@ import {
 	type BillingAccountStatus,
 	type BillingCadence,
 	type BillingPaymentMode,
-	type UsageLimits,
+	type EnforcementMode,
+	type WorkspaceLimits,
 } from '../../models/billing';
 import { Workspace } from '../../models/workspace';
 import { getDb } from '../../utils/db';
@@ -14,18 +15,14 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { requirePlatformOperator } from '../../utils/platformAdminContext';
 import { recordPlatformAuditEvent } from '../../utils/platformAuditLog';
-import {
-	getBillingAccountByWorkspaceId,
-	normalizeUsageLimits,
-	usageLimitsToIncluded,
-} from '../../utils/billing/billingAccounts';
-import { recordSsoAddOnEvent } from '../../utils/billing/usageRecording';
+import { getBillingAccountByWorkspaceId, normalizeLimits } from '../../utils/billing/billingAccounts';
 import { parseOptionalIsoDate } from '../../utils/billing/billingPeriod';
 import { serializeBillingAccount } from '../../utils/billing/serializers';
 
 const ACCOUNT_STATUSES: BillingAccountStatus[] = ['draft', 'pilot', 'active', 'past_due', 'cancelled'];
 const CADENCES: BillingCadence[] = ['monthly', 'yearly'];
 const PAYMENT_MODES: BillingPaymentMode[] = ['offline_wire', 'provider_bank_transfer', 'manual_external'];
+const ENFORCEMENT_MODES: EnforcementMode[] = ['overage', 'block'];
 
 type UpdateBillingInput = {
 	status?: BillingAccountStatus;
@@ -38,14 +35,10 @@ type UpdateBillingInput = {
 	periodStart?: string;
 	periodEnd?: string;
 	pastDue?: boolean;
-	included?: {
-		seatMonths?: number;
-		exports?: number;
-		uploadGb?: number;
-		sso?: boolean;
-	};
-	usageLimits?: Partial<UsageLimits>;
 	ssoEnabled?: boolean;
+	limits?: Partial<WorkspaceLimits>;
+	usageLimits?: Partial<Pick<WorkspaceLimits, 'seats' | 'exports' | 'uploadGb' | 'ssoAllowed'>>;
+	enforcementMode?: EnforcementMode;
 };
 
 /**
@@ -82,7 +75,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const updates: Record<string, unknown> = {};
 		const now = new Date();
-		const isCountLimit = (path: keyof Omit<UsageLimits, 'ssoAllowed'>) => path === 'seats' || path === 'exports';
+		const limits = normalizeLimits(existing);
+		let limitsChanged = false;
 
 		if (input.status !== undefined) {
 			if (!ACCOUNT_STATUSES.includes(input.status)) {
@@ -90,8 +84,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}
 			updates.status = input.status;
 		}
-		if (typeof input.limitsEnabled === 'boolean') updates.meteringEnabled = input.limitsEnabled;
-		if (typeof input.meteringEnabled === 'boolean') updates.meteringEnabled = input.meteringEnabled;
 		if (input.billingCadence !== undefined) {
 			if (!CADENCES.includes(input.billingCadence)) {
 				return ResponseWrapper.badRequest('billingCadence must be monthly or yearly');
@@ -118,54 +110,80 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			updates.periodEnd = parsedPeriodEnd.date;
 		}
 
-		const usageLimits = normalizeUsageLimits(existing);
-		let usageLimitsChanged = false;
-		const applyNumericLimit = (path: keyof Omit<UsageLimits, 'ssoAllowed'>, value: unknown): boolean | APIGatewayProxyResult => {
+		const seatInput = input.limits?.seats ?? input.usageLimits?.seats;
+		if (seatInput !== undefined) {
+			return ResponseWrapper.badRequest('Seat limits are mirrored from Chargebee and cannot be edited manually');
+		}
+
+		const applyNumericLimit = (
+			path: 'exports' | 'uploadGb',
+			value: unknown,
+		): boolean | APIGatewayProxyResult => {
 			if (value === undefined) return false;
 			if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
 				return ResponseWrapper.badRequest(`${path} must be a non-negative number`);
 			}
-			if (isCountLimit(path) && !Number.isInteger(value)) {
+			if (path === 'exports' && !Number.isInteger(value)) {
 				return ResponseWrapper.badRequest(`${path} must be a whole number`);
 			}
-			usageLimits[path] = value;
+			limits[path] = value;
 			return true;
 		};
 
-		const seatLimitResult = applyNumericLimit('seats', input.usageLimits?.seats ?? input.included?.seatMonths);
-		if (typeof seatLimitResult !== 'boolean') return seatLimitResult;
-		usageLimitsChanged = usageLimitsChanged || seatLimitResult;
-
-		const exportLimitResult = applyNumericLimit('exports', input.usageLimits?.exports ?? input.included?.exports);
+		const exportLimitResult = applyNumericLimit('exports', input.limits?.exports ?? input.usageLimits?.exports);
 		if (typeof exportLimitResult !== 'boolean') return exportLimitResult;
-		usageLimitsChanged = usageLimitsChanged || exportLimitResult;
+		limitsChanged = limitsChanged || exportLimitResult;
 
-		const uploadLimitResult = applyNumericLimit('uploadGb', input.usageLimits?.uploadGb ?? input.included?.uploadGb);
+		const uploadLimitResult = applyNumericLimit('uploadGb', input.limits?.uploadGb ?? input.usageLimits?.uploadGb);
 		if (typeof uploadLimitResult !== 'boolean') return uploadLimitResult;
-		usageLimitsChanged = usageLimitsChanged || uploadLimitResult;
+		limitsChanged = limitsChanged || uploadLimitResult;
 
-		const ssoAllowedInput = input.usageLimits?.ssoAllowed ?? input.included?.sso;
+		const ssoAllowedInput = input.limits?.ssoAllowed ?? input.usageLimits?.ssoAllowed;
 		if (ssoAllowedInput !== undefined) {
 			if (typeof ssoAllowedInput !== 'boolean') {
 				return ResponseWrapper.badRequest('ssoAllowed must be a boolean');
 			}
-			usageLimits.ssoAllowed = ssoAllowedInput;
-			usageLimitsChanged = true;
+			limits.ssoAllowed = ssoAllowedInput;
+			limitsChanged = true;
 		}
 
-		if (usageLimitsChanged) {
-			updates.usageLimits = usageLimits;
-			updates.included = usageLimitsToIncluded(usageLimits);
+		if (typeof input.limitsEnabled === 'boolean') {
+			limits.enabled = input.limitsEnabled;
+			limitsChanged = true;
+		}
+		if (typeof input.meteringEnabled === 'boolean') {
+			limits.enabled = input.meteringEnabled;
+			limitsChanged = true;
+		}
+		if (input.enforcementMode !== undefined) {
+			if (!ENFORCEMENT_MODES.includes(input.enforcementMode)) {
+				return ResponseWrapper.badRequest("enforcementMode must be 'overage' or 'block'");
+			}
+			limits.enforcementMode = input.enforcementMode;
+			limitsChanged = true;
+		}
+		if (input.limits?.enforcementMode !== undefined) {
+			if (!ENFORCEMENT_MODES.includes(input.limits.enforcementMode)) {
+				return ResponseWrapper.badRequest("enforcementMode must be 'overage' or 'block'");
+			}
+			limits.enforcementMode = input.limits.enforcementMode;
+			limitsChanged = true;
+		}
+		if (typeof input.limits?.enabled === 'boolean') {
+			limits.enabled = input.limits.enabled;
+			limitsChanged = true;
 		}
 
-		let ssoAction: 'enabled' | 'disabled' | null = null;
+		if (limitsChanged) {
+			updates.limits = limits;
+		}
+
 		if (typeof input.ssoEnabled === 'boolean' && input.ssoEnabled !== existing.sso.enabled) {
-			if (input.ssoEnabled && !usageLimits.ssoAllowed) {
+			if (input.ssoEnabled && !limits.ssoAllowed) {
 				return ResponseWrapper.badRequest('SSO is not allowed by this workspace usage limit');
 			}
 			updates['sso.enabled'] = input.ssoEnabled;
 			updates[`sso.${input.ssoEnabled ? 'enabledAt' : 'disabledAt'}`] = now;
-			ssoAction = input.ssoEnabled ? 'enabled' : 'disabled';
 		}
 
 		if (Object.keys(updates).length === 0) {
@@ -181,14 +199,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		);
 
 		if (!updated) return ResponseWrapper.notFound('Billing account not found');
-
-		if (ssoAction) {
-			await recordSsoAddOnEvent({
-				workspaceId: workspaceObjectId,
-				billingAccountId: existing._id,
-				action: ssoAction,
-			});
-		}
 
 		const { auth, operator } = operatorResult.context;
 		await recordPlatformAuditEvent({

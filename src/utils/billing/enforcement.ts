@@ -1,8 +1,8 @@
 import { ObjectId } from 'mongodb';
 import type { Workspace } from '../../models/workspace';
 import { getDb } from '../db';
-import { getBillingAccountByWorkspaceId, normalizeUsageLimits } from './billingAccounts';
-import { bytesToGb, gbToBytes, resolveBillingPeriod } from './billingPeriod';
+import { getBillingAccountByWorkspaceId, normalizeLimits } from './billingAccounts';
+import { bytesToGb, gbToBytes, resolveUsagePeriod } from './billingPeriod';
 import { countActiveExportJobs } from '../exportJobs';
 import { aggregateUsageForPeriod, countActiveWorkspaceSeats } from './usageRecording';
 
@@ -10,7 +10,7 @@ type EnforceableUsageMetric = 'completed_export' | 'upload_bytes';
 
 export type MetricLimitCheck = {
 	allowed: boolean;
-	meteringEnabled: boolean;
+	limitsEnabled: boolean;
 	enforcementMode: 'overage' | 'block';
 	overage: boolean;
 	used: number;
@@ -77,7 +77,7 @@ export const checkMetricLimit = async (
 	if (!account) {
 		return {
 			allowed: true,
-			meteringEnabled: false,
+			limitsEnabled: false,
 			enforcementMode: 'overage',
 			overage: false,
 			used: 0,
@@ -86,10 +86,9 @@ export const checkMetricLimit = async (
 		};
 	}
 
-	const { periodStart, periodEnd } = resolveBillingPeriod(account);
+	const limits = normalizeLimits(account);
+	const { periodStart, periodEnd } = resolveUsagePeriod(account);
 	const usage = await aggregateUsageForPeriod({ workspaceId, periodStart, periodEnd });
-	const enforcementMode = account.workspacePreferences.enforcementMode;
-	const usageLimits = normalizeUsageLimits(account);
 
 	let used = 0;
 	let limit = 0;
@@ -97,20 +96,20 @@ export const checkMetricLimit = async (
 	if (metric === 'completed_export') {
 		const pendingExports = await countActiveExportJobs({ workspaceId, periodStart, periodEnd });
 		used = usage.exports + pendingExports;
-		limit = usageLimits.exports;
+		limit = limits.exports;
 	} else {
 		used = usage.uploadBytes;
-		limit = gbToBytes(usageLimits.uploadGb);
+		limit = gbToBytes(limits.uploadGb);
 	}
 
 	const projected = used + additionalQuantity;
 	const overage = projected > limit;
 
-	if (!account.meteringEnabled) {
+	if (!limits.enabled) {
 		return {
 			allowed: true,
-			meteringEnabled: false,
-			enforcementMode,
+			limitsEnabled: false,
+			enforcementMode: limits.enforcementMode,
 			overage,
 			used,
 			limit,
@@ -118,11 +117,11 @@ export const checkMetricLimit = async (
 		};
 	}
 
-	if (enforcementMode === 'overage') {
+	if (limits.enforcementMode === 'overage') {
 		return {
 			allowed: true,
-			meteringEnabled: true,
-			enforcementMode,
+			limitsEnabled: true,
+			enforcementMode: limits.enforcementMode,
 			overage,
 			used,
 			limit,
@@ -136,8 +135,8 @@ export const checkMetricLimit = async (
 			: 'upload';
 		return {
 			allowed: false,
-			meteringEnabled: true,
-			enforcementMode,
+			limitsEnabled: true,
+			enforcementMode: limits.enforcementMode,
 			overage: true,
 			used,
 			limit,
@@ -148,8 +147,8 @@ export const checkMetricLimit = async (
 
 	return {
 		allowed: true,
-		meteringEnabled: true,
-		enforcementMode,
+		limitsEnabled: true,
+		enforcementMode: limits.enforcementMode,
 		overage: false,
 		used,
 		limit,
@@ -173,16 +172,15 @@ export const assertSeatActivationAllowed = async (
 	const account = await getBillingAccountByWorkspaceId(workspaceId);
 	if (!account) return { allowed: true };
 
-	const usageLimits = normalizeUsageLimits(account);
+	const limits = normalizeLimits(account);
 	const activeSeats = await countActiveWorkspaceSeats(workspaceId);
 	const projectedActiveSeats = activeSeats + additionalActiveSeats;
 
-	if (!account.meteringEnabled || account.workspacePreferences.enforcementMode === 'overage') {
+	if (!limits.enabled || limits.enforcementMode === 'overage') {
 		return { allowed: true };
 	}
 
-	// Every future path that changes a workspace member to active must run this guard first.
-	if (projectedActiveSeats > usageLimits.seats) {
+	if (projectedActiveSeats > limits.seats) {
 		return { allowed: false, reason: 'Seat limit reached for this workspace' };
 	}
 
@@ -194,13 +192,13 @@ export const verifySeatLimitAfterActivation = async (
 ): Promise<{ allowed: true } | { allowed: false; reason: string }> => {
 	const account = await getBillingAccountByWorkspaceId(workspaceId);
 	if (!account) return { allowed: true };
-	if (!account.meteringEnabled || account.workspacePreferences.enforcementMode === 'overage') {
+	const limits = normalizeLimits(account);
+	if (!limits.enabled || limits.enforcementMode === 'overage') {
 		return { allowed: true };
 	}
 
-	const usageLimits = normalizeUsageLimits(account);
 	const activeSeats = await countActiveWorkspaceSeats(workspaceId);
-	if (activeSeats > usageLimits.seats) {
+	if (activeSeats > limits.seats) {
 		return { allowed: false, reason: 'Seat limit reached for this workspace' };
 	}
 

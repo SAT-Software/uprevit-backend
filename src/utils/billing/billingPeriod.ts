@@ -76,6 +76,23 @@ export const resolveBillingPeriod = (
 	return computeBillingPeriodFromAnchor(anchor, account.billingCadence, now);
 };
 
+export type UsagePeriodSource = 'chargebee' | 'internal';
+
+export const resolveUsagePeriod = (
+	account: Pick<BillingAccount, 'billingCadence' | 'periodStart' | 'periodEnd' | 'createdAt' | 'chargebee'>,
+	now: Date = new Date(),
+): { periodStart: Date; periodEnd: Date; source: UsagePeriodSource } => {
+	const termStart = account.chargebee?.currentTermStart;
+	const termEnd = account.chargebee?.currentTermEnd;
+
+	if (termStart && termEnd) {
+		return { periodStart: termStart, periodEnd: termEnd, source: 'chargebee' };
+	}
+
+	const { periodStart, periodEnd } = resolveBillingPeriod(account, now);
+	return { periodStart, periodEnd, source: 'internal' };
+};
+
 export const calendarMonthKey = (date: Date): string =>
 	`${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
 

@@ -58,7 +58,7 @@ const main = async () => {
 
 	console.log(`Billing period anchor fix complete. Updated: ${updated}, skipped: ${skipped}`);
 	console.log(
-		'Note: usage events recorded under old calendar-month periods are not retagged automatically. Recompute snapshots after verifying usage totals, or adjust manually for test workspaces.',
+		'Note: usage events recorded under old calendar-month periods are not retagged automatically. Adjust usage events manually for test workspaces if needed.',
 	);
 	process.exit(0);
 };

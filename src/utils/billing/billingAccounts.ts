@@ -2,63 +2,91 @@ import { ObjectId } from 'mongodb';
 import {
 	BILLING_ACCOUNTS_COLLECTION,
 	type BillingAccount,
-	type DeprecatedIncludedLimits,
+	type EnforcementMode,
 	type UsageLimits,
+	type WorkspaceLimits,
 } from '../../models/billing';
 import { getDb } from '../db';
 import { defaultPeriodForCadence } from './billingPeriod';
 
 let hasEnsuredBillingIndexes = false;
 
-export const DEFAULT_USAGE_LIMITS: UsageLimits = {
-	seats: 5,
+export const DEFAULT_LIMITS: WorkspaceLimits = {
+	enabled: false,
+	enforcementMode: 'overage',
+	seats: 1,
 	exports: 100,
 	uploadGb: 10,
 	ssoAllowed: false,
 };
 
-/** @deprecated Use DEFAULT_USAGE_LIMITS. */
-export const DEFAULT_INCLUDED_LIMITS: DeprecatedIncludedLimits = {
-	seatMonths: DEFAULT_USAGE_LIMITS.seats,
-	exports: DEFAULT_USAGE_LIMITS.exports,
-	uploadGb: DEFAULT_USAGE_LIMITS.uploadGb,
-	sso: DEFAULT_USAGE_LIMITS.ssoAllowed,
+type LegacyBillingAccount = {
+	limits?: Partial<WorkspaceLimits>;
+	usageLimits?: Partial<UsageLimits>;
+	included?: {
+		seatMonths?: number;
+		exports?: number;
+		uploadGb?: number;
+		sso?: boolean;
+	};
+	meteringEnabled?: boolean;
+	workspacePreferences?: { enforcementMode?: EnforcementMode };
 };
 
-export const usageLimitsToIncluded = (usageLimits: UsageLimits): DeprecatedIncludedLimits => ({
-	seatMonths: usageLimits.seats,
-	exports: usageLimits.exports,
-	uploadGb: usageLimits.uploadGb,
-	sso: usageLimits.ssoAllowed,
+export const limitsToUsageLimits = (limits: WorkspaceLimits): UsageLimits => ({
+	seats: limits.seats,
+	exports: limits.exports,
+	uploadGb: limits.uploadGb,
+	ssoAllowed: limits.ssoAllowed,
 });
 
-export const normalizeUsageLimits = (account?: Pick<BillingAccount, 'usageLimits' | 'included'> | null): UsageLimits => {
-	const source = account?.usageLimits;
-	const legacy = account?.included;
+export type NormalizableBillingAccount = LegacyBillingAccount & {
+	limits?: Partial<WorkspaceLimits> | WorkspaceLimits;
+};
+
+export const normalizeLimits = (
+	account?: NormalizableBillingAccount | null,
+): WorkspaceLimits => {
+	if (account?.limits && typeof account.limits.enabled === 'boolean') {
+		return { ...DEFAULT_LIMITS, ...account.limits };
+	}
+
+	const legacyUsage = account?.usageLimits;
+	const legacyIncluded = account?.included;
 
 	return {
-		seats: typeof source?.seats === 'number'
-			? source.seats
-			: typeof legacy?.seatMonths === 'number'
-				? legacy.seatMonths
-				: DEFAULT_USAGE_LIMITS.seats,
-		exports: typeof source?.exports === 'number'
-			? source.exports
-			: typeof legacy?.exports === 'number'
-				? legacy.exports
-				: DEFAULT_USAGE_LIMITS.exports,
-		uploadGb: typeof source?.uploadGb === 'number'
-			? source.uploadGb
-			: typeof legacy?.uploadGb === 'number'
-				? legacy.uploadGb
-				: DEFAULT_USAGE_LIMITS.uploadGb,
-		ssoAllowed: typeof source?.ssoAllowed === 'boolean'
-			? source.ssoAllowed
-			: typeof legacy?.sso === 'boolean'
-				? legacy.sso
-				: DEFAULT_USAGE_LIMITS.ssoAllowed,
+		enabled: account?.meteringEnabled ?? DEFAULT_LIMITS.enabled,
+		enforcementMode: account?.workspacePreferences?.enforcementMode ?? DEFAULT_LIMITS.enforcementMode,
+		seats: typeof legacyUsage?.seats === 'number'
+			? legacyUsage.seats
+			: typeof legacyIncluded?.seatMonths === 'number'
+				? legacyIncluded.seatMonths
+				: DEFAULT_LIMITS.seats,
+		exports: typeof legacyUsage?.exports === 'number'
+			? legacyUsage.exports
+			: typeof legacyIncluded?.exports === 'number'
+				? legacyIncluded.exports
+				: DEFAULT_LIMITS.exports,
+		uploadGb: typeof legacyUsage?.uploadGb === 'number'
+			? legacyUsage.uploadGb
+			: typeof legacyIncluded?.uploadGb === 'number'
+				? legacyIncluded.uploadGb
+				: DEFAULT_LIMITS.uploadGb,
+		ssoAllowed: typeof legacyUsage?.ssoAllowed === 'boolean'
+			? legacyUsage.ssoAllowed
+			: typeof legacyIncluded?.sso === 'boolean'
+				? legacyIncluded.sso
+				: DEFAULT_LIMITS.ssoAllowed,
 	};
 };
+
+/**
+ * @deprecated Use normalizeLimits instead.
+ * @param {LegacyBillingAccount | null} account
+ * @return {UsageLimits}
+ */
+export const normalizeUsageLimits = (account?: LegacyBillingAccount | null): UsageLimits =>
+	limitsToUsageLimits(normalizeLimits(account));
 
 export const ensureBillingAccountIndexes = async (): Promise<void> => {
 	if (hasEnsuredBillingIndexes) return;
@@ -69,7 +97,7 @@ export const ensureBillingAccountIndexes = async (): Promise<void> => {
 	await Promise.all([
 		collection.createIndex({ workspaceId: 1 }, { unique: true }),
 		collection.createIndex({ status: 1 }),
-		collection.createIndex({ meteringEnabled: 1 }),
+		collection.createIndex({ 'limits.enabled': 1 }),
 		collection.createIndex({ pastDue: 1 }),
 	]);
 
@@ -94,16 +122,13 @@ export const createBillingAccountForWorkspace = async (
 	const account: BillingAccount = {
 		workspaceId,
 		status: 'draft',
-		meteringEnabled: false,
+		limits: { ...DEFAULT_LIMITS },
 		billingCadence: 'monthly',
 		currency: 'USD',
 		netTermDays: 30,
 		paymentMode: 'offline_wire',
 		periodStart,
 		periodEnd,
-		usageLimits: { ...DEFAULT_USAGE_LIMITS },
-		included: { ...DEFAULT_INCLUDED_LIMITS },
-		workspacePreferences: { enforcementMode: 'overage' },
 		sso: { enabled: false },
 		pastDue: false,
 		createdAt: now,

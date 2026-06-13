@@ -32,7 +32,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			db.collection('users').countDocuments({ userType: 'admin', workspaceId: { $ne: null } }),
 			db.collection(BILLING_ACCOUNTS_COLLECTION).countDocuments({}),
 			db.collection(BILLING_ACCOUNTS_COLLECTION).countDocuments({ pastDue: true }),
-			db.collection(BILLING_ACCOUNTS_COLLECTION).countDocuments({ meteringEnabled: true }),
+			db.collection(BILLING_ACCOUNTS_COLLECTION).countDocuments({ 'limits.enabled': true }),
 		]);
 
 		return ResponseWrapper.success({

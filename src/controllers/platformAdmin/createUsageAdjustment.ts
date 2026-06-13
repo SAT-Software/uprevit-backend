@@ -1,11 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
-import {
-	USAGE_ADJUSTMENTS_COLLECTION,
-	type BillingUsageMetric,
-	type UsageAdjustment,
-	type UsageUnit,
-} from '../../models/billing';
+import type { BillingUsageMetric, UsageUnit } from '../../models/billing';
 import { Workspace } from '../../models/workspace';
 import { getDb } from '../../utils/db';
 import { ResponseWrapper } from '../../utils/responseWrapper';
@@ -13,16 +8,20 @@ import { logError } from '../../utils/logger';
 import { requirePlatformOperator } from '../../utils/platformAdminContext';
 import { recordPlatformAuditEvent } from '../../utils/platformAuditLog';
 import { getBillingAccountByWorkspaceId } from '../../utils/billing/billingAccounts';
-import { resolveBillingPeriod } from '../../utils/billing/billingPeriod';
+import { resolveUsagePeriod } from '../../utils/billing/billingPeriod';
 import { recordUsageEvent } from '../../utils/billing/usageRecording';
-import { serializeUsageAdjustment } from '../../utils/billing/serializers';
+import { serializeUsageEvent } from '../../utils/billing/serializers';
+import {
+	buildChargebeeDeduplicationId,
+	trySyncUsageEventToChargebee,
+} from '../../utils/billing/usageEventChargebeeSync';
 
 const METRICS: BillingUsageMetric[] = ['completed_export', 'upload_bytes'];
 
 /**
- * Creates a platform usage adjustment and records a matching usage event.
+ * Creates a platform usage adjustment as a usage event.
  * @param {APIGatewayProxyEvent} event API Gateway request event
- * @return {Promise<APIGatewayProxyResult>} Usage adjustment created payload
+ * @return {Promise<APIGatewayProxyResult>} Usage event created payload
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
@@ -58,27 +57,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const account = await getBillingAccountByWorkspaceId(workspaceObjectId);
 		if (!account) return ResponseWrapper.notFound('Billing account not found');
 
-		const { periodStart, periodEnd } = resolveBillingPeriod(account);
+		const { periodStart, periodEnd } = resolveUsagePeriod(account);
 		const unit: UsageUnit = input.metric === 'upload_bytes' ? 'bytes' : 'count';
 		const now = new Date();
 		const { operator } = operatorResult.context;
+		const adjustmentId = new ObjectId();
 
-		const adjustment: UsageAdjustment = {
-			workspaceId: workspaceObjectId,
-			billingAccountId: account._id,
-			metric: input.metric,
-			quantityDelta: input.quantityDelta,
-			unit,
-			billingPeriodStart: periodStart,
-			billingPeriodEnd: periodEnd,
-			createdByPlatformAdminId: operator._id!,
-			createdAt: now,
-		};
-
-		const insertResult = await db.collection<UsageAdjustment>(USAGE_ADJUSTMENTS_COLLECTION).insertOne(adjustment);
-		const adjustmentId = insertResult.insertedId;
-
-		await recordUsageEvent({
+		const idempotencyKey = `adjustment:${adjustmentId.toString()}`;
+		const insertedEvent = await recordUsageEvent({
 			workspaceId: workspaceObjectId,
 			billingAccountId: account._id,
 			metric: input.metric,
@@ -86,10 +72,27 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			unit,
 			source: 'platform_adjustment',
 			sourceId: adjustmentId.toString(),
-			idempotencyKey: `adjustment:${adjustmentId.toString()}`,
+			idempotencyKey,
 			occurredAt: now,
 			billingPeriodStart: periodStart,
 			billingPeriodEnd: periodEnd,
+			metadata: {
+				createdByPlatformAdminId: operator._id?.toString(),
+			},
+			chargebeeSync: {
+				status: 'pending',
+				deduplicationId: buildChargebeeDeduplicationId(idempotencyKey),
+				attempts: 0,
+			},
+		});
+
+		if (!insertedEvent?._id) {
+			return ResponseWrapper.conflict('Usage adjustment already exists');
+		}
+
+		await trySyncUsageEventToChargebee({
+			event: insertedEvent as typeof insertedEvent & { _id: ObjectId },
+			account,
 		});
 
 		const { auth } = operatorResult.context;
@@ -97,7 +100,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			action: 'usage.adjustment.create',
 			targetType: 'usage_event',
 			workspaceId: workspaceObjectId,
-			entityId: adjustmentId.toString(),
+			entityId: insertedEvent._id.toString(),
 			summary: `Created usage adjustment for ${workspace.workspaceName}`,
 			auth: auth.payload,
 			operator,
@@ -107,7 +110,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		return ResponseWrapper.created({
 			message: 'Usage adjustment created',
-			data: serializeUsageAdjustment({ ...adjustment, _id: adjustmentId }),
+			data: serializeUsageEvent(insertedEvent as typeof insertedEvent & { _id: ObjectId }),
 		});
 	} catch (error) {
 		logError('Platform admin create usage adjustment failed', error);

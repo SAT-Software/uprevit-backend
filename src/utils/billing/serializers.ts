@@ -1,41 +1,51 @@
 import { ObjectId } from 'mongodb';
-import type {
-	BillingAccount,
-	UsageAdjustment,
-	UsageEvent,
-	UsageSnapshot,
-} from '../../models/billing';
+import type { BillingAccount, UsageEvent } from '../../models/billing';
 import type { Workspace } from '../../models/workspace';
-import { bytesToGb, resolveBillingPeriod } from './billingPeriod';
-import { normalizeUsageLimits, usageLimitsToIncluded } from './billingAccounts';
+import { bytesToGb, resolveUsagePeriod } from './billingPeriod';
+import { limitsToUsageLimits, normalizeLimits } from './billingAccounts';
 import { buildLimitStatus } from './limitStatus';
 import { aggregateUsageForPeriod } from './usageRecording';
 
-export const serializeBillingAccount = (account: BillingAccount & { _id: ObjectId }) => ({
-	id: account._id.toString(),
-	workspaceId: account.workspaceId.toString(),
-	status: account.status,
-	meteringEnabled: account.meteringEnabled,
-	limitsEnabled: account.meteringEnabled,
-	billingCadence: account.billingCadence,
-	currency: account.currency,
-	netTermDays: account.netTermDays,
-	paymentMode: account.paymentMode,
-	periodStart: account.periodStart?.toISOString() ?? null,
-	periodEnd: account.periodEnd?.toISOString() ?? null,
-	usageLimits: normalizeUsageLimits(account),
-	included: usageLimitsToIncluded(normalizeUsageLimits(account)),
-	workspacePreferences: account.workspacePreferences,
-	sso: {
-		enabled: account.sso.enabled,
-		enabledAt: account.sso.enabledAt?.toISOString() ?? null,
-		disabledAt: account.sso.disabledAt?.toISOString() ?? null,
-	},
-	pastDue: account.pastDue,
-	lastReconciledAt: account.lastReconciledAt?.toISOString() ?? null,
-	createdAt: account.createdAt.toISOString(),
-	updatedAt: account.updatedAt.toISOString(),
-});
+export const serializeBillingAccount = (account: BillingAccount & { _id: ObjectId }) => {
+	const limits = normalizeLimits(account);
+
+	return {
+		id: account._id.toString(),
+		workspaceId: account.workspaceId.toString(),
+		status: account.status,
+		limits,
+		limitsEnabled: limits.enabled,
+		meteringEnabled: limits.enabled,
+		billingCadence: account.billingCadence,
+		currency: account.currency,
+		netTermDays: account.netTermDays,
+		paymentMode: account.paymentMode,
+		periodStart: account.periodStart?.toISOString() ?? null,
+		periodEnd: account.periodEnd?.toISOString() ?? null,
+		usageLimits: limitsToUsageLimits(limits),
+		chargebee: account.chargebee
+			? {
+				customerId: account.chargebee.customerId ?? null,
+				subscriptionId: account.chargebee.subscriptionId ?? null,
+				subscriptionStatus: account.chargebee.subscriptionStatus ?? null,
+				planId: account.chargebee.planId ?? null,
+				planName: account.chargebee.planName ?? null,
+				billingCadence: account.chargebee.billingCadence ?? null,
+				currentTermStart: account.chargebee.currentTermStart?.toISOString() ?? null,
+				currentTermEnd: account.chargebee.currentTermEnd?.toISOString() ?? null,
+				nextBillingAt: account.chargebee.nextBillingAt?.toISOString() ?? null,
+			}
+			: null,
+		sso: {
+			enabled: account.sso.enabled,
+			enabledAt: account.sso.enabledAt?.toISOString() ?? null,
+			disabledAt: account.sso.disabledAt?.toISOString() ?? null,
+		},
+		pastDue: account.pastDue,
+		createdAt: account.createdAt.toISOString(),
+		updatedAt: account.updatedAt.toISOString(),
+	};
+};
 
 export const serializeWorkspaceBillingPreview = (account: BillingAccount | null) => {
 	if (!account) {
@@ -49,10 +59,12 @@ export const serializeWorkspaceBillingPreview = (account: BillingAccount | null)
 		};
 	}
 
+	const limits = normalizeLimits(account);
+
 	return {
 		status: account.status,
-		meteringEnabled: account.meteringEnabled,
-		limitsEnabled: account.meteringEnabled,
+		meteringEnabled: limits.enabled,
+		limitsEnabled: limits.enabled,
 		billingCadence: account.billingCadence,
 		currency: account.currency,
 		pastDue: account.pastDue,
@@ -81,10 +93,11 @@ export const buildBillingSummary = async ({
 	account: BillingAccount & { _id: ObjectId };
 	workspaceId: ObjectId;
 }) => {
-	const { periodStart, periodEnd } = resolveBillingPeriod(account);
+	const limits = normalizeLimits(account);
+	const { periodStart, periodEnd, source } = resolveUsagePeriod(account);
 	const usage = await aggregateUsageForPeriod({ workspaceId, periodStart, periodEnd });
 	const uploadGb = bytesToGb(usage.uploadBytes);
-	const usageLimits = normalizeUsageLimits(account);
+	const usageLimits = limitsToUsageLimits(limits);
 	const limitStatus = buildLimitStatus({
 		activeSeats: usage.activeSeats,
 		exports: usage.exports,
@@ -97,6 +110,7 @@ export const buildBillingSummary = async ({
 		period: {
 			start: periodStart.toISOString(),
 			end: periodEnd.toISOString(),
+			source,
 		},
 		usage: {
 			activeSeats: usage.activeSeats,
@@ -104,15 +118,15 @@ export const buildBillingSummary = async ({
 			uploadBytes: usage.uploadBytes,
 			uploadGb,
 		},
+		limits,
 		usageLimits,
-		included: usageLimitsToIncluded(usageLimits),
 		limitStatus,
 		addOns: {
 			ssoEnabled: account.sso.enabled,
 		},
-		enforcementMode: account.workspacePreferences.enforcementMode,
-		meteringEnabled: account.meteringEnabled,
-		limitsEnabled: account.meteringEnabled,
+		enforcementMode: limits.enforcementMode,
+		limitsEnabled: limits.enabled,
+		meteringEnabled: limits.enabled,
 	};
 };
 
@@ -126,27 +140,12 @@ export const serializeUsageEvent = (event: UsageEvent & { _id: ObjectId }) => ({
 	occurredAt: event.occurredAt.toISOString(),
 	billingPeriodStart: event.billingPeriodStart.toISOString(),
 	billingPeriodEnd: event.billingPeriodEnd.toISOString(),
-});
-
-export const serializeUsageSnapshot = (snapshot: UsageSnapshot & { _id: ObjectId }) => ({
-	id: snapshot._id.toString(),
-	periodStart: snapshot.periodStart.toISOString(),
-	periodEnd: snapshot.periodEnd.toISOString(),
-	usage: snapshot.usage,
-	usageLimits: snapshot.usageLimits,
-	included: usageLimitsToIncluded(snapshot.usageLimits),
-	limitStatus: snapshot.limitStatus,
-	reconciliationStatus: snapshot.reconciliationStatus,
-	approvedForBillingAt: snapshot.approvedForBillingAt?.toISOString() ?? null,
-	updatedAt: snapshot.updatedAt.toISOString(),
-});
-
-export const serializeUsageAdjustment = (adjustment: UsageAdjustment & { _id: ObjectId }) => ({
-	id: adjustment._id.toString(),
-	metric: adjustment.metric,
-	quantityDelta: adjustment.quantityDelta,
-	unit: adjustment.unit,
-	billingPeriodStart: adjustment.billingPeriodStart.toISOString(),
-	billingPeriodEnd: adjustment.billingPeriodEnd.toISOString(),
-	createdAt: adjustment.createdAt.toISOString(),
+	chargebeeSync: event.chargebeeSync
+		? {
+			status: event.chargebeeSync.status,
+			deduplicationId: event.chargebeeSync.deduplicationId,
+			attempts: event.chargebeeSync.attempts,
+			lastError: event.chargebeeSync.lastError ?? null,
+		}
+		: null,
 });

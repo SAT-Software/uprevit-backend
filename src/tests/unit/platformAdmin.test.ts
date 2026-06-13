@@ -421,7 +421,7 @@ describe('platformAdmin', () => {
 			expect(getCollection('billingAccounts').findOneAndUpdate).not.toHaveBeenCalled();
 		});
 
-		it('rejects fractional seat limits', async () => {
+		it('rejects manual seat limit edits', async () => {
 			const workspaceId = new ObjectId();
 			mockValidOperatorAuth();
 
@@ -433,13 +433,18 @@ describe('platformAdmin', () => {
 				_id: new ObjectId(),
 				workspaceId,
 				status: 'active',
-				meteringEnabled: true,
+				limits: {
+					enabled: true,
+					enforcementMode: 'block',
+					seats: 5,
+					exports: 100,
+					uploadGb: 10,
+					ssoAllowed: false,
+				},
 				billingCadence: 'monthly',
 				currency: 'USD',
 				netTermDays: 30,
 				paymentMode: 'offline_wire',
-				usageLimits: { seats: 5, exports: 100, uploadGb: 10, ssoAllowed: false },
-				workspacePreferences: { enforcementMode: 'block' },
 				sso: { enabled: false },
 				pastDue: false,
 				createdAt: new Date(),
@@ -449,12 +454,12 @@ describe('platformAdmin', () => {
 			const response = await updateBillingAccountHandler(buildEvent({
 				httpMethod: 'PUT',
 				pathParameters: { workspaceId: workspaceId.toString() },
-				body: JSON.stringify({ usageLimits: { seats: 2.5 } }),
+				body: JSON.stringify({ usageLimits: { seats: 10 } }),
 			}));
 
 			expect(response.statusCode).toBe(400);
 			const body = JSON.parse(response.body);
-			expect(body.message).toContain('whole number');
+			expect(body.message).toContain('Chargebee');
 		});
 
 		it('rejects invalid billing period date strings', async () => {
@@ -507,7 +512,7 @@ describe('platformAdmin', () => {
 			}));
 
 			expect(response.statusCode).toBe(400);
-			expect(getCollection('usageAdjustments').insertOne).not.toHaveBeenCalled();
+			expect(getCollection('usageEvents').insertOne).not.toHaveBeenCalled();
 		});
 	});
 });

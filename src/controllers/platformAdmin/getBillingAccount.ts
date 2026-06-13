@@ -10,10 +10,8 @@ import { getBillingAccountByWorkspaceId } from '../../utils/billing/billingAccou
 import {
 	buildBillingSummary,
 	serializeBillingAccount,
-	serializeUsageSnapshot,
 	serializeWorkspaceFreezes,
 } from '../../utils/billing/serializers';
-import { getCurrentUsageSnapshot } from '../../utils/billing/snapshots';
 
 /**
  * Returns full billing account detail for a workspace.
@@ -38,11 +36,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const account = await getBillingAccountByWorkspaceId(workspaceObjectId);
 		if (!account) return ResponseWrapper.notFound('Billing account not found');
 
-		const snapshot = await getCurrentUsageSnapshot({
-			workspaceId: workspaceObjectId,
-			billingAccount: account,
-		});
-
 		const summary = await buildBillingSummary({
 			account,
 			workspaceId: workspaceObjectId,
@@ -66,7 +59,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			data: {
 				account: serializeBillingAccount(account),
 				summary,
-				snapshot: snapshot?._id ? serializeUsageSnapshot(snapshot) : null,
 				freezes: serializeWorkspaceFreezes(workspace),
 			},
 		});
