@@ -1577,6 +1577,40 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/billing/getBillingChargebee.ts]
 
+  BillingGetInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/getBillingInvoice.lambdaHandler
+      Events:
+        BillingGetInvoice:
+          Type: Api
+          Properties:
+            Path: /billing/invoices/{invoiceId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/billing/getBillingInvoice.ts]
+
+  BillingDownloadInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/downloadBillingInvoice.lambdaHandler
+      Events:
+        BillingDownloadInvoice:
+          Type: Api
+          Properties:
+            Path: /billing/invoices/{invoiceId}/download
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/billing/downloadBillingInvoice.ts]
+
   ChargebeeWebhookFunction:
     Type: AWS::Serverless::Function
     Properties:

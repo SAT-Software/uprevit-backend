@@ -5,19 +5,10 @@ import { isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContex
 import { getBillingAccountByWorkspaceId } from '../../utils/billing/billingAccounts';
 import { serializeBillingAccount } from '../../utils/billing/serializers';
 import { isChargebeeConfigured } from '../../config/chargebeeConfig';
-import { listChargebeeInvoicesForCustomer, type ChargebeeInvoice } from '../../utils/billing/chargebeeClient';
+import { listChargebeeInvoicesForCustomer } from '../../utils/billing/chargebeeClient';
+import { serializeInvoiceSummary } from '../../utils/billing/invoiceSerializers';
 
-const serializeInvoice = (invoice: ChargebeeInvoice) => ({
-	id: invoice.id,
-	status: invoice.status,
-	date: invoice.date ? new Date(invoice.date * 1000).toISOString() : null,
-	dueDate: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : null,
-	total: invoice.total ?? 0,
-	amountPaid: invoice.amount_paid ?? 0,
-	amountDue: invoice.amount_due ?? 0,
-	currencyCode: invoice.currency_code ?? null,
-	subscriptionId: invoice.subscription_id ?? null,
-});
+const serializeInvoice = serializeInvoiceSummary;
 
 /**
  * Returns mirrored Chargebee profile and on-demand invoices for the Billing tab.

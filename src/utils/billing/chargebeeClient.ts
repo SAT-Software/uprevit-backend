@@ -103,6 +103,30 @@ export type ChargebeeSubscription = {
 	subscription_items?: ChargebeeSubscriptionItem[];
 };
 
+export type ChargebeeInvoiceLineItem = {
+	id: string;
+	description?: string;
+	amount?: number;
+	unit_amount?: number;
+	quantity?: number;
+	date_from?: number;
+	date_to?: number;
+	entity_type?: string;
+	entity_id?: string;
+};
+
+export type ChargebeeBillingAddress = {
+	first_name?: string;
+	last_name?: string;
+	company?: string;
+	line1?: string;
+	line2?: string;
+	city?: string;
+	state?: string;
+	zip?: string;
+	country?: string;
+};
+
 export type ChargebeeInvoice = {
 	id: string;
 	customer_id: string;
@@ -113,7 +137,17 @@ export type ChargebeeInvoice = {
 	total?: number;
 	amount_paid?: number;
 	amount_due?: number;
+	sub_total?: number;
 	currency_code?: string;
+	line_items?: ChargebeeInvoiceLineItem[];
+	billing_address?: ChargebeeBillingAddress;
+};
+
+export type ChargebeeDownload = {
+	download_url: string;
+	mime_type?: string;
+	valid_till?: number;
+	object?: string;
 };
 
 export const createChargebeeCustomer = async ({
@@ -180,4 +214,33 @@ export const listChargebeeInvoicesForCustomer = async (
 	});
 
 	return result.list.map((entry) => entry.invoice);
+};
+
+export const retrieveChargebeeInvoice = async (
+	invoiceId: string,
+): Promise<ChargebeeInvoice> => {
+	const result = await chargebeeRequest<ChargebeeEntityResponse<ChargebeeInvoice>>({
+		method: 'GET',
+		path: `/invoices/${encodeURIComponent(invoiceId)}`,
+	});
+
+	return result.invoice;
+};
+
+export const retrieveChargebeeInvoicePdf = async (
+	invoiceId: string,
+): Promise<ChargebeeDownload> => {
+	const result = await chargebeeRequest<{ download: ChargebeeDownload }>({
+		method: 'POST',
+		path: `/invoices/${encodeURIComponent(invoiceId)}/pdf`,
+		body: {
+			disposition_type: 'attachment',
+		},
+	});
+
+	if (!result.download?.download_url) {
+		throw new Error('Invoice PDF download not available');
+	}
+
+	return result.download;
 };
