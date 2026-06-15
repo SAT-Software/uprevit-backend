@@ -202,19 +202,30 @@ export const updateChargebeeSubscriptionOfflineBilling = async (
 
 export const listChargebeeInvoicesForCustomer = async (
 	customerId: string,
-	limit = 20,
+	limit = 100,
 ): Promise<ChargebeeInvoice[]> => {
-	const result = await chargebeeRequest<ChargebeeListResponse<ChargebeeInvoice>>({
-		method: 'GET',
-		path: '/invoices',
-		query: {
-			'customer_id[is]': customerId,
-			limit,
-			'sort_by[desc]': 'date',
-		},
-	});
+	const invoices: ChargebeeInvoice[] = [];
+	let offset: string | undefined;
+	const maxPages = 10;
 
-	return result.list.map((entry) => entry.invoice);
+	for (let page = 0; page < maxPages; page += 1) {
+		const result = await chargebeeRequest<ChargebeeListResponse<ChargebeeInvoice>>({
+			method: 'GET',
+			path: '/invoices',
+			query: {
+				'customer_id[is]': customerId,
+				limit,
+				'sort_by[desc]': 'date',
+				...(offset ? { offset } : {}),
+			},
+		});
+
+		invoices.push(...result.list.map((entry) => entry.invoice));
+		if (!result.next_offset) break;
+		offset = result.next_offset;
+	}
+
+	return invoices;
 };
 
 export const retrieveChargebeeInvoice = async (

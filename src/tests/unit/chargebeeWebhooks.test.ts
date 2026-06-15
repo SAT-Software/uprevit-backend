@@ -1,7 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals';
-import { buildChargebeeMirrorUpdate } from '../../utils/billing/chargebeeWebhooks';
+import {
+	buildChargebeeMirrorUpdate,
+	claimChargebeeWebhook,
+} from '../../utils/billing/chargebeeWebhooks';
 import type { BillingAccount } from '../../models/billing';
 import { ObjectId } from 'mongodb';
+
+jest.mock('../../utils/db', () => ({
+	getDb: jest.fn(),
+}));
+
+import { getDb } from '../../utils/db';
+
+const mockGetDb = getDb as jest.MockedFunction<typeof getDb>;
 
 describe('chargebee webhooks mirror', () => {
 	const baseAccount: BillingAccount & { _id: ObjectId } = {
@@ -57,5 +68,79 @@ describe('chargebee webhooks mirror', () => {
 		expect(update.sso?.enabled).toBe(true);
 		expect(update.chargebee?.subscriptionId).toBe('sub_123');
 		expect(update.billingCadence).toBe('monthly');
+	});
+
+	it('marks past due when due_invoices_count is positive', () => {
+		const update = buildChargebeeMirrorUpdate(baseAccount, {
+			id: 'sub_123',
+			customer_id: 'cust_123',
+			status: 'active',
+			due_invoices_count: 2,
+		});
+
+		expect(update.pastDue).toBe(true);
+		expect(update.status).toBe('past_due');
+	});
+
+	it('clears past due when due_invoices_count is zero', () => {
+		const update = buildChargebeeMirrorUpdate(
+			{ ...baseAccount, pastDue: true, status: 'past_due' },
+			{
+				id: 'sub_123',
+				customer_id: 'cust_123',
+				status: 'active',
+				due_invoices_count: 0,
+			},
+		);
+
+		expect(update.pastDue).toBe(false);
+		expect(update.status).toBe('active');
+	});
+
+	it('honors explicit invoicePastDue override', () => {
+		const update = buildChargebeeMirrorUpdate(
+			baseAccount,
+			{
+				id: 'sub_123',
+				customer_id: 'cust_123',
+				status: 'active',
+				due_invoices_count: 0,
+			},
+			{ invoicePastDue: true },
+		);
+
+		expect(update.pastDue).toBe(true);
+		expect(update.status).toBe('past_due');
+	});
+});
+
+describe('claimChargebeeWebhook', () => {
+	beforeEach(() => {
+		jest.clearAllMocks();
+	});
+
+	it('returns claimed on first insert', async () => {
+		const insertOne = jest.fn().mockResolvedValue({ acknowledged: true });
+		mockGetDb.mockResolvedValue({
+			collection: jest.fn().mockReturnValue({
+				createIndex: jest.fn().mockResolvedValue(undefined),
+				insertOne,
+			}),
+		} as never);
+
+		await expect(claimChargebeeWebhook('evt_1', 'invoice_generated')).resolves.toBe('claimed');
+		expect(insertOne).toHaveBeenCalledWith(expect.objectContaining({ eventId: 'evt_1' }));
+	});
+
+	it('returns duplicate on unique index conflict', async () => {
+		const insertOne = jest.fn().mockRejectedValue({ code: 11000 });
+		mockGetDb.mockResolvedValue({
+			collection: jest.fn().mockReturnValue({
+				createIndex: jest.fn().mockResolvedValue(undefined),
+				insertOne,
+			}),
+		} as never);
+
+		await expect(claimChargebeeWebhook('evt_1', 'invoice_generated')).resolves.toBe('duplicate');
 	});
 });

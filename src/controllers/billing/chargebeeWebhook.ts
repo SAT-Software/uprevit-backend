@@ -7,19 +7,15 @@ import {
 	getChargebeeWebhookUsername,
 	isChargebeeWebhookConfigured,
 } from '../../config/chargebeeConfig';
-import {
-	retrieveChargebeeSubscription,
-	type ChargebeeSubscription,
-} from '../../utils/billing/chargebeeClient';
+import type { ChargebeeSubscription } from '../../utils/billing/chargebeeClient';
 import {
 	applyChargebeeSubscriptionMirror,
+	claimChargebeeWebhook,
 	findBillingAccountByChargebeeCustomerId,
 	findBillingAccountByChargebeeSubscriptionId,
-	hasProcessedChargebeeWebhook,
-	markChargebeeWebhookProcessed,
+	releaseChargebeeWebhookClaim,
+	syncPastDueFromChargebee,
 } from '../../utils/billing/chargebeeWebhooks';
-import { getDb } from '../../utils/db';
-import { BILLING_ACCOUNTS_COLLECTION, type BillingAccount } from '../../models/billing';
 
 const safeCompare = (left: string, right: string): boolean => {
 	const leftBuffer = Buffer.from(left);
@@ -57,29 +53,14 @@ const subscriptionFromContent = (content: Record<string, unknown>): ChargebeeSub
 	return subscription as ChargebeeSubscription;
 };
 
-const markPastDueForSubscription = async (subscriptionId: string): Promise<void> => {
-	const account = await findBillingAccountByChargebeeSubscriptionId(subscriptionId);
-	if (!account) return;
-
-	const db = await getDb();
-	await db.collection<BillingAccount>(BILLING_ACCOUNTS_COLLECTION).updateOne(
-		{ _id: account._id },
-		{
-			$set: {
-				status: 'past_due',
-				pastDue: true,
-				updatedAt: new Date(),
-			},
-		},
-	);
-};
-
 /**
  * Processes Chargebee webhook events to mirror subscription terms, seats, and SSO.
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Acknowledgement response
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+	let eventId: string | undefined;
+
 	try {
 		if (!isAuthorized(event)) {
 			return ResponseWrapper.unauthorized('Unauthorized');
@@ -101,13 +82,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Invalid JSON in request body');
 		}
 
-		const eventId = payload.id?.trim();
+		eventId = payload.id?.trim();
 		const eventType = payload.event_type?.trim();
 		if (!eventId || !eventType) {
 			return ResponseWrapper.badRequest('Invalid webhook payload');
 		}
 
-		if (await hasProcessedChargebeeWebhook(eventId)) {
+		const claim = await claimChargebeeWebhook(eventId, eventType);
+		if (claim === 'duplicate') {
 			return ResponseWrapper.success({ message: 'Webhook already processed' });
 		}
 
@@ -137,31 +119,24 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		if (eventType === 'invoice_generated' || eventType === 'invoice_updated') {
-			const invoice = content.invoice as { subscription_id?: string; status?: string } | undefined;
-			if (invoice?.subscription_id && (invoice.status === 'payment_due' || invoice.status === 'not_paid')) {
-				await markPastDueForSubscription(invoice.subscription_id);
+			const invoice = content.invoice as { subscription_id?: string } | undefined;
+			if (invoice?.subscription_id) {
+				await syncPastDueFromChargebee(invoice.subscription_id);
 			}
 		}
 
 		if (eventType === 'payment_succeeded') {
 			const invoice = content.invoice as { subscription_id?: string } | undefined;
 			if (invoice?.subscription_id) {
-				const account = await findBillingAccountByChargebeeSubscriptionId(invoice.subscription_id);
-				if (account) {
-					const refreshedSubscription = await retrieveChargebeeSubscription(invoice.subscription_id);
-					const stillHasDues = (refreshedSubscription.due_invoices_count ?? 0) > 0;
-					await applyChargebeeSubscriptionMirror({
-						account,
-						subscription: refreshedSubscription,
-						invoicePastDue: stillHasDues,
-					});
-				}
+				await syncPastDueFromChargebee(invoice.subscription_id);
 			}
 		}
 
-		await markChargebeeWebhookProcessed(eventId, eventType);
 		return ResponseWrapper.success({ message: 'Webhook processed' });
 	} catch (error) {
+		if (eventId) {
+			await releaseChargebeeWebhookClaim(eventId).catch(() => undefined);
+		}
 		logError('Chargebee webhook processing failed', error);
 		return ResponseWrapper.internalServerError('Failed to process webhook');
 	}

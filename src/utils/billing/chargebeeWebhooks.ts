@@ -10,7 +10,11 @@ import {
 	getChargebeeSeatAddonItemPriceId,
 	getChargebeeSsoAddonItemPriceId,
 } from '../../config/chargebeeConfig';
-import type { ChargebeeSubscription, ChargebeeSubscriptionItem } from './chargebeeClient';
+import {
+	retrieveChargebeeSubscription,
+	type ChargebeeSubscription,
+	type ChargebeeSubscriptionItem,
+} from './chargebeeClient';
 import { normalizeLimits } from './billingAccounts';
 
 export const CHARGEBEE_WEBHOOK_EVENTS_COLLECTION = 'chargebeeWebhookEvents';
@@ -29,21 +33,34 @@ export const ensureChargebeeWebhookIndexes = async (): Promise<void> => {
 	hasEnsuredWebhookIndexes = true;
 };
 
-export const hasProcessedChargebeeWebhook = async (eventId: string): Promise<boolean> => {
+const isDuplicateKeyError = (error: unknown): boolean =>
+	typeof error === 'object'
+	&& error !== null
+	&& 'code' in error
+	&& (error as { code?: number }).code === 11000;
+
+export const claimChargebeeWebhook = async (
+	eventId: string,
+	eventType: string,
+): Promise<'claimed' | 'duplicate'> => {
 	await ensureChargebeeWebhookIndexes();
 	const db = await getDb();
-	const existing = await db.collection(CHARGEBEE_WEBHOOK_EVENTS_COLLECTION).findOne({ eventId });
-	return Boolean(existing);
+	try {
+		await db.collection(CHARGEBEE_WEBHOOK_EVENTS_COLLECTION).insertOne({
+			eventId,
+			eventType,
+			processedAt: new Date(),
+		});
+		return 'claimed';
+	} catch (error) {
+		if (isDuplicateKeyError(error)) return 'duplicate';
+		throw error;
+	}
 };
 
-export const markChargebeeWebhookProcessed = async (eventId: string, eventType: string): Promise<void> => {
-	await ensureChargebeeWebhookIndexes();
+export const releaseChargebeeWebhookClaim = async (eventId: string): Promise<void> => {
 	const db = await getDb();
-	await db.collection(CHARGEBEE_WEBHOOK_EVENTS_COLLECTION).insertOne({
-		eventId,
-		eventType,
-		processedAt: new Date(),
-	});
+	await db.collection(CHARGEBEE_WEBHOOK_EVENTS_COLLECTION).deleteOne({ eventId });
 };
 
 const unixToDate = (value?: number): Date | undefined => {
@@ -58,7 +75,7 @@ const mapBillingCadence = (subscription: ChargebeeSubscription): BillingCadence 
 };
 
 const mapAccountStatus = (subscriptionStatus: string, invoicePastDue = false): BillingAccountStatus => {
-	if (invoicePastDue || subscriptionStatus === 'past_due') return 'past_due';
+	if (invoicePastDue) return 'past_due';
 	if (subscriptionStatus === 'cancelled') return 'cancelled';
 	if (subscriptionStatus === 'active' || subscriptionStatus === 'non_renewing') return 'active';
 	if (subscriptionStatus === 'in_trial') return 'pilot';
@@ -87,6 +104,7 @@ export const buildChargebeeMirrorUpdate = (
 	subscription: ChargebeeSubscription,
 	options: { invoicePastDue?: boolean } = {},
 ): Partial<BillingAccount> => {
+	const invoicePastDue = options.invoicePastDue ?? (subscription.due_invoices_count ?? 0) > 0;
 	const limits = normalizeLimits(account);
 	const items = subscriptionItems(subscription);
 	const seatItemPriceId = getChargebeeSeatAddonItemPriceId();
@@ -99,8 +117,8 @@ export const buildChargebeeMirrorUpdate = (
 	const now = new Date();
 
 	return {
-		status: mapAccountStatus(subscription.status, options.invoicePastDue),
-		pastDue: options.invoicePastDue ?? subscription.status === 'past_due',
+		status: mapAccountStatus(subscription.status, invoicePastDue),
+		pastDue: invoicePastDue,
 		billingCadence: mapBillingCadence(subscription) ?? account.billingCadence,
 		limits: {
 			...limits,
@@ -183,4 +201,13 @@ export const applyChargebeeSubscriptionMirror = async ({
 	});
 
 	return updated as BillingAccount & { _id: ObjectId };
+};
+
+export const syncPastDueFromChargebee = async (subscriptionId: string): Promise<void> => {
+	const account = await findBillingAccountByChargebeeSubscriptionId(subscriptionId);
+	if (!account) return;
+
+	const subscription = await retrieveChargebeeSubscription(subscriptionId);
+	const invoicePastDue = (subscription.due_invoices_count ?? 0) > 0;
+	await applyChargebeeSubscriptionMirror({ account, subscription, invoicePastDue });
 };

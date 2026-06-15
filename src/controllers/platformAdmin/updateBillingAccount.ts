@@ -34,7 +34,6 @@ type UpdateBillingInput = {
 	paymentMode?: BillingPaymentMode;
 	periodStart?: string;
 	periodEnd?: string;
-	pastDue?: boolean;
 	ssoEnabled?: boolean;
 	limits?: Partial<WorkspaceLimits>;
 	usageLimits?: Partial<Pick<WorkspaceLimits, 'seats' | 'exports' | 'uploadGb' | 'ssoAllowed'>>;
@@ -79,6 +78,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		let limitsChanged = false;
 
 		if (input.status !== undefined) {
+			if (input.status === 'past_due') {
+				return ResponseWrapper.badRequest('past_due is mirrored from Chargebee and cannot be set manually');
+			}
 			if (!ACCOUNT_STATUSES.includes(input.status)) {
 				return ResponseWrapper.badRequest('Invalid billing account status');
 			}
@@ -98,7 +100,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}
 			updates.paymentMode = input.paymentMode;
 		}
-		if (typeof input.pastDue === 'boolean') updates.pastDue = input.pastDue;
 		if (input.periodStart !== undefined) {
 			const parsedPeriodStart = parseOptionalIsoDate(input.periodStart, 'periodStart');
 			if (!parsedPeriodStart.ok) return ResponseWrapper.badRequest(parsedPeriodStart.message);
