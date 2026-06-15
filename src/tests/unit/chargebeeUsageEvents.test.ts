@@ -44,10 +44,11 @@ describe('chargebee usage events', () => {
 		expect(isChargebeeConfigured()).toBe(false);
 	});
 
-	it('converts upload bytes to whole MB rounded up', () => {
+	it('converts upload bytes to fractional MB', () => {
 		expect(bytesToUploadMb(3 * 1024 * 1024)).toBe(3);
 		expect(bytesToUploadMb(1024 * 1024)).toBe(1);
-		expect(bytesToUploadMb(1024 * 1024 + 1)).toBe(2);
+		expect(bytesToUploadMb(1024 * 1024 + 1)).toBeCloseTo(1 + 1 / (1024 * 1024));
+		expect(bytesToUploadMb(512 * 1024)).toBe(0.5);
 	});
 
 	it('builds stable unique Chargebee deduplication IDs within the length limit', () => {

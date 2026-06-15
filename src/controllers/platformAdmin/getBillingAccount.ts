@@ -7,6 +7,7 @@ import { logError } from '../../utils/logger';
 import { requirePlatformOperator } from '../../utils/platformAdminContext';
 import { recordPlatformAuditEvent } from '../../utils/platformAuditLog';
 import { getBillingAccountByWorkspaceId } from '../../utils/billing/billingAccounts';
+import { countFailedUsageEventSyncs } from '../../utils/billing/usageEventChargebeeSync';
 import {
 	buildBillingSummary,
 	serializeBillingAccount,
@@ -36,10 +37,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const account = await getBillingAccountByWorkspaceId(workspaceObjectId);
 		if (!account) return ResponseWrapper.notFound('Billing account not found');
 
-		const summary = await buildBillingSummary({
-			account,
-			workspaceId: workspaceObjectId,
-		});
+		const [summary, failedUsageEventSyncCount] = await Promise.all([
+			buildBillingSummary({
+				account,
+				workspaceId: workspaceObjectId,
+			}),
+			countFailedUsageEventSyncs(workspaceObjectId),
+		]);
 
 		const { auth, operator } = operatorResult.context;
 		await recordPlatformAuditEvent({
@@ -60,6 +64,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				account: serializeBillingAccount(account),
 				summary,
 				freezes: serializeWorkspaceFreezes(workspace),
+				failedUsageEventSyncCount,
 			},
 		});
 	} catch (error) {

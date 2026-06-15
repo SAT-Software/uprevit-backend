@@ -22,6 +22,14 @@ jest.mock('../../utils/billing/enforcement', () => ({
 
 jest.mock('../../utils/billing/billingAccounts', () => ({
 	getBillingAccountByWorkspaceId: jest.fn(),
+	normalizeLimits: jest.fn((account: { meteringEnabled?: boolean }) => ({
+		enabled: account?.meteringEnabled ?? false,
+		enforcementMode: 'overage',
+		seats: 5,
+		exports: 100,
+		uploadGb: 10,
+		ssoAllowed: false,
+	})),
 }));
 
 jest.mock('../../utils/billing/uploadCommit', () => ({

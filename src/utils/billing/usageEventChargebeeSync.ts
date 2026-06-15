@@ -270,7 +270,6 @@ export const processScheduledUsageEventRetries = async (): Promise<{
 	const db = await getDb();
 	const now = new Date();
 	const windowStart = new Date(now.getTime() - CHARGEBEE_USAGE_WINDOW_MS);
-	const retryWindowStart = new Date(now.getTime() - 11 * 60 * 60 * 1000);
 
 	const agedOut = await db.collection<UsageEvent>(USAGE_EVENTS_COLLECTION).updateMany(
 		{
@@ -289,7 +288,7 @@ export const processScheduledUsageEventRetries = async (): Promise<{
 
 	const events = await db.collection<UsageEvent>(USAGE_EVENTS_COLLECTION).find({
 		metric: { $in: ['completed_export', 'upload_bytes'] },
-		occurredAt: { $gte: retryWindowStart },
+		occurredAt: { $gte: windowStart },
 		'chargebeeSync.status': { $in: RETRYABLE_STATUSES },
 	}).limit(100).toArray();
 

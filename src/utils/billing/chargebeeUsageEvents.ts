@@ -4,7 +4,7 @@ export { isChargebeeConfigured };
 
 const BYTES_PER_MB = 1024 * 1024;
 
-export const bytesToUploadMb = (bytes: number): number => Math.ceil(bytes / BYTES_PER_MB);
+export const bytesToUploadMb = (bytes: number): number => bytes / BYTES_PER_MB;
 
 export const ingestUsageEvent = async ({
 	subscriptionId,
