@@ -7,7 +7,10 @@ import {
 	getChargebeeWebhookUsername,
 	isChargebeeWebhookConfigured,
 } from '../../config/chargebeeConfig';
-import type { ChargebeeSubscription } from '../../utils/billing/chargebeeClient';
+import {
+	retrieveChargebeeSubscription,
+	type ChargebeeSubscription,
+} from '../../utils/billing/chargebeeClient';
 import {
 	applyChargebeeSubscriptionMirror,
 	findBillingAccountByChargebeeCustomerId,
@@ -71,22 +74,6 @@ const markPastDueForSubscription = async (subscriptionId: string): Promise<void>
 	);
 };
 
-const clearPastDueForSubscription = async (subscriptionId: string): Promise<void> => {
-	const account = await findBillingAccountByChargebeeSubscriptionId(subscriptionId);
-	if (!account) return;
-
-	const db = await getDb();
-	await db.collection<BillingAccount>(BILLING_ACCOUNTS_COLLECTION).updateOne(
-		{ _id: account._id },
-		{
-			$set: {
-				pastDue: false,
-				updatedAt: new Date(),
-			},
-		},
-	);
-};
-
 /**
  * Processes Chargebee webhook events to mirror subscription terms, seats, and SSO.
  * @param {APIGatewayProxyEvent} event API Gateway request event
@@ -135,6 +122,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				'subscription_renewed',
 				'subscription_activated',
 				'subscription_reactivated',
+				'subscription_cancelled',
+				'subscription_deleted',
 			].includes(eventType)
 		) {
 			const account = await findBillingAccountByChargebeeSubscriptionId(subscription.id)
@@ -157,7 +146,16 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (eventType === 'payment_succeeded') {
 			const invoice = content.invoice as { subscription_id?: string } | undefined;
 			if (invoice?.subscription_id) {
-				await clearPastDueForSubscription(invoice.subscription_id);
+				const account = await findBillingAccountByChargebeeSubscriptionId(invoice.subscription_id);
+				if (account) {
+					const refreshedSubscription = await retrieveChargebeeSubscription(invoice.subscription_id);
+					const stillHasDues = (refreshedSubscription.due_invoices_count ?? 0) > 0;
+					await applyChargebeeSubscriptionMirror({
+						account,
+						subscription: refreshedSubscription,
+						invoicePastDue: stillHasDues,
+					});
+				}
 			}
 		}
 

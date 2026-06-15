@@ -91,10 +91,12 @@ export const buildChargebeeMirrorUpdate = (
 	const items = subscriptionItems(subscription);
 	const seatItemPriceId = getChargebeeSeatAddonItemPriceId();
 	const ssoItemPriceId = getChargebeeSsoAddonItemPriceId();
+	const planItem = items.find((item) => item.item_type === 'plan') ?? items[0];
 	const seatQuantity = findAddonQuantity(items, seatItemPriceId);
+	const planItemQuantity = typeof planItem?.quantity === 'number' ? planItem.quantity : undefined;
+	const resolvedSeats = seatQuantity ?? planItemQuantity ?? limits.seats;
 	const ssoPresent = hasAddon(items, ssoItemPriceId);
 	const now = new Date();
-	const planItem = items.find((item) => item.item_type === 'plan') ?? items[0];
 
 	return {
 		status: mapAccountStatus(subscription.status, options.invoicePastDue),
@@ -102,7 +104,7 @@ export const buildChargebeeMirrorUpdate = (
 		billingCadence: mapBillingCadence(subscription) ?? account.billingCadence,
 		limits: {
 			...limits,
-			seats: typeof seatQuantity === 'number' ? seatQuantity : limits.seats,
+			seats: resolvedSeats,
 			ssoAllowed: ssoPresent,
 		},
 		sso: ssoPresent

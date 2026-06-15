@@ -100,6 +100,7 @@ export type ChargebeeSubscription = {
 	current_term_start?: number;
 	current_term_end?: number;
 	next_billing_at?: number;
+	due_invoices_count?: number;
 	subscription_items?: ChargebeeSubscriptionItem[];
 };
 
