@@ -114,6 +114,7 @@ export const buildChargebeeMirrorUpdate = (
 	const planItemQuantity = typeof planItem?.quantity === 'number' ? planItem.quantity : undefined;
 	const resolvedSeats = seatQuantity ?? planItemQuantity ?? limits.seats;
 	const ssoPresent = hasAddon(items, ssoItemPriceId);
+	const sso = account.sso ?? { enabled: false };
 	const now = new Date();
 
 	return {
@@ -128,13 +129,13 @@ export const buildChargebeeMirrorUpdate = (
 		sso: ssoPresent
 			? {
 				enabled: true,
-				enabledAt: account.sso.enabled ? account.sso.enabledAt ?? now : now,
+				enabledAt: sso.enabled ? sso.enabledAt ?? now : now,
 				disabledAt: undefined,
 			}
 			: {
 				enabled: false,
-				enabledAt: account.sso.enabledAt,
-				disabledAt: account.sso.enabled ? now : account.sso.disabledAt,
+				enabledAt: sso.enabledAt,
+				disabledAt: sso.enabled ? now : sso.disabledAt,
 			},
 		chargebee: {
 			...(account.chargebee ?? {}),
@@ -203,11 +204,12 @@ export const applyChargebeeSubscriptionMirror = async ({
 	return updated as BillingAccount & { _id: ObjectId };
 };
 
-export const syncPastDueFromChargebee = async (subscriptionId: string): Promise<void> => {
+export const syncPastDueFromChargebee = async (subscriptionId: string): Promise<boolean> => {
 	const account = await findBillingAccountByChargebeeSubscriptionId(subscriptionId);
-	if (!account) return;
+	if (!account) return false;
 
 	const subscription = await retrieveChargebeeSubscription(subscriptionId);
 	const invoicePastDue = (subscription.due_invoices_count ?? 0) > 0;
 	await applyChargebeeSubscriptionMirror({ account, subscription, invoicePastDue });
+	return true;
 };

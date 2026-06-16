@@ -1,6 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { timingSafeEqual } from 'crypto';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { StatusCodes } from '../../utils/statusCodes';
 import { logError } from '../../utils/logger';
 import {
 	getChargebeeWebhookPassword,
@@ -53,6 +54,23 @@ const subscriptionFromContent = (content: Record<string, unknown>): ChargebeeSub
 	return subscription as ChargebeeSubscription;
 };
 
+const SUBSCRIPTION_MIRROR_EVENT_TYPES = [
+	'subscription_created',
+	'subscription_changed',
+	'subscription_renewed',
+	'subscription_activated',
+	'subscription_reactivated',
+	'subscription_cancelled',
+	'subscription_deleted',
+] as const;
+
+const retryWebhookLater = async (eventId: string): Promise<APIGatewayProxyResult> => {
+	await releaseChargebeeWebhookClaim(eventId);
+	return ResponseWrapper.custom(StatusCodes.INTERNAL_SERVER_ERROR, {
+		message: 'Billing account not linked; webhook will be retried',
+	});
+};
+
 /**
  * Processes Chargebee webhook events to mirror subscription terms, seats, and SSO.
  * @param {APIGatewayProxyEvent} event API Gateway request event
@@ -96,39 +114,36 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const content = payload.content ?? {};
 		const subscription = subscriptionFromContent(content);
 
-		if (
-			subscription
-			&& [
-				'subscription_created',
-				'subscription_changed',
-				'subscription_renewed',
-				'subscription_activated',
-				'subscription_reactivated',
-				'subscription_cancelled',
-				'subscription_deleted',
-			].includes(eventType)
-		) {
+		if (subscription && SUBSCRIPTION_MIRROR_EVENT_TYPES.includes(eventType as typeof SUBSCRIPTION_MIRROR_EVENT_TYPES[number])) {
 			const account = await findBillingAccountByChargebeeSubscriptionId(subscription.id)
 				?? (subscription.customer_id
 					? await findBillingAccountByChargebeeCustomerId(subscription.customer_id)
 					: null);
 
-			if (account) {
-				await applyChargebeeSubscriptionMirror({ account, subscription });
+			if (!account) {
+				return retryWebhookLater(eventId);
 			}
+
+			await applyChargebeeSubscriptionMirror({ account, subscription });
 		}
 
 		if (eventType === 'invoice_generated' || eventType === 'invoice_updated') {
 			const invoice = content.invoice as { subscription_id?: string } | undefined;
 			if (invoice?.subscription_id) {
-				await syncPastDueFromChargebee(invoice.subscription_id);
+				const synced = await syncPastDueFromChargebee(invoice.subscription_id);
+				if (!synced) {
+					return retryWebhookLater(eventId);
+				}
 			}
 		}
 
 		if (eventType === 'payment_succeeded') {
 			const invoice = content.invoice as { subscription_id?: string } | undefined;
 			if (invoice?.subscription_id) {
-				await syncPastDueFromChargebee(invoice.subscription_id);
+				const synced = await syncPastDueFromChargebee(invoice.subscription_id);
+				if (!synced) {
+					return retryWebhookLater(eventId);
+				}
 			}
 		}
 

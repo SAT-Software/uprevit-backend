@@ -112,6 +112,23 @@ describe('chargebee webhooks mirror', () => {
 		expect(update.pastDue).toBe(true);
 		expect(update.status).toBe('past_due');
 	});
+
+	it('handles legacy billing accounts without sso field', () => {
+		const { sso: _sso, ...legacyAccount } = baseAccount;
+
+		const update = buildChargebeeMirrorUpdate(legacyAccount as BillingAccount & { _id: ObjectId }, {
+			id: 'sub_123',
+			customer_id: 'cust_123',
+			status: 'active',
+			subscription_items: [
+				{ item_price_id: 'platform-monthly', item_type: 'plan', quantity: 1 },
+				{ item_price_id: 'sso-addon-monthly', item_type: 'addon', quantity: 1 },
+			],
+		});
+
+		expect(update.sso?.enabled).toBe(true);
+		expect(update.sso?.enabledAt).toBeInstanceOf(Date);
+	});
 });
 
 describe('claimChargebeeWebhook', () => {
