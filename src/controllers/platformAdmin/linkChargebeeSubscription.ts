@@ -13,7 +13,10 @@ import {
 	retrieveChargebeeSubscription,
 	updateChargebeeSubscriptionOfflineBilling,
 } from '../../utils/billing/chargebeeClient';
-import { applyChargebeeSubscriptionMirror } from '../../utils/billing/chargebeeWebhooks';
+import {
+	applyChargebeeSubscriptionMirror,
+	findBillingAccountByChargebeeCustomerId,
+} from '../../utils/billing/chargebeeWebhooks';
 import { retryPendingUsageEventsForWorkspace } from '../../utils/billing/usageEventChargebeeSync';
 
 /**
@@ -57,9 +60,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const account = await getBillingAccountByWorkspaceId(workspaceObjectId);
 		if (!account) return ResponseWrapper.notFound('Billing account not found');
 
+		const customerId = account.chargebee?.customerId?.trim();
+		if (!customerId) {
+			return ResponseWrapper.badRequest('Link a Chargebee customer before linking a subscription');
+		}
+
 		const subscription = await retrieveChargebeeSubscription(subscriptionId);
-		if (account.chargebee?.customerId && subscription.customer_id !== account.chargebee.customerId) {
+		if (subscription.customer_id !== customerId) {
 			return ResponseWrapper.badRequest('Subscription does not belong to the linked Chargebee customer');
+		}
+
+		const customerLinkedAccount = await findBillingAccountByChargebeeCustomerId(subscription.customer_id);
+		if (customerLinkedAccount && !customerLinkedAccount._id.equals(account._id)) {
+			return ResponseWrapper.conflict('Chargebee customer is already linked to another workspace');
 		}
 
 		await updateChargebeeSubscriptionOfflineBilling(subscriptionId);
