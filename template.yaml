@@ -1804,6 +1804,57 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/platformAdmin/linkChargebeeSubscription.ts]
 
+  PlatformAdminGetBillingChargebeeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/getBillingChargebee.lambdaHandler
+      Events:
+        PlatformAdminGetBillingChargebee:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/chargebee
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/getBillingChargebee.ts]
+
+  PlatformAdminGetBillingInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/getBillingInvoice.lambdaHandler
+      Events:
+        PlatformAdminGetBillingInvoice:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/invoices/{invoiceId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/getBillingInvoice.ts]
+
+  PlatformAdminDownloadBillingInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/downloadBillingInvoice.lambdaHandler
+      Events:
+        PlatformAdminDownloadBillingInvoice:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/invoices/{invoiceId}/download
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/downloadBillingInvoice.ts]
+
   # ──────────────────────────────────────────────────────────────────────────
   # S3 STORAGE
   # ──────────────────────────────────────────────────────────────────────────
