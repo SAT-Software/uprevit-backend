@@ -116,10 +116,14 @@ export const aggregateUsageForPeriod = async ({
 	await ensureUsageEventIndexes();
 	const db = await getDb();
 
+	// Match events recorded for this period, or events that occurred within it.
+	// Chargebee term dates can change after events were written, so occurredAt keeps totals accurate.
 	const events = await db.collection<UsageEvent>(USAGE_EVENTS_COLLECTION).find({
 		workspaceId,
-		billingPeriodStart: periodStart,
-		billingPeriodEnd: periodEnd,
+		$or: [
+			{ billingPeriodStart: periodStart, billingPeriodEnd: periodEnd },
+			{ occurredAt: { $gte: periodStart, $lte: periodEnd } },
+		],
 	}).toArray();
 
 	const eventTotals = events.reduce<Omit<PeriodUsageTotals, 'activeSeats'>>(

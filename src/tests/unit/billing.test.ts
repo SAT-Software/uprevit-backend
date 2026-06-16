@@ -859,4 +859,51 @@ describe('billing summaries', () => {
 		expect(summary.usage.exports).toBe(2);
 		expect(summary.limitStatus.seats.used).toBe(3);
 	});
+
+	it('aggregates events by occurredAt when stored billing period differs from current term', async () => {
+		const { aggregateUsageForPeriod } = require('../../utils/billing/usageRecording');
+		const stalePeriodStart = new Date('2025-01-01T00:00:00.000Z');
+		const stalePeriodEnd = new Date('2025-12-31T23:59:59.999Z');
+
+		dbModule.getDb.mockResolvedValue({
+			collection: jest.fn((name: string) => {
+				if (name === 'usageEvents') {
+					return {
+						find: jest.fn(() => ({
+							toArray: jest.fn(async () => [
+								{
+									metric: 'completed_export',
+									quantity: 5,
+									billingPeriodStart: stalePeriodStart,
+									billingPeriodEnd: stalePeriodEnd,
+									occurredAt: new Date('2026-06-15T00:00:00.000Z'),
+								},
+								{
+									metric: 'upload_bytes',
+									quantity: 2048,
+									billingPeriodStart: stalePeriodStart,
+									billingPeriodEnd: stalePeriodEnd,
+									occurredAt: new Date('2026-06-16T00:00:00.000Z'),
+								},
+							]),
+						})),
+						createIndex: jest.fn(async () => undefined),
+					};
+				}
+				if (name === 'users') {
+					return {
+						countDocuments: jest.fn(async () => 1),
+					};
+				}
+				return {
+					createIndex: jest.fn(async () => undefined),
+				};
+			}),
+		});
+
+		const totals = await aggregateUsageForPeriod({ workspaceId, periodStart, periodEnd });
+
+		expect(totals.exports).toBe(5);
+		expect(totals.uploadBytes).toBe(2048);
+	});
 });

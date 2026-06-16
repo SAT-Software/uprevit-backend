@@ -70,6 +70,37 @@ describe('chargebee webhooks mirror', () => {
 		expect(update.billingCadence).toBe('monthly');
 	});
 
+	it('resolves seats from addon item_price_id containing seat when configured id mismatches', () => {
+		process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID = 'wrong-seat-addon-id';
+
+		const update = buildChargebeeMirrorUpdate(baseAccount, {
+			id: 'sub_123',
+			customer_id: 'cust_123',
+			status: 'active',
+			subscription_items: [
+				{ item_price_id: 'uprevit-platform-USD-Yearly', item_type: 'plan', quantity: 1 },
+				{ item_price_id: 'User-Seats-USD-Yearly', item_type: 'addon', quantity: 5 },
+			],
+		});
+
+		expect(update.limits?.seats).toBe(5);
+	});
+
+	it('does not treat plan quantity as seat count', () => {
+		process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID = '';
+
+		const update = buildChargebeeMirrorUpdate(baseAccount, {
+			id: 'sub_123',
+			customer_id: 'cust_123',
+			status: 'active',
+			subscription_items: [
+				{ item_price_id: 'uprevit-platform-USD-Yearly', item_type: 'plan', quantity: 1 },
+			],
+		});
+
+		expect(update.limits?.seats).toBe(5);
+	});
+
 	it('marks past due when due_invoices_count is positive', () => {
 		const update = buildChargebeeMirrorUpdate(baseAccount, {
 			id: 'sub_123',

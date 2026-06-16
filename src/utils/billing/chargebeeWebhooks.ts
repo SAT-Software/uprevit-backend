@@ -9,13 +9,14 @@ import { getDb } from '../db';
 import {
 	getChargebeeSeatAddonItemPriceId,
 	getChargebeeSsoAddonItemPriceId,
+	isChargebeeConfigured,
 } from '../../config/chargebeeConfig';
 import {
 	retrieveChargebeeSubscription,
 	type ChargebeeSubscription,
 	type ChargebeeSubscriptionItem,
 } from './chargebeeClient';
-import { normalizeLimits } from './billingAccounts';
+import { limitsToUsageLimits, normalizeLimits } from './billingAccounts';
 
 export const CHARGEBEE_WEBHOOK_EVENTS_COLLECTION = 'chargebeeWebhookEvents';
 
@@ -99,6 +100,26 @@ const hasAddon = (items: ChargebeeSubscriptionItem[], itemPriceId: string): bool
 	return items.some((item) => item.item_price_id === itemPriceId);
 };
 
+export const resolveSubscriptionSeatQuantity = (
+	items: ChargebeeSubscriptionItem[],
+	seatItemPriceId: string,
+	fallbackSeats: number,
+): number => {
+	if (seatItemPriceId) {
+		const configuredQuantity = findAddonQuantity(items, seatItemPriceId);
+		if (configuredQuantity !== undefined) return configuredQuantity;
+	}
+
+	const seatAddon = items.find((item) =>
+		item.item_type === 'addon'
+		&& item.item_price_id?.toLowerCase().includes('seat')
+		&& typeof item.quantity === 'number');
+
+	if (seatAddon) return seatAddon.quantity as number;
+
+	return fallbackSeats;
+};
+
 export const buildChargebeeMirrorUpdate = (
 	account: BillingAccount,
 	subscription: ChargebeeSubscription,
@@ -110,9 +131,7 @@ export const buildChargebeeMirrorUpdate = (
 	const seatItemPriceId = getChargebeeSeatAddonItemPriceId();
 	const ssoItemPriceId = getChargebeeSsoAddonItemPriceId();
 	const planItem = items.find((item) => item.item_type === 'plan') ?? items[0];
-	const seatQuantity = findAddonQuantity(items, seatItemPriceId);
-	const planItemQuantity = typeof planItem?.quantity === 'number' ? planItem.quantity : undefined;
-	const resolvedSeats = seatQuantity ?? planItemQuantity ?? limits.seats;
+	const resolvedSeats = resolveSubscriptionSeatQuantity(items, seatItemPriceId, limits.seats);
 	const ssoPresent = hasAddon(items, ssoItemPriceId);
 	const sso = account.sso ?? { enabled: false };
 	const now = new Date();
@@ -212,4 +231,24 @@ export const syncPastDueFromChargebee = async (subscriptionId: string): Promise<
 	const invoicePastDue = (subscription.due_invoices_count ?? 0) > 0;
 	await applyChargebeeSubscriptionMirror({ account, subscription, invoicePastDue });
 	return true;
+};
+
+export const resolveLiveUsageLimits = async (
+	account: BillingAccount & { _id: ObjectId },
+) => {
+	const subscriptionId = account.chargebee?.subscriptionId?.trim();
+	if (!subscriptionId || !isChargebeeConfigured()) return null;
+
+	try {
+		const subscription = await retrieveChargebeeSubscription(subscriptionId);
+		const mirror = buildChargebeeMirrorUpdate(account, subscription);
+		if (!mirror.limits) return null;
+
+		return limitsToUsageLimits({
+			...normalizeLimits(account),
+			...mirror.limits,
+		});
+	} catch {
+		return null;
+	}
 };
