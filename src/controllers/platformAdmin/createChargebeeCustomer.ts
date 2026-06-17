@@ -9,7 +9,11 @@ import { recordPlatformAuditEvent } from '../../utils/platformAuditLog';
 import { getBillingAccountByWorkspaceId } from '../../utils/billing/billingAccounts';
 import { serializeBillingAccount } from '../../utils/billing/serializers';
 import { isChargebeeConfigured } from '../../config/chargebeeConfig';
-import { createChargebeeCustomer } from '../../utils/billing/chargebeeClient';
+import {
+	createChargebeeCustomer,
+	isChargebeeDuplicateCustomerError,
+	retrieveChargebeeCustomer,
+} from '../../utils/billing/chargebeeClient';
 import { BILLING_ACCOUNTS_COLLECTION, type BillingAccount } from '../../models/billing';
 
 /**
@@ -53,11 +57,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const customerId = `ws_${workspaceId}`;
-		const customer = await createChargebeeCustomer({
-			id: customerId,
-			company: workspace.workspaceName,
-			email: typeof input.email === 'string' ? input.email : undefined,
-		});
+		let customer;
+		let recoveredExistingCustomer = false;
+		try {
+			customer = await createChargebeeCustomer({
+				id: customerId,
+				company: workspace.workspaceName,
+				email: typeof input.email === 'string' ? input.email : undefined,
+			});
+		} catch (error) {
+			if (!isChargebeeDuplicateCustomerError(error)) throw error;
+			customer = await retrieveChargebeeCustomer(customerId);
+			recoveredExistingCustomer = true;
+		}
 
 		const now = new Date();
 		await db.collection<BillingAccount>(BILLING_ACCOUNTS_COLLECTION).updateOne(
@@ -85,7 +97,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			targetType: 'chargebee_customer',
 			workspaceId: workspaceObjectId,
 			entityId: customer.id,
-			summary: `Created Chargebee customer for ${workspace.workspaceName}`,
+			summary: recoveredExistingCustomer
+				? `Linked existing Chargebee customer for ${workspace.workspaceName}`
+				: `Created Chargebee customer for ${workspace.workspaceName}`,
 			auth: auth.payload,
 			operator,
 			event,
@@ -93,7 +107,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 
 		return ResponseWrapper.created({
-			message: 'Chargebee customer created',
+			message: recoveredExistingCustomer
+				? 'Chargebee customer linked'
+				: 'Chargebee customer created',
 			data: {
 				customerId: customer.id,
 				account: serializeBillingAccount(updated),

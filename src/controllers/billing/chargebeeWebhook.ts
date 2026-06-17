@@ -15,6 +15,7 @@ import {
 	findBillingAccountByChargebeeCustomerId,
 	findBillingAccountByChargebeeSubscriptionId,
 	releaseChargebeeWebhookClaim,
+	resolveChargebeeSubscriptionForMirror,
 	syncPastDueFromChargebee,
 } from '../../utils/billing/chargebeeWebhooks';
 
@@ -124,7 +125,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				return retryWebhookLater(eventId);
 			}
 
-			await applyChargebeeSubscriptionMirror({ account, subscription });
+			const resolvedSubscription = await resolveChargebeeSubscriptionForMirror(account, subscription);
+			await applyChargebeeSubscriptionMirror({ account, subscription: resolvedSubscription });
 		}
 
 		if (eventType === 'invoice_generated' || eventType === 'invoice_updated') {

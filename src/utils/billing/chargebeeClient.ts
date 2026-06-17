@@ -101,6 +101,7 @@ export type ChargebeeSubscription = {
 	current_term_end?: number;
 	next_billing_at?: number;
 	due_invoices_count?: number;
+	resource_version?: number;
 	subscription_items?: ChargebeeSubscriptionItem[];
 };
 
@@ -172,6 +173,33 @@ export const createChargebeeCustomer = async ({
 	});
 
 	return result.customer;
+};
+
+export const retrieveChargebeeCustomer = async (customerId: string): Promise<ChargebeeCustomer> => {
+	const result = await chargebeeRequest<ChargebeeEntityResponse<ChargebeeCustomer>>({
+		method: 'GET',
+		path: `/customers/${encodeURIComponent(customerId)}`,
+	});
+
+	return result.customer;
+};
+
+export const isChargebeeDuplicateCustomerError = (error: unknown): boolean => {
+	if (!(error instanceof Error)) return false;
+
+	try {
+		const parsed = JSON.parse(error.message) as {
+			api_error_code?: string;
+			error_code?: string;
+		};
+		if (parsed.api_error_code === 'duplicate_entry') return true;
+		if (parsed.error_code === 'param_not_unique') return true;
+	} catch {
+		// Chargebee may return plain-text error bodies.
+	}
+
+	const message = error.message.toLowerCase();
+	return message.includes('duplicate') || message.includes('already present');
 };
 
 export const retrieveChargebeeSubscription = async (

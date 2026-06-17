@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 import type { Workspace } from '../../models/workspace';
 import { getDb } from '../db';
 import { getBillingAccountByWorkspaceId, normalizeLimits } from './billingAccounts';
+import { resolveEffectiveLimits } from './effectiveLimits';
 import { bytesToGb, gbToBytes, resolveUsagePeriod } from './billingPeriod';
 import { countActiveExportJobs } from '../exportJobs';
 import { aggregateUsageForPeriod, countActiveWorkspaceSeats } from './usageRecording';
@@ -172,7 +173,7 @@ export const assertSeatActivationAllowed = async (
 	const account = await getBillingAccountByWorkspaceId(workspaceId);
 	if (!account) return { allowed: true };
 
-	const limits = normalizeLimits(account);
+	const limits = await resolveEffectiveLimits(account);
 	const activeSeats = await countActiveWorkspaceSeats(workspaceId);
 	const projectedActiveSeats = activeSeats + additionalActiveSeats;
 
@@ -192,7 +193,7 @@ export const verifySeatLimitAfterActivation = async (
 ): Promise<{ allowed: true } | { allowed: false; reason: string }> => {
 	const account = await getBillingAccountByWorkspaceId(workspaceId);
 	if (!account) return { allowed: true };
-	const limits = normalizeLimits(account);
+	const limits = await resolveEffectiveLimits(account);
 	if (!limits.enabled || limits.enforcementMode === 'overage') {
 		return { allowed: true };
 	}

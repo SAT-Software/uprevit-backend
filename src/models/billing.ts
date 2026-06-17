@@ -42,6 +42,8 @@ export type BillingAccountChargebee = {
 	currentTermEnd?: Date;
 	nextBillingAt?: Date;
 	addOns?: Array<{ itemPriceId: string; name?: string; quantity?: number }>;
+	/** Chargebee subscription.resource_version for stale webhook detection. */
+	resourceVersion?: number;
 	lastSyncedAt?: Date;
 	lastSyncError?: string;
 };

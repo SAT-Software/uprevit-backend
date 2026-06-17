@@ -7,6 +7,15 @@ import {
 	resolveInvoicePastDueFromInvoices,
 } from '../../utils/billing/chargebeeBillingDetail';
 
+const clearAddonEnv = () => {
+	delete process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID;
+	delete process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY;
+	delete process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY;
+	delete process.env.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID;
+	delete process.env.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY;
+	delete process.env.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY;
+};
+
 describe('chargebeeBillingDetail', () => {
 	const baseAccount: BillingAccount & { _id: ObjectId } = {
 		_id: new ObjectId(),
@@ -40,13 +49,14 @@ describe('chargebeeBillingDetail', () => {
 	};
 
 	beforeEach(() => {
-		process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID = 'seat-addon-monthly';
-		process.env.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID = 'sso-addon-monthly';
+		process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY = 'seat-addon-monthly';
+		process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY = 'User-Seats-USD-Yearly';
+		process.env.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY = 'sso-addon-monthly';
+		process.env.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY = 'sso-addon-yearly';
 	});
 
 	afterEach(() => {
-		delete process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID;
-		delete process.env.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID;
+		clearAddonEnv();
 	});
 
 	it('resolves invoice past due from due_invoices_count when invoices are unavailable', () => {
@@ -118,9 +128,7 @@ describe('chargebeeBillingDetail', () => {
 		expect(serialized.sso.enabled).toBe(true);
 	});
 
-	it('mirrors seat quantity from Chargebee subscription items on live reads', () => {
-		process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID = 'wrong-seat-addon-id';
-
+	it('mirrors seat quantity from configured yearly item price ID on live reads', () => {
 		const serialized = applyLiveChargebeeToSerializedAccount(baseAccount, {
 			id: 'sub_123',
 			customer_id: 'cust_123',
@@ -132,6 +140,27 @@ describe('chargebeeBillingDetail', () => {
 			subscription_items: [
 				{ item_price_id: 'uprevit-platform-USD-Yearly', item_type: 'plan', quantity: 1 },
 				{ item_price_id: 'User-Seats-USD-Yearly', item_type: 'addon', quantity: 5 },
+			],
+		});
+
+		expect(serialized.usageLimits.seats).toBe(5);
+	});
+
+	it('keeps fallback seats when configured IDs do not match subscription items', () => {
+		process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY = 'wrong-seat-addon-id';
+		process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY = 'also-wrong';
+
+		const serialized = applyLiveChargebeeToSerializedAccount(baseAccount, {
+			id: 'sub_123',
+			customer_id: 'cust_123',
+			status: 'active',
+			due_invoices_count: 0,
+			billing_period_unit: 'year',
+			current_term_start: 1_700_000_000,
+			current_term_end: 1_702_592_000,
+			subscription_items: [
+				{ item_price_id: 'uprevit-platform-USD-Yearly', item_type: 'plan', quantity: 1 },
+				{ item_price_id: 'User-Seats-USD-Yearly', item_type: 'addon', quantity: 9 },
 			],
 		});
 

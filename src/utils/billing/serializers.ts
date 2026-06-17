@@ -3,9 +3,9 @@ import type { BillingAccount, UsageEvent } from '../../models/billing';
 import type { Workspace } from '../../models/workspace';
 import { bytesToGb, resolveUsagePeriod } from './billingPeriod';
 import { limitsToUsageLimits, normalizeLimits } from './billingAccounts';
+import { resolveEffectiveLimits } from './effectiveLimits';
 import { buildLimitStatus } from './limitStatus';
 import { aggregateUsageForPeriod } from './usageRecording';
-import { resolveLiveUsageLimits } from './chargebeeWebhooks';
 
 export const serializeBillingAccount = (account: BillingAccount & { _id: ObjectId }) => {
 	const limits = normalizeLimits(account);
@@ -94,14 +94,13 @@ export const buildBillingSummary = async ({
 	account: BillingAccount & { _id: ObjectId };
 	workspaceId: ObjectId;
 }) => {
-	const limits = normalizeLimits(account);
 	const { periodStart, periodEnd, source } = resolveUsagePeriod(account);
-	const [usage, liveUsageLimits] = await Promise.all([
+	const [limits, usage] = await Promise.all([
+		resolveEffectiveLimits(account),
 		aggregateUsageForPeriod({ workspaceId, periodStart, periodEnd }),
-		resolveLiveUsageLimits(account),
 	]);
 	const uploadGb = bytesToGb(usage.uploadBytes);
-	const usageLimits = liveUsageLimits ?? limitsToUsageLimits(limits);
+	const usageLimits = limitsToUsageLimits(limits);
 	const limitStatus = buildLimitStatus({
 		activeSeats: usage.activeSeats,
 		exports: usage.exports,

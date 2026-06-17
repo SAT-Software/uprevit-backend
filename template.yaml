@@ -74,11 +74,27 @@ Parameters:
     Default: ""
   ChargebeeSeatAddonItemPriceId:
     Type: String
-    Description: "Chargebee item price ID for the seat add-on"
+    Description: "Legacy Chargebee seat add-on item price ID(s); comma-separated or use monthly/yearly params"
+    Default: ""
+  ChargebeeSeatAddonItemPriceIdMonthly:
+    Type: String
+    Description: "Chargebee item price ID for the monthly seat add-on"
+    Default: ""
+  ChargebeeSeatAddonItemPriceIdYearly:
+    Type: String
+    Description: "Chargebee item price ID for the yearly seat add-on"
     Default: ""
   ChargebeeSsoAddonItemPriceId:
     Type: String
-    Description: "Chargebee item price ID for the SSO add-on"
+    Description: "Legacy Chargebee SSO add-on item price ID(s); comma-separated or use monthly/yearly params"
+    Default: ""
+  ChargebeeSsoAddonItemPriceIdMonthly:
+    Type: String
+    Description: "Chargebee item price ID for the monthly SSO add-on"
+    Default: ""
+  ChargebeeSsoAddonItemPriceIdYearly:
+    Type: String
+    Description: "Chargebee item price ID for the yearly SSO add-on"
     Default: ""
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -118,7 +134,11 @@ Globals:
         CHARGEBEE_WEBHOOK_USERNAME: !Ref ChargebeeWebhookUsername
         CHARGEBEE_WEBHOOK_PASSWORD: !Ref ChargebeeWebhookPassword
         CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+        CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+        CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
         CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+        CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+        CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
