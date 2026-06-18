@@ -25,7 +25,7 @@ Documentation video CloudFront signing (on `GetDocumentationVideoSignedUrlFuncti
 
 - `DOCUMENTATION_CLOUDFRONT_DOMAIN`: e.g. `d123.cloudfront.net`
 - `DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID`: from CloudFront key management
-- `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY`: PEM private key (`env.json` locally — do not commit; in deployed environments CloudFormation loads it from SSM Parameter Store)
+- `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY`: PEM private key (`env.json` locally — do not commit; deployed Lambdas load the PEM from SSM at runtime using `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM`)
 - `EXPORT_JOB_QUEUE_URL`: The SQS queue URL used by export jobs
 
 AWS SAM `--env-vars` expects Lambda environment variable names, not CloudFormation parameter names like `MongoDbUri` or `UserPoolId`.
@@ -43,7 +43,7 @@ Branch to environment mapping:
 
 Release branches (for example `release/x.y.z`) do not trigger deployment. Deployments happen when the release is merged to `main` (prod) or back to `develop` (develop).
 
-The deploy workflow reads non-secret configuration from GitHub environment variables. It loads `MONGODB_URI` from AWS Systems Manager Parameter Store using `MONGODB_URI_PARAM`, and passes `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM` (the SSM path for the CloudFront signing PEM) so CloudFormation can resolve the private key at deploy time.
+The deploy workflow reads non-secret configuration from GitHub environment variables. It loads `MONGODB_URI` from AWS Systems Manager Parameter Store using `MONGODB_URI_PARAM`, and passes `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM` (the SSM path for the CloudFront signing PEM) so the documentation video Lambda can load the key at runtime.
 
 After a successful deploy, the backend API base URL comes from the CloudFormation stack output `ApiBaseUrl`. That is the base URL the frontend should use for production.
 

@@ -166,7 +166,8 @@ jobs:
           }
 
           for key, value in parameters.items():
-              print(f"ParameterKey={key},ParameterValue={value or ''}")
+              if value:
+                  print(f"{key}={value}")
           PY
           )
 

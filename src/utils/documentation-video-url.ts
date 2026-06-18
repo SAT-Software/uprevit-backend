@@ -1,3 +1,4 @@
+import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { getSignedUrl } from "@aws-sdk/cloudfront-signer";
 import { createDocumentationFilePresignedGetUrl } from "./s3-storage";
 
@@ -15,14 +16,21 @@ const parsePositiveInteger = (value: string | undefined, fallback: number): numb
 const cloudFrontDomain = process.env.DOCUMENTATION_CLOUDFRONT_DOMAIN?.trim().replace(/\/$/, "");
 const cloudFrontKeyPairId = process.env.DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID?.trim();
 const cloudFrontPrivateKeyEnv = process.env.DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY?.trim();
+const cloudFrontPrivateKeyParam = process.env.DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM?.trim();
 
 const CLOUDFRONT_URL_EXPIRES_IN_SECONDS = parsePositiveInteger(
 	process.env.DOCS_VIDEO_URL_EXPIRES_IN_SECONDS,
 	86400,
 );
 
+let cachedCloudFrontPrivateKeyFromSsm: string | undefined;
+
 const isCloudFrontSigningConfigured = (): boolean =>
-	Boolean(cloudFrontDomain && cloudFrontKeyPairId && cloudFrontPrivateKeyEnv);
+	Boolean(
+		cloudFrontDomain
+		&& cloudFrontKeyPairId
+		&& (cloudFrontPrivateKeyEnv || cloudFrontPrivateKeyParam),
+	);
 
 const wrapPemBody = (body: string): string => {
 	const compactBody = body.replace(/\s+/g, "");
@@ -51,6 +59,40 @@ const buildCloudFrontObjectUrl = (objectKey: string): string => {
 	return `https://${cloudFrontDomain}/${normalizedKey}`;
 };
 
+const loadCloudFrontPrivateKey = async (): Promise<string> => {
+	if (cloudFrontPrivateKeyEnv) {
+		return normalizePrivateKey(cloudFrontPrivateKeyEnv);
+	}
+
+	if (!cloudFrontPrivateKeyParam) {
+		throw new Error(
+			"Missing required environment variable: DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY or DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM",
+		);
+	}
+
+	if (cachedCloudFrontPrivateKeyFromSsm) {
+		return cachedCloudFrontPrivateKeyFromSsm;
+	}
+
+	const ssmClient = new SSMClient({});
+	const response = await ssmClient.send(
+		new GetParameterCommand({
+			Name: cloudFrontPrivateKeyParam,
+			WithDecryption: true,
+		}),
+	);
+
+	const privateKeyValue = response.Parameter?.Value?.trim();
+	if (!privateKeyValue) {
+		throw new Error(
+			`CloudFront signing private key SSM parameter is empty: ${cloudFrontPrivateKeyParam}`,
+		);
+	}
+
+	cachedCloudFrontPrivateKeyFromSsm = normalizePrivateKey(privateKeyValue);
+	return cachedCloudFrontPrivateKeyFromSsm;
+};
+
 export const createDocumentationVideoCloudFrontSignedUrl = async (
 	objectKey: string,
 ): Promise<DocumentationVideoSignedUrl> => {
@@ -58,11 +100,7 @@ export const createDocumentationVideoCloudFrontSignedUrl = async (
 		throw new Error("Missing required environment variable: DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID");
 	}
 
-	if (!cloudFrontPrivateKeyEnv) {
-		throw new Error("Missing required environment variable: DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY");
-	}
-
-	const privateKey = normalizePrivateKey(cloudFrontPrivateKeyEnv);
+	const privateKey = await loadCloudFrontPrivateKey();
 	const expiresIn = CLOUDFRONT_URL_EXPIRES_IN_SECONDS;
 	const dateLessThan = new Date(Date.now() + expiresIn * 1000);
 	const resourceUrl = buildCloudFrontObjectUrl(objectKey);
