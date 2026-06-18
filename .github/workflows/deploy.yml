@@ -137,8 +137,7 @@ jobs:
           CHARGEBEE_API_KEY: ${{ secrets.CHARGEBEE_API_KEY }}
           CHARGEBEE_WEBHOOK_PASSWORD: ${{ secrets.CHARGEBEE_WEBHOOK_PASSWORD }}
         run: |
-          python - <<'PY'
-          import json
+          mapfile -t parameter_overrides < <(python - <<'PY'
           import os
 
           parameters = {
@@ -166,15 +165,10 @@ jobs:
               "ChargebeeSsoAddonItemPriceIdYearly": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY", ""),
           }
 
-          with open("sam-parameter-overrides.json", "w", encoding="utf-8") as file:
-              json.dump(
-                  [
-                      {"ParameterKey": key, "ParameterValue": value or ""}
-                      for key, value in parameters.items()
-                  ],
-                  file,
-              )
+          for key, value in parameters.items():
+              print(f"ParameterKey={key},ParameterValue={value or ''}")
           PY
+          )
 
           sam deploy \
             --stack-name "$STACK_NAME" \
@@ -185,4 +179,4 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --parameter-overrides \
-            file://sam-parameter-overrides.json
+            "${parameter_overrides[@]}"
