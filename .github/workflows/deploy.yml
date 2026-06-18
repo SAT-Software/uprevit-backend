@@ -137,40 +137,44 @@ jobs:
           CHARGEBEE_API_KEY: ${{ secrets.CHARGEBEE_API_KEY }}
           CHARGEBEE_WEBHOOK_PASSWORD: ${{ secrets.CHARGEBEE_WEBHOOK_PASSWORD }}
         run: |
-          parameter_overrides=(
-            "MongoDbUri=$MONGODB_URI"
-            "DbName=$DB_NAME"
-            "UserPoolId=$USER_POOL_ID"
-            "ClientId=$CLIENT_ID"
-            "UploadsBucket=$UPLOADS_BUCKET"
-            "ExportsBucket=$EXPORTS_BUCKET"
-            "StandardSymbolsBucket=uprevit-standard-symbols"
-            "DocumentationFilesBucket=uprevit-documentation-files"
-          )
+          python - <<'PY'
+          import json
+          import os
 
-          append_parameter_override() {
-            local key="$1"
-            local value="$2"
-
-            if [ -n "$value" ]; then
-              parameter_overrides+=("$key=$value")
-            fi
+          parameters = {
+              "MongoDbUri": os.environ["MONGODB_URI"],
+              "DbName": os.environ["DB_NAME"],
+              "UserPoolId": os.environ["USER_POOL_ID"],
+              "ClientId": os.environ["CLIENT_ID"],
+              "UploadsBucket": os.environ["UPLOADS_BUCKET"],
+              "ExportsBucket": os.environ["EXPORTS_BUCKET"],
+              "StandardSymbolsBucket": "uprevit-standard-symbols",
+              "DocumentationFilesBucket": "uprevit-documentation-files",
+              "DocumentationCloudFrontDomain": os.environ.get("DOCUMENTATION_CLOUDFRONT_DOMAIN", ""),
+              "DocumentationCloudFrontKeyPairId": os.environ.get("DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID", ""),
+              "DocumentationCloudFrontPrivateKeyParam": os.environ.get("DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM", ""),
+              "ExportJobQueueUrl": os.environ.get("EXPORT_JOB_QUEUE_URL", ""),
+              "ChargebeeSite": os.environ.get("CHARGEBEE_SITE", ""),
+              "ChargebeeApiKey": os.environ.get("CHARGEBEE_API_KEY", ""),
+              "ChargebeeWebhookUsername": os.environ.get("CHARGEBEE_WEBHOOK_USERNAME", ""),
+              "ChargebeeWebhookPassword": os.environ.get("CHARGEBEE_WEBHOOK_PASSWORD", ""),
+              "ChargebeeSeatAddonItemPriceId": os.environ.get("CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID", ""),
+              "ChargebeeSeatAddonItemPriceIdMonthly": os.environ.get("CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY", ""),
+              "ChargebeeSeatAddonItemPriceIdYearly": os.environ.get("CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY", ""),
+              "ChargebeeSsoAddonItemPriceId": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID", ""),
+              "ChargebeeSsoAddonItemPriceIdMonthly": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY", ""),
+              "ChargebeeSsoAddonItemPriceIdYearly": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY", ""),
           }
 
-          append_parameter_override "DocumentationCloudFrontDomain" "$DOCUMENTATION_CLOUDFRONT_DOMAIN"
-          append_parameter_override "DocumentationCloudFrontKeyPairId" "$DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID"
-          append_parameter_override "DocumentationCloudFrontPrivateKeyParam" "$DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM"
-          append_parameter_override "ExportJobQueueUrl" "$EXPORT_JOB_QUEUE_URL"
-          append_parameter_override "ChargebeeSite" "$CHARGEBEE_SITE"
-          append_parameter_override "ChargebeeApiKey" "$CHARGEBEE_API_KEY"
-          append_parameter_override "ChargebeeWebhookUsername" "$CHARGEBEE_WEBHOOK_USERNAME"
-          append_parameter_override "ChargebeeWebhookPassword" "$CHARGEBEE_WEBHOOK_PASSWORD"
-          append_parameter_override "ChargebeeSeatAddonItemPriceId" "$CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID"
-          append_parameter_override "ChargebeeSeatAddonItemPriceIdMonthly" "$CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY"
-          append_parameter_override "ChargebeeSeatAddonItemPriceIdYearly" "$CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY"
-          append_parameter_override "ChargebeeSsoAddonItemPriceId" "$CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID"
-          append_parameter_override "ChargebeeSsoAddonItemPriceIdMonthly" "$CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY"
-          append_parameter_override "ChargebeeSsoAddonItemPriceIdYearly" "$CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY"
+          with open("sam-parameter-overrides.json", "w", encoding="utf-8") as file:
+              json.dump(
+                  [
+                      {"ParameterKey": key, "ParameterValue": value or ""}
+                      for key, value in parameters.items()
+                  ],
+                  file,
+              )
+          PY
 
           sam deploy \
             --stack-name "$STACK_NAME" \
@@ -181,4 +185,4 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --parameter-overrides \
-            "${parameter_overrides[@]}"
+            file://sam-parameter-overrides.json
