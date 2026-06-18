@@ -25,7 +25,7 @@ Documentation video CloudFront signing (on `GetDocumentationVideoSignedUrlFuncti
 
 - `DOCUMENTATION_CLOUDFRONT_DOMAIN`: e.g. `d123.cloudfront.net`
 - `DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID`: from CloudFront key management
-- `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY`: PEM private key (GitHub secret in CI; `env.json` locally — do not commit)
+- `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY`: PEM private key (`env.json` locally — do not commit; in deployed environments CloudFormation loads it from SSM Parameter Store)
 - `EXPORT_JOB_QUEUE_URL`: The SQS queue URL used by export jobs
 
 AWS SAM `--env-vars` expects Lambda environment variable names, not CloudFormation parameter names like `MongoDbUri` or `UserPoolId`.
@@ -43,7 +43,7 @@ Branch to environment mapping:
 
 Release branches (for example `release/x.y.z`) do not trigger deployment. Deployments happen when the release is merged to `main` (prod) or back to `develop` (develop).
 
-The deploy workflow reads non-secret configuration from GitHub environment variables and loads `MONGODB_URI` from AWS Systems Manager Parameter Store using `MONGODB_URI_PARAM`.
+The deploy workflow reads non-secret configuration from GitHub environment variables. It loads `MONGODB_URI` from AWS Systems Manager Parameter Store using `MONGODB_URI_PARAM`, and passes `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM` (the SSM path for the CloudFront signing PEM) so CloudFormation can resolve the private key at deploy time.
 
 After a successful deploy, the backend API base URL comes from the CloudFormation stack output `ApiBaseUrl`. That is the base URL the frontend should use for production.
 
@@ -177,7 +177,7 @@ Requires `AWS_REGION` and credentials with `s3:PutObject` on `DOCUMENTATION_FILE
 
 `GET /docs/videos/{videoKey}/signed-url` returns a **CloudFront signed URL** when domain, key pair id, and private key PEM are set.
 
-**GitHub (per environment):** variables `DOCUMENTATION_CLOUDFRONT_DOMAIN`, `DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID`; secret `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY` (full private PEM, including `BEGIN PRIVATE KEY` / `END PRIVATE KEY`). The key pair id must be the CloudFront public key ID for the public key generated from that exact private key. Paste the secret as multiline PEM when possible; the backend also normalizes JSON-style `\n` and space-flattened PEMs.
+**GitHub (per environment):** variables `DOCUMENTATION_CLOUDFRONT_DOMAIN`, `DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID`, and `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM` (SSM Parameter Store path only — not the PEM itself). Store the full private PEM in AWS Systems Manager as a **SecureString** at that path (multiline PEM is fine). The key pair id must be the CloudFront public key ID for the public key generated from that exact private key.
 
 **Local:** copy `GetDocumentationVideoSignedUrlFunction` from `env.example.json` into `env.json` with the same three values.
 

@@ -17,7 +17,8 @@ import {
 	serializeWorkspaceAdmin,
 } from '../../utils/platformAdminSerializers';
 import { getBillingAccountByWorkspaceId } from '../../utils/billing/billingAccounts';
-import { serializeWorkspaceBillingPreview, serializeWorkspaceFreezes } from '../../utils/billing/serializers';
+import { resolveLiveWorkspaceBillingPreview } from '../../utils/billing/chargebeeBillingDetail';
+import { serializeWorkspaceFreezes } from '../../utils/billing/serializers';
 
 /**
  * Returns workspace profile, admin list, billing preview, and recent platform audit events.
@@ -89,7 +90,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					admins: admins.length,
 				},
 				admins: admins.map((admin) => serializeWorkspaceAdmin(admin as User & { _id: ObjectId })),
-				billing: serializeWorkspaceBillingPreview(billingAccount),
+				billing: await resolveLiveWorkspaceBillingPreview(billingAccount),
 				freezes: serializeWorkspaceFreezes(workspace),
 				recentAuditLogs: recentAuditLogs.map(serializePlatformAuditLog),
 			},

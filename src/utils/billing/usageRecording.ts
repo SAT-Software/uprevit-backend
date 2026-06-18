@@ -1,18 +1,18 @@
 import { ObjectId } from 'mongodb';
 import {
-	BILLING_ADDON_EVENTS_COLLECTION,
-	BILLING_ACCOUNTS_COLLECTION,
 	USAGE_EVENTS_COLLECTION,
-	type BillingAccount,
-	type BillingAddOnEvent,
 	type BillingUsageMetric,
 	type UsageEvent,
 	type UsageEventSource,
 	type UsageUnit,
 } from '../../models/billing';
 import { getDb } from '../db';
-import { resolveBillingPeriod } from './billingPeriod';
+import { resolveUsagePeriod } from './billingPeriod';
 import { getBillingAccountByWorkspaceId } from './billingAccounts';
+import {
+	buildChargebeeDeduplicationId,
+	trySyncUsageEventToChargebee,
+} from './usageEventChargebeeSync';
 import { recordCommittedUploadBytes } from './uploadCommit';
 
 let hasEnsuredUsageIndexes = false;
@@ -28,7 +28,6 @@ export const ensureUsageEventIndexes = async (): Promise<void> => {
 		collection.createIndex({ workspaceId: 1, occurredAt: -1 }),
 		collection.createIndex({ workspaceId: 1, billingPeriodStart: 1, billingPeriodEnd: 1 }),
 		collection.createIndex({ workspaceId: 1, metric: 1, billingPeriodStart: 1 }),
-		db.collection<BillingAddOnEvent>(BILLING_ADDON_EVENTS_COLLECTION).createIndex({ idempotencyKey: 1 }, { unique: true }),
 	]);
 
 	hasEnsuredUsageIndexes = true;
@@ -53,6 +52,7 @@ export const recordUsageEvent = async ({
 	billingPeriodStart,
 	billingPeriodEnd,
 	metadata,
+	chargebeeSync,
 }: {
 	workspaceId: ObjectId;
 	billingAccountId?: ObjectId;
@@ -66,6 +66,7 @@ export const recordUsageEvent = async ({
 	billingPeriodStart: Date;
 	billingPeriodEnd: Date;
 	metadata?: Record<string, unknown>;
+	chargebeeSync?: UsageEvent['chargebeeSync'];
 }): Promise<UsageEvent | null> => {
 	if (!Number.isFinite(quantity) || quantity === 0) return null;
 	if (source !== 'platform_adjustment' && quantity < 0) return null;
@@ -87,6 +88,7 @@ export const recordUsageEvent = async ({
 		billingPeriodStart,
 		billingPeriodEnd,
 		metadata,
+		chargebeeSync,
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -102,47 +104,6 @@ export const recordUsageEvent = async ({
 	}
 };
 
-export type UploadReconciliationBreakdown = {
-	commitBytes: number;
-	adjustmentBytes: number;
-	totalBytes: number;
-};
-
-export const aggregateUploadReconciliationBreakdown = async ({
-	workspaceId,
-	periodStart,
-	periodEnd,
-}: {
-	workspaceId: ObjectId;
-	periodStart: Date;
-	periodEnd: Date;
-}): Promise<UploadReconciliationBreakdown> => {
-	await ensureUsageEventIndexes();
-	const db = await getDb();
-
-	const events = await db.collection<UsageEvent>(USAGE_EVENTS_COLLECTION).find({
-		workspaceId,
-		billingPeriodStart: periodStart,
-		billingPeriodEnd: periodEnd,
-		metric: 'upload_bytes',
-	}).toArray();
-
-	return events.reduce<UploadReconciliationBreakdown>(
-		(totals, event) => {
-			totals.totalBytes += event.quantity;
-
-			if (event.source === 'platform_adjustment') {
-				totals.adjustmentBytes += event.quantity;
-			} else if (event.source === 'upload_commit' || event.source === 'reconciliation_backfill') {
-				totals.commitBytes += event.quantity;
-			}
-
-			return totals;
-		},
-		{ commitBytes: 0, adjustmentBytes: 0, totalBytes: 0 },
-	);
-};
-
 export const aggregateUsageForPeriod = async ({
 	workspaceId,
 	periodStart,
@@ -155,10 +116,14 @@ export const aggregateUsageForPeriod = async ({
 	await ensureUsageEventIndexes();
 	const db = await getDb();
 
+	// Match events recorded for this period, or events that occurred within it.
+	// Chargebee term dates can change after events were written, so occurredAt keeps totals accurate.
 	const events = await db.collection<UsageEvent>(USAGE_EVENTS_COLLECTION).find({
 		workspaceId,
-		billingPeriodStart: periodStart,
-		billingPeriodEnd: periodEnd,
+		$or: [
+			{ billingPeriodStart: periodStart, billingPeriodEnd: periodEnd },
+			{ occurredAt: { $gte: periodStart, $lte: periodEnd } },
+		],
 	}).toArray();
 
 	const eventTotals = events.reduce<Omit<PeriodUsageTotals, 'activeSeats'>>(
@@ -199,9 +164,10 @@ export const recordCompletedExport = async ({
 	if (!account) return;
 
 	const now = occurredAt ?? new Date();
-	const { periodStart, periodEnd } = resolveBillingPeriod(account, now);
+	const { periodStart, periodEnd } = resolveUsagePeriod(account, now);
+	const idempotencyKey = `export:${jobId.toString()}`;
 
-	await recordUsageEvent({
+	const insertedEvent = await recordUsageEvent({
 		workspaceId,
 		billingAccountId: account._id,
 		metric: 'completed_export',
@@ -209,11 +175,20 @@ export const recordCompletedExport = async ({
 		unit: 'count',
 		source: 'export_job',
 		sourceId: jobId.toString(),
-		idempotencyKey: `export:${jobId.toString()}`,
+		idempotencyKey,
 		occurredAt: now,
 		billingPeriodStart: periodStart,
 		billingPeriodEnd: periodEnd,
+		chargebeeSync: {
+			status: 'pending',
+			deduplicationId: buildChargebeeDeduplicationId(idempotencyKey),
+			attempts: 0,
+		},
 	});
+
+	if (insertedEvent?._id) {
+		await trySyncUsageEventToChargebee({ event: insertedEvent as UsageEvent & { _id: ObjectId }, account });
+	}
 };
 
 export { recordCommittedUploadBytes, recordCommittedUploadIfNew, recordUploadCommitsFromPayload } from './uploadCommit';
@@ -243,45 +218,4 @@ export const recordUploadBytes = async ({
 		occurredAt,
 		metadata: sourceFileId ? { sourceFileId: sourceFileId.toString() } : undefined,
 	});
-};
-
-export const recordSsoAddOnEvent = async ({
-	workspaceId,
-	billingAccountId,
-	action,
-	occurredAt,
-}: {
-	workspaceId: ObjectId;
-	billingAccountId: ObjectId;
-	action: 'enabled' | 'disabled';
-	occurredAt?: Date;
-}): Promise<void> => {
-	await ensureUsageEventIndexes();
-	const db = await getDb();
-	const account = await db.collection<BillingAccount>(BILLING_ACCOUNTS_COLLECTION).findOne({ _id: billingAccountId });
-	if (!account) return;
-
-	const now = occurredAt ?? new Date();
-	const { periodStart, periodEnd } = resolveBillingPeriod(account, now);
-
-	const event: BillingAddOnEvent = {
-		workspaceId,
-		billingAccountId,
-		addOn: 'sso',
-		action,
-		occurredAt: now,
-		billingPeriodStart: periodStart,
-		billingPeriodEnd: periodEnd,
-		idempotencyKey: `sso:${workspaceId.toString()}:${action}:${periodStart.toISOString()}`,
-		createdAt: now,
-	};
-
-	try {
-		await db.collection<BillingAddOnEvent>(BILLING_ADDON_EVENTS_COLLECTION).insertOne(event);
-	} catch (error) {
-		if (error && typeof error === 'object' && 'code' in error && error.code === 11000) {
-			return;
-		}
-		throw error;
-	}
 };

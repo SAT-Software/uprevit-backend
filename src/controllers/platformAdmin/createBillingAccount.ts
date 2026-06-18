@@ -13,10 +13,8 @@ import {
 import {
 	buildBillingSummary,
 	serializeBillingAccount,
-	serializeUsageSnapshot,
 	serializeWorkspaceFreezes,
 } from '../../utils/billing/serializers';
-import { getCurrentUsageSnapshot } from '../../utils/billing/snapshots';
 
 /**
  * Creates a draft billing account for a workspace that does not have one yet.
@@ -41,12 +39,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const existing = await getBillingAccountByWorkspaceId(workspaceObjectId);
 		const created = !existing;
 		const account = existing ?? (await createBillingAccountForWorkspace(workspaceObjectId));
-
-		const snapshot = await getCurrentUsageSnapshot({
-			workspaceId: workspaceObjectId,
-			billingAccount: account,
-			recomputeIfStale: created,
-		});
 
 		const summary = await buildBillingSummary({
 			account,
@@ -74,7 +66,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			data: {
 				account: serializeBillingAccount(account),
 				summary,
-				snapshot: snapshot?._id ? serializeUsageSnapshot(snapshot) : null,
 				freezes: serializeWorkspaceFreezes(workspace),
 			},
 		});

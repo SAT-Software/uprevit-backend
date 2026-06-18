@@ -22,6 +22,14 @@ jest.mock('../../utils/billing/enforcement', () => ({
 
 jest.mock('../../utils/billing/billingAccounts', () => ({
 	getBillingAccountByWorkspaceId: jest.fn(),
+	normalizeLimits: jest.fn((account: { limits?: { enabled?: boolean } }) => ({
+		enabled: account?.limits?.enabled ?? false,
+		enforcementMode: 'overage',
+		seats: 5,
+		exports: 100,
+		uploadGb: 10,
+		ssoAllowed: false,
+	})),
 }));
 
 jest.mock('../../utils/billing/uploadCommit', () => ({
@@ -62,7 +70,7 @@ describe('createSourceFileAndFolder', () => {
 		});
 
 		billingAccounts.getBillingAccountByWorkspaceId.mockResolvedValue({
-			meteringEnabled: true,
+			limits: { enabled: true },
 		});
 
 		dbModule.getDb.mockResolvedValue({

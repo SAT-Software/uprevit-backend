@@ -45,14 +45,55 @@ Parameters:
     Type: String
     Description: "CloudFront key pair id for signed documentation video URLs"
     Default: ""
-  DocumentationCloudFrontPrivateKey:
+  DocumentationCloudFrontPrivateKeyParam:
     Type: String
-    NoEcho: true
-    Description: "CloudFront signing private key PEM (from GitHub secret at deploy)"
+    Description: "SSM Parameter Store path (SecureString) for the CloudFront signing private key PEM"
     Default: ""
   ExportJobQueueUrl:
     Type: String
     Description: "Optional explicit SQS queue URL override for local/dev"
+    Default: ""
+  ChargebeeSite:
+    Type: String
+    Description: "Chargebee site subdomain for usage event ingest"
+    Default: ""
+  ChargebeeApiKey:
+    Type: String
+    NoEcho: true
+    Description: "Chargebee API key for usage event ingest"
+    Default: ""
+  ChargebeeWebhookUsername:
+    Type: String
+    Description: "Basic auth username for Chargebee webhooks"
+    Default: ""
+  ChargebeeWebhookPassword:
+    Type: String
+    NoEcho: true
+    Description: "Basic auth password for Chargebee webhooks"
+    Default: ""
+  ChargebeeSeatAddonItemPriceId:
+    Type: String
+    Description: "Legacy Chargebee seat add-on item price ID(s); comma-separated or use monthly/yearly params"
+    Default: ""
+  ChargebeeSeatAddonItemPriceIdMonthly:
+    Type: String
+    Description: "Chargebee item price ID for the monthly seat add-on"
+    Default: ""
+  ChargebeeSeatAddonItemPriceIdYearly:
+    Type: String
+    Description: "Chargebee item price ID for the yearly seat add-on"
+    Default: ""
+  ChargebeeSsoAddonItemPriceId:
+    Type: String
+    Description: "Legacy Chargebee SSO add-on item price ID(s); comma-separated or use monthly/yearly params"
+    Default: ""
+  ChargebeeSsoAddonItemPriceIdMonthly:
+    Type: String
+    Description: "Chargebee item price ID for the monthly SSO add-on"
+    Default: ""
+  ChargebeeSsoAddonItemPriceIdYearly:
+    Type: String
+    Description: "Chargebee item price ID for the yearly SSO add-on"
     Default: ""
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -87,6 +128,16 @@ Globals:
         EXPORTS_BUCKET: !Ref ExportsBucket
         STANDARD_SYMBOLS_BUCKET: !Ref StandardSymbolsBucket
         DOCUMENTATION_FILES_BUCKET: !Ref DocumentationFilesBucket
+        CHARGEBEE_SITE: !Ref ChargebeeSite
+        CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+        CHARGEBEE_WEBHOOK_USERNAME: !Ref ChargebeeWebhookUsername
+        CHARGEBEE_WEBHOOK_PASSWORD: !Ref ChargebeeWebhookPassword
+        CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+        CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+        CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+        CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+        CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+        CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
@@ -96,6 +147,7 @@ Globals:
 
 Conditions:
   HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]
+  UseDocumentationCloudFrontPrivateKey: !Not [!Equals [!Ref DocumentationCloudFrontPrivateKeyParam, ""]]
 
 Resources:
   HelloWorldFunction:
@@ -682,7 +734,10 @@ Resources:
         Variables:
           DOCUMENTATION_CLOUDFRONT_DOMAIN: !Ref DocumentationCloudFrontDomain
           DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID: !Ref DocumentationCloudFrontKeyPairId
-          DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY: !Ref DocumentationCloudFrontPrivateKey
+          DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY: !If
+            - UseDocumentationCloudFrontPrivateKey
+            - !Sub "{{resolve:ssm-secure:${DocumentationCloudFrontPrivateKeyParam}}}"
+            - ""
       Policies:
         - Statement:
             - Effect: Allow
@@ -851,6 +906,8 @@ Resources:
         Variables:
           EXPORTS_PREFIX: exports
           EXPORT_JOB_MAX_RECEIVE_COUNT: 5
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -1526,6 +1583,92 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/billing/updatePreferences.ts]
 
+  BillingGetChargebeeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/getBillingChargebee.lambdaHandler
+      Events:
+        BillingGetChargebee:
+          Type: Api
+          Properties:
+            Path: /billing/chargebee
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/billing/getBillingChargebee.ts]
+
+  BillingGetInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/getBillingInvoice.lambdaHandler
+      Events:
+        BillingGetInvoice:
+          Type: Api
+          Properties:
+            Path: /billing/invoices/{invoiceId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/billing/getBillingInvoice.ts]
+
+  BillingDownloadInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/downloadBillingInvoice.lambdaHandler
+      Events:
+        BillingDownloadInvoice:
+          Type: Api
+          Properties:
+            Path: /billing/invoices/{invoiceId}/download
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/billing/downloadBillingInvoice.ts]
+
+  ChargebeeWebhookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/chargebeeWebhook.lambdaHandler
+      Events:
+        ChargebeeWebhook:
+          Type: Api
+          Properties:
+            Path: /billing/webhooks/chargebee
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/billing/chargebeeWebhook.ts]
+
+  BillingRetryUsageEventSyncScheduledFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/retryUsageEventSyncScheduled.lambdaHandler
+      Timeout: 300
+      Events:
+        BillingRetryUsageEventSyncSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(10 minutes)
+            Enabled: true
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/billing/retryUsageEventSyncScheduled.ts]
+
   PlatformAdminGetBillingAccountFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1594,23 +1737,6 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/platformAdmin/createUsageAdjustment.ts]
 
-  PlatformAdminRecomputeUsageSnapshotFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/
-      Handler: controllers/platformAdmin/recomputeUsageSnapshot.lambdaHandler
-      Events:
-        PlatformAdminRecomputeUsageSnapshot:
-          Type: Api
-          Properties:
-            Path: /platform-admin/workspaces/{workspaceId}/usage-snapshots/recompute
-            Method: post
-    Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/recomputeUsageSnapshot.ts]
-
   PlatformAdminUpdateFreezesFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1628,23 +1754,6 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/platformAdmin/updateFreezes.ts]
 
-  PlatformAdminRunReconciliationFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/
-      Handler: controllers/platformAdmin/runReconciliation.lambdaHandler
-      Events:
-        PlatformAdminRunReconciliation:
-          Type: Api
-          Properties:
-            Path: /platform-admin/billing/reconciliation-runs
-            Method: post
-    Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/runReconciliation.ts]
-
   PlatformAdminListUsageEventsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1661,6 +1770,113 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/platformAdmin/listUsageEvents.ts]
+
+  PlatformAdminRetryUsageEventSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/retryUsageEventSync.lambdaHandler
+      Events:
+        PlatformAdminRetryUsageEventSync:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/usage-events/{eventId}/retry-sync
+            Method: post
+        PlatformAdminRetryWorkspaceUsageSync:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/billing/retry-usage-sync
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/retryUsageEventSync.ts]
+
+  PlatformAdminCreateChargebeeCustomerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/createChargebeeCustomer.lambdaHandler
+      Events:
+        PlatformAdminCreateChargebeeCustomer:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/chargebee/customer
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/createChargebeeCustomer.ts]
+
+  PlatformAdminLinkChargebeeSubscriptionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/linkChargebeeSubscription.lambdaHandler
+      Events:
+        PlatformAdminLinkChargebeeSubscription:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/chargebee/subscription/link
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/linkChargebeeSubscription.ts]
+
+  PlatformAdminGetBillingChargebeeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/getBillingChargebee.lambdaHandler
+      Events:
+        PlatformAdminGetBillingChargebee:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/chargebee
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/getBillingChargebee.ts]
+
+  PlatformAdminGetBillingInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/getBillingInvoice.lambdaHandler
+      Events:
+        PlatformAdminGetBillingInvoice:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/invoices/{invoiceId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/getBillingInvoice.ts]
+
+  PlatformAdminDownloadBillingInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/downloadBillingInvoice.lambdaHandler
+      Events:
+        PlatformAdminDownloadBillingInvoice:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/invoices/{invoiceId}/download
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/downloadBillingInvoice.ts]
 
   # ──────────────────────────────────────────────────────────────────────────
   # S3 STORAGE

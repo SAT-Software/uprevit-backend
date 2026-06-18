@@ -24,7 +24,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			workspaceAdmins,
 			billingAccounts,
 			pastDueWorkspaces,
-			meteringEnabledWorkspaces,
+			limitsEnabledWorkspaces,
 		] = await Promise.all([
 			db.collection('workspaces').countDocuments({}),
 			db.collection('users').countDocuments({ status: 'active', workspaceId: { $ne: null } }),
@@ -32,7 +32,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			db.collection('users').countDocuments({ userType: 'admin', workspaceId: { $ne: null } }),
 			db.collection(BILLING_ACCOUNTS_COLLECTION).countDocuments({}),
 			db.collection(BILLING_ACCOUNTS_COLLECTION).countDocuments({ pastDue: true }),
-			db.collection(BILLING_ACCOUNTS_COLLECTION).countDocuments({ meteringEnabled: true }),
+			db.collection(BILLING_ACCOUNTS_COLLECTION).countDocuments({ 'limits.enabled': true }),
 		]);
 
 		return ResponseWrapper.success({
@@ -45,8 +45,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				billing: {
 					accountsLinked: billingAccounts,
 					pastDueWorkspaces,
-					limitsEnabledWorkspaces: meteringEnabledWorkspaces,
-					meteringEnabledWorkspaces,
+					limitsEnabledWorkspaces,
 				},
 			},
 		});

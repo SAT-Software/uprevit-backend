@@ -31,8 +31,9 @@ const {
 	defaultPeriodForCadence,
 	endOfBillingPeriod,
 	resolveBillingPeriod,
+	resolveUsagePeriod,
 } = require('../../utils/billing/billingPeriod');
-const { createBillingAccountForWorkspace, DEFAULT_INCLUDED_LIMITS, getBillingAccountByWorkspaceId } = require('../../utils/billing/billingAccounts');
+const { createBillingAccountForWorkspace, DEFAULT_LIMITS, getBillingAccountByWorkspaceId } = require('../../utils/billing/billingAccounts');
 const {
 	assertNewUploadCommitsAllowed,
 	collectUploadCommitsFromValue,
@@ -42,7 +43,6 @@ const {
 	recordCommittedUploadIfNew,
 	sumNewUploadCommitBytes,
 } = require('../../utils/billing/uploadCommit');
-const { aggregateUploadReconciliationBreakdown } = require('../../utils/billing/usageRecording');
 const { recordUsageEvent } = require('../../utils/billing/usageRecording');
 const { buildBillingSummary } = require('../../utils/billing/serializers');
 
@@ -79,6 +79,23 @@ describe('billing period helpers', () => {
 
 		expect(periodStart.toISOString()).toBe(now.toISOString());
 		expect(periodEnd.toISOString()).toBe(endOfBillingPeriod(now, 'monthly').toISOString());
+	});
+
+	it('prefers Chargebee term dates when subscription is linked', () => {
+		const termStart = new Date('2026-06-01T00:00:00.000Z');
+		const termEnd = new Date('2026-06-30T23:59:59.999Z');
+		const period = resolveUsagePeriod({
+			billingCadence: 'monthly',
+			createdAt: new Date('2025-01-01T00:00:00.000Z'),
+			chargebee: {
+				currentTermStart: termStart,
+				currentTermEnd: termEnd,
+			},
+		});
+
+		expect(period.source).toBe('chargebee');
+		expect(period.periodStart.toISOString()).toBe(termStart.toISOString());
+		expect(period.periodEnd.toISOString()).toBe(termEnd.toISOString());
 	});
 
 	it('resolves the current period from stored anchor and createdAt fallback', () => {
@@ -130,25 +147,28 @@ describe('workspace freezes', () => {
 
 describe('metric enforcement', () => {
 	const workspaceId = new ObjectId();
+	const phase3BillingAccount = (
+		limits: Partial<typeof DEFAULT_LIMITS> = {},
+		overrides: Record<string, unknown> = {},
+	) => ({
+		_id: new ObjectId(),
+		workspaceId,
+		billingCadence: 'monthly',
+		createdAt: new Date(),
+		limits: { ...DEFAULT_LIMITS, ...limits },
+		...overrides,
+	});
 
 	beforeEach(() => {
 		jest.clearAllMocks();
 	});
 
-	it('allows usage when metering is disabled', async () => {
+	it('allows usage when limits are disabled', async () => {
 		dbModule.getDb.mockResolvedValue({
 			collection: jest.fn((name: string) => {
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: false,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							included: DEFAULT_INCLUDED_LIMITS,
-						})),
+						findOne: jest.fn(async () => phase3BillingAccount({ enabled: false, enforcementMode: 'block' })),
 						createIndex: jest.fn(async () => undefined),
 					};
 				}
@@ -163,19 +183,13 @@ describe('metric enforcement', () => {
 						countDocuments: jest.fn(async () => 0),
 					};
 				}
-				if (name === 'billingAddOnEvents') {
-					return {
-						createIndex: jest.fn(async () => undefined),
-						findOne: jest.fn(async () => null),
-					};
-				}
 				return defaultCollectionFallback();
 			}),
 		});
 
 		const result = await checkMetricLimit(workspaceId, 'completed_export');
 		expect(result.allowed).toBe(true);
-		expect(result.meteringEnabled).toBe(false);
+		expect(result.limitsEnabled).toBe(false);
 	});
 
 	it('blocks only the exceeded metric when enforcement is block', async () => {
@@ -183,14 +197,13 @@ describe('metric enforcement', () => {
 			collection: jest.fn((name: string) => {
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							included: { seatMonths: 1, exports: 1, uploadGb: 1, sso: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 1,
+							exports: 1,
+							uploadGb: 1,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -209,12 +222,6 @@ describe('metric enforcement', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 0),
-					};
-				}
-				if (name === 'billingAddOnEvents') {
-					return {
-						createIndex: jest.fn(async () => undefined),
-						findOne: jest.fn(async () => null),
 					};
 				}
 				return defaultCollectionFallback();
@@ -238,14 +245,13 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							usageLimits: { seats: 5, exports: 5, uploadGb: 10, ssoAllowed: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 5,
+							exports: 5,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -279,17 +285,21 @@ describe('metric enforcement', () => {
 			collection: jest.fn((name: string) => {
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							periodStart: new Date('2026-06-01T00:00:00.000Z'),
-							periodEnd: new Date('2026-06-30T23:59:59.999Z'),
-							createdAt: new Date('2026-06-01T00:00:00.000Z'),
-							workspacePreferences: { enforcementMode: 'block' },
-							usageLimits: { seats: 5, exports: 5, uploadGb: 10, ssoAllowed: false },
-						})),
+						findOne: jest.fn(async () => phase3BillingAccount(
+							{
+								enabled: true,
+								enforcementMode: 'block',
+								seats: 5,
+								exports: 5,
+								uploadGb: 10,
+								ssoAllowed: false,
+							},
+							{
+								periodStart: new Date('2026-06-01T00:00:00.000Z'),
+								periodEnd: new Date('2026-06-30T23:59:59.999Z'),
+								createdAt: new Date('2026-06-01T00:00:00.000Z'),
+							},
+						)),
 						createIndex: jest.fn(async () => undefined),
 					};
 				}
@@ -334,14 +344,13 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							included: { seatMonths: 2, exports: 10, uploadGb: 10, sso: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 2,
+							exports: 10,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -354,12 +363,6 @@ describe('metric enforcement', () => {
 							]),
 						})),
 						createIndex: jest.fn(async () => undefined),
-					};
-				}
-				if (name === 'billingAddOnEvents') {
-					return {
-						createIndex: jest.fn(async () => undefined),
-						findOne: jest.fn(async () => null),
 					};
 				}
 				return defaultCollectionFallback();
@@ -383,14 +386,13 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							usageLimits: { seats: 2, exports: 10, uploadGb: 10, ssoAllowed: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 2,
+							exports: 10,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -419,14 +421,13 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'overage' },
-							usageLimits: { seats: 2, exports: 10, uploadGb: 10, ssoAllowed: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'overage',
+							seats: 2,
+							exports: 10,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -455,14 +456,13 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: false,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							usageLimits: { seats: 2, exports: 10, uploadGb: 10, ssoAllowed: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: false,
+							enforcementMode: 'block',
+							seats: 2,
+							exports: 10,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -491,14 +491,13 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							usageLimits: { seats: 5, exports: 10, uploadGb: 10, ssoAllowed: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 5,
+							exports: 10,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -522,14 +521,13 @@ describe('metric enforcement', () => {
 			collection: jest.fn((name: string) => {
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							usageLimits: { seats: 1, exports: 10, uploadGb: 10, ssoAllowed: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 1,
+							exports: 10,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -549,19 +547,18 @@ describe('metric enforcement', () => {
 		expect(result.reason).toContain('Seat limit reached');
 	});
 
-	it('enforces legacy-only included limits for export checks', async () => {
+	it('enforces phase 3 export limits', async () => {
 		dbModule.getDb.mockResolvedValue({
 			collection: jest.fn((name: string) => {
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							included: { seatMonths: 5, exports: 1, uploadGb: 10, sso: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 5,
+							exports: 1,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -597,9 +594,9 @@ describe('billing account creation', () => {
 		dbModule.getDb.mockResolvedValue({
 			collection: jest.fn(() => ({
 				findOne: jest.fn(async () => null),
-				insertOne: jest.fn(async (doc: Record<string, unknown>) => {
+				insertOne: jest.fn(async (doc: { status?: string; limits?: { enabled?: boolean } }) => {
 					expect(doc.status).toBe('draft');
-					expect(doc.meteringEnabled).toBe(false);
+					expect(doc.limits?.enabled).toBe(false);
 					return { insertedId };
 				}),
 				createIndex: jest.fn(async () => undefined),
@@ -608,8 +605,7 @@ describe('billing account creation', () => {
 
 		const account = await createBillingAccountForWorkspace(workspaceId);
 		expect(account._id?.toString()).toBe(insertedId.toString());
-		expect(account.usageLimits?.seats).toBe(DEFAULT_INCLUDED_LIMITS.seatMonths);
-		expect(account.included.seatMonths).toBe(DEFAULT_INCLUDED_LIMITS.seatMonths);
+		expect(account.limits.seats).toBe(DEFAULT_LIMITS.seats);
 	});
 });
 
@@ -718,11 +714,17 @@ describe('upload commit helpers', () => {
 		).mockResolvedValue({
 			_id: billingAccountId,
 			workspaceId,
-			meteringEnabled: true,
 			billingCadence: 'monthly',
 			createdAt: new Date(),
-			workspacePreferences: { enforcementMode: 'block' },
-			included: { seatMonths: 1, exports: 1, uploadGb: 0.001, sso: false },
+			limits: {
+				...DEFAULT_LIMITS,
+				enabled: true,
+				enforcementMode: 'block',
+				seats: 1,
+				exports: 1,
+				uploadGb: 0.001,
+				ssoAllowed: false,
+			},
 		} as any);
 
 		dbModule.getDb.mockResolvedValue({
@@ -736,12 +738,6 @@ describe('upload commit helpers', () => {
 							]),
 						})),
 						createIndex: jest.fn(async () => undefined),
-					};
-				}
-				if (name === 'billingAddOnEvents') {
-					return {
-						createIndex: jest.fn(async () => undefined),
-						findOne: jest.fn(async () => null),
 					};
 				}
 				if (name === 'users') {
@@ -780,45 +776,7 @@ describe('upload commit helpers', () => {
 	});
 });
 
-describe('upload reconciliation breakdown', () => {
-	const workspaceId = new ObjectId();
-	const periodStart = new Date('2026-06-01T00:00:00.000Z');
-	const periodEnd = new Date('2026-06-30T23:59:59.999Z');
-
-	it('separates upload commit bytes from platform adjustments', async () => {
-		dbModule.getDb.mockResolvedValue({
-			collection: jest.fn(() => ({
-				find: jest.fn(() => ({
-					toArray: jest.fn(async () => [
-						{
-							metric: 'upload_bytes',
-							source: 'upload_commit',
-							quantity: 1000,
-						},
-						{
-							metric: 'upload_bytes',
-							source: 'platform_adjustment',
-							quantity: 200,
-						},
-					]),
-				})),
-				createIndex: jest.fn(async () => undefined),
-			})),
-		});
-
-		const breakdown = await aggregateUploadReconciliationBreakdown({
-			workspaceId,
-			periodStart,
-			periodEnd,
-		});
-
-		expect(breakdown.commitBytes).toBe(1000);
-		expect(breakdown.adjustmentBytes).toBe(200);
-		expect(breakdown.totalBytes).toBe(1200);
-	});
-});
-
-describe('usage snapshots', () => {
+describe('billing summaries', () => {
 	const workspaceId = new ObjectId();
 	const billingAccountId = new ObjectId();
 	const periodStart = new Date('2026-06-01T00:00:00.000Z');
@@ -827,7 +785,14 @@ describe('usage snapshots', () => {
 		_id: billingAccountId,
 		workspaceId,
 		status: 'active',
-		meteringEnabled: true,
+		limits: {
+			enabled: true,
+			enforcementMode: 'block',
+			seats: 5,
+			exports: 100,
+			uploadGb: 10,
+			ssoAllowed: false,
+		},
 		billingCadence: 'monthly',
 		currency: 'USD',
 		netTermDays: 30,
@@ -836,216 +801,9 @@ describe('usage snapshots', () => {
 		periodEnd,
 		createdAt: periodStart,
 		updatedAt: periodStart,
-		usageLimits: { seats: 5, exports: 100, uploadGb: 10, ssoAllowed: false },
-		included: { seatMonths: 5, exports: 100, uploadGb: 10, sso: false },
-		workspacePreferences: { enforcementMode: 'block' },
 		sso: { enabled: false },
 		pastDue: false,
 	};
-
-	const { getCurrentUsageSnapshot, recomputeUsageSnapshot } = require('../../utils/billing/snapshots');
-
-	beforeEach(() => {
-		jest.clearAllMocks();
-		jest.spyOn(
-			require('../../utils/billing/billingAccounts'),
-			'getBillingAccountByWorkspaceId',
-		).mockResolvedValue(billingAccount);
-	});
-
-	it('recomputes zero-usage snapshots as ok', async () => {
-		const findOneAndUpdate = jest.fn(async () => ({
-			_id: new ObjectId(),
-			workspaceId,
-			billingAccountId,
-			periodStart,
-			periodEnd,
-			usage: { activeSeats: 0, exports: 0, uploadBytes: 0, uploadGb: 0 },
-			usageLimits: billingAccount.usageLimits,
-			limitStatus: {
-				seats: { used: 0, limit: 5, delta: 0, overLimit: false },
-				exports: { used: 0, limit: 100, delta: 0, overLimit: false },
-				uploadGb: { used: 0, limit: 10, delta: 0, overLimit: false },
-			},
-			reconciliationStatus: 'ok',
-			createdAt: new Date(),
-			updatedAt: new Date(),
-		}));
-
-		dbModule.getDb.mockResolvedValue({
-			collection: jest.fn((name: string) => {
-				if (name === 'usageEvents') {
-					return {
-						find: jest.fn(() => ({
-							toArray: jest.fn(async () => []),
-						})),
-						createIndex: jest.fn(async () => undefined),
-					};
-				}
-				if (name === 'billingAddOnEvents') {
-					return {
-						createIndex: jest.fn(async () => undefined),
-						findOne: jest.fn(async () => null),
-					};
-				}
-				if (name === 'users') {
-					return {
-						countDocuments: jest.fn(async () => 0),
-					};
-				}
-				if (name === 'usageSnapshots') {
-					return {
-						createIndex: jest.fn(async () => undefined),
-						findOneAndUpdate,
-					};
-				}
-				return {
-					findOne: jest.fn(async () => null),
-					createIndex: jest.fn(async () => undefined),
-				};
-			}),
-		});
-
-		const snapshot = await recomputeUsageSnapshot({
-			workspaceId,
-			billingAccount,
-		});
-
-		expect(snapshot.reconciliationStatus).toBe('ok');
-		expect(findOneAndUpdate).toHaveBeenCalled();
-	});
-
-	it('replaces stale pending snapshots on read', async () => {
-		const pendingSnapshot = {
-			_id: new ObjectId(),
-			workspaceId,
-			billingAccountId,
-			periodStart,
-			periodEnd,
-			reconciliationStatus: 'pending',
-		};
-
-		const findOne = jest.fn(async () => pendingSnapshot);
-		const findOneAndUpdate = jest.fn(async () => ({
-			...pendingSnapshot,
-			reconciliationStatus: 'ok',
-			usage: { activeSeats: 0, exports: 0, uploadBytes: 0, uploadGb: 0 },
-			usageLimits: billingAccount.usageLimits,
-			limitStatus: {
-				seats: { used: 0, limit: 5, delta: 0, overLimit: false },
-				exports: { used: 0, limit: 100, delta: 0, overLimit: false },
-				uploadGb: { used: 0, limit: 10, delta: 0, overLimit: false },
-			},
-			updatedAt: new Date(),
-		}));
-
-		dbModule.getDb.mockResolvedValue({
-			collection: jest.fn((name: string) => {
-				if (name === 'usageEvents') {
-					return {
-						find: jest.fn(() => ({
-							toArray: jest.fn(async () => []),
-						})),
-						createIndex: jest.fn(async () => undefined),
-					};
-				}
-				if (name === 'billingAddOnEvents') {
-					return {
-						createIndex: jest.fn(async () => undefined),
-						findOne: jest.fn(async () => null),
-					};
-				}
-				if (name === 'users') {
-					return {
-						countDocuments: jest.fn(async () => 0),
-					};
-				}
-				if (name === 'usageSnapshots') {
-					return {
-						createIndex: jest.fn(async () => undefined),
-						findOne,
-						findOneAndUpdate,
-					};
-				}
-				return {
-					findOne: jest.fn(async () => null),
-					createIndex: jest.fn(async () => undefined),
-				};
-			}),
-		});
-
-		const snapshot = await getCurrentUsageSnapshot({
-			workspaceId,
-			billingAccount,
-		});
-
-		expect(snapshot?.reconciliationStatus).toBe('ok');
-		expect(findOneAndUpdate).toHaveBeenCalled();
-	});
-
-	it('recomputes old-shape snapshots that lack active seats and limit status', async () => {
-		const oldShapeSnapshot = {
-			_id: new ObjectId(),
-			workspaceId,
-			billingAccountId,
-			periodStart,
-			periodEnd,
-			reconciliationStatus: 'ok',
-			usage: { seatMonths: 3, exports: 0, uploadBytes: 0, uploadGb: 0 },
-			included: { seatMonths: 5, exports: 100, uploadGb: 10, sso: false },
-			overages: { seatMonths: 0, exports: 0, uploadGb: 0 },
-		};
-
-		const findOne = jest.fn(async () => oldShapeSnapshot);
-		const findOneAndUpdate = jest.fn(async () => ({
-			...oldShapeSnapshot,
-			usage: { activeSeats: 1, exports: 0, uploadBytes: 0, uploadGb: 0 },
-			usageLimits: billingAccount.usageLimits,
-			limitStatus: {
-				seats: { used: 1, limit: 5, delta: 0, overLimit: false },
-				exports: { used: 0, limit: 100, delta: 0, overLimit: false },
-				uploadGb: { used: 0, limit: 10, delta: 0, overLimit: false },
-			},
-			updatedAt: new Date(),
-		}));
-
-		dbModule.getDb.mockResolvedValue({
-			collection: jest.fn((name: string) => {
-				if (name === 'usageEvents') {
-					return {
-						find: jest.fn(() => ({
-							toArray: jest.fn(async () => []),
-						})),
-						createIndex: jest.fn(async () => undefined),
-					};
-				}
-				if (name === 'users') {
-					return {
-						countDocuments: jest.fn(async () => 1),
-					};
-				}
-				if (name === 'usageSnapshots') {
-					return {
-						createIndex: jest.fn(async () => undefined),
-						findOne,
-						findOneAndUpdate,
-					};
-				}
-				return {
-					findOne: jest.fn(async () => null),
-					createIndex: jest.fn(async () => undefined),
-				};
-			}),
-		});
-
-		const snapshot = await getCurrentUsageSnapshot({
-			workspaceId,
-			billingAccount,
-		});
-
-		expect(snapshot?.usage.activeSeats).toBe(1);
-		expect(findOneAndUpdate).toHaveBeenCalled();
-	});
 
 	it('builds summaries from active seats and ignores legacy seat-month events', async () => {
 		dbModule.getDb.mockResolvedValue({
@@ -1081,5 +839,52 @@ describe('usage snapshots', () => {
 		expect(summary.usage.activeSeats).toBe(3);
 		expect(summary.usage.exports).toBe(2);
 		expect(summary.limitStatus.seats.used).toBe(3);
+	});
+
+	it('aggregates events by occurredAt when stored billing period differs from current term', async () => {
+		const { aggregateUsageForPeriod } = require('../../utils/billing/usageRecording');
+		const stalePeriodStart = new Date('2025-01-01T00:00:00.000Z');
+		const stalePeriodEnd = new Date('2025-12-31T23:59:59.999Z');
+
+		dbModule.getDb.mockResolvedValue({
+			collection: jest.fn((name: string) => {
+				if (name === 'usageEvents') {
+					return {
+						find: jest.fn(() => ({
+							toArray: jest.fn(async () => [
+								{
+									metric: 'completed_export',
+									quantity: 5,
+									billingPeriodStart: stalePeriodStart,
+									billingPeriodEnd: stalePeriodEnd,
+									occurredAt: new Date('2026-06-15T00:00:00.000Z'),
+								},
+								{
+									metric: 'upload_bytes',
+									quantity: 2048,
+									billingPeriodStart: stalePeriodStart,
+									billingPeriodEnd: stalePeriodEnd,
+									occurredAt: new Date('2026-06-16T00:00:00.000Z'),
+								},
+							]),
+						})),
+						createIndex: jest.fn(async () => undefined),
+					};
+				}
+				if (name === 'users') {
+					return {
+						countDocuments: jest.fn(async () => 1),
+					};
+				}
+				return {
+					createIndex: jest.fn(async () => undefined),
+				};
+			}),
+		});
+
+		const totals = await aggregateUsageForPeriod({ workspaceId, periodStart, periodEnd });
+
+		expect(totals.exports).toBe(5);
+		expect(totals.uploadBytes).toBe(2048);
 	});
 });

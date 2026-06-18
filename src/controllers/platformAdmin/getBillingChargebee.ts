@@ -5,14 +5,14 @@ import { getDb } from '../../utils/db';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { requirePlatformOperator } from '../../utils/platformAdminContext';
+import { recordPlatformAuditEvent } from '../../utils/platformAuditLog';
 import { getBillingAccountByWorkspaceId } from '../../utils/billing/billingAccounts';
-import { recomputeUsageSnapshot } from '../../utils/billing/snapshots';
-import { serializeUsageSnapshot } from '../../utils/billing/serializers';
+import { buildChargebeeBillingDetail } from '../../utils/billing/chargebeeBillingDetail';
 
 /**
- * Recomputes the current billing period usage snapshot for a workspace.
+ * Returns Chargebee billing detail and invoices for a workspace (platform admin).
  * @param {APIGatewayProxyEvent} event API Gateway request event
- * @return {Promise<APIGatewayProxyResult>} Recomputed usage snapshot payload
+ * @return {Promise<APIGatewayProxyResult>} Chargebee billing payload
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
@@ -32,17 +32,27 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const account = await getBillingAccountByWorkspaceId(workspaceObjectId);
 		if (!account) return ResponseWrapper.notFound('Billing account not found');
 
-		const snapshot = await recomputeUsageSnapshot({
+		const detail = await buildChargebeeBillingDetail(account);
+
+		const { auth, operator } = operatorResult.context;
+		await recordPlatformAuditEvent({
+			action: 'billing.chargebee.view',
+			targetType: 'billing_account',
 			workspaceId: workspaceObjectId,
-			billingAccount: account,
+			entityId: account._id.toString(),
+			summary: `Viewed Chargebee billing for ${workspace.workspaceName}`,
+			auth: auth.payload,
+			operator,
+			event,
+			source: 'platform-admin-portal',
 		});
 
 		return ResponseWrapper.success({
-			message: 'Usage snapshot recomputed',
-			data: serializeUsageSnapshot(snapshot),
+			message: 'Chargebee billing retrieved',
+			data: detail,
 		});
 	} catch (error) {
-		logError('Platform admin recompute usage snapshot failed', error);
-		return ResponseWrapper.internalServerError('Failed to recompute usage snapshot');
+		logError('Platform admin get billing chargebee failed', error);
+		return ResponseWrapper.internalServerError('Failed to load billing information');
 	}
 };
