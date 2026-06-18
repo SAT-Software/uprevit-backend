@@ -45,10 +45,9 @@ Parameters:
     Type: String
     Description: "CloudFront key pair id for signed documentation video URLs"
     Default: ""
-  DocumentationCloudFrontPrivateKey:
+  DocumentationCloudFrontPrivateKeyParam:
     Type: String
-    NoEcho: true
-    Description: "CloudFront signing private key PEM (from GitHub secret at deploy)"
+    Description: "SSM Parameter Store path (SecureString) for the CloudFront signing private key PEM"
     Default: ""
   ExportJobQueueUrl:
     Type: String
@@ -148,6 +147,7 @@ Globals:
 
 Conditions:
   HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]
+  UseDocumentationCloudFrontPrivateKey: !Not [!Equals [!Ref DocumentationCloudFrontPrivateKeyParam, ""]]
 
 Resources:
   HelloWorldFunction:
@@ -734,7 +734,10 @@ Resources:
         Variables:
           DOCUMENTATION_CLOUDFRONT_DOMAIN: !Ref DocumentationCloudFrontDomain
           DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID: !Ref DocumentationCloudFrontKeyPairId
-          DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY: !Ref DocumentationCloudFrontPrivateKey
+          DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY: !If
+            - UseDocumentationCloudFrontPrivateKey
+            - !Sub "{{resolve:ssm-secure:${DocumentationCloudFrontPrivateKeyParam}}}"
+            - ""
       Policies:
         - Statement:
             - Effect: Allow
