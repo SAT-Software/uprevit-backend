@@ -734,16 +734,21 @@ Resources:
         Variables:
           DOCUMENTATION_CLOUDFRONT_DOMAIN: !Ref DocumentationCloudFrontDomain
           DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID: !Ref DocumentationCloudFrontKeyPairId
-          DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY: !If
-            - UseDocumentationCloudFrontPrivateKey
-            - !Sub "{{resolve:ssm-secure:${DocumentationCloudFrontPrivateKeyParam}}}"
-            - ""
+          DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM: !Ref DocumentationCloudFrontPrivateKeyParam
       Policies:
         - Statement:
             - Effect: Allow
               Action:
                 - s3:GetObject
               Resource: !Sub "arn:aws:s3:::${DocumentationFilesBucket}/videos/*"
+        - !If
+          - UseDocumentationCloudFrontPrivateKey
+          - Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${DocumentationCloudFrontPrivateKeyParam}"
+          - !Ref AWS::NoValue
       Events:
         GetDocumentationVideoSignedUrl:
           Type: Api
