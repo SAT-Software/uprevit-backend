@@ -16,7 +16,6 @@ export const serializeBillingAccount = (account: BillingAccount & { _id: ObjectI
 		status: account.status,
 		limits,
 		limitsEnabled: limits.enabled,
-		meteringEnabled: limits.enabled,
 		billingCadence: account.billingCadence,
 		currency: account.currency,
 		netTermDays: account.netTermDays,
@@ -52,7 +51,6 @@ export const serializeWorkspaceBillingPreview = (account: BillingAccount | null)
 	if (!account) {
 		return {
 			status: 'not_set' as const,
-			meteringEnabled: null,
 			limitsEnabled: null,
 			billingCadence: null,
 			currency: null,
@@ -64,7 +62,6 @@ export const serializeWorkspaceBillingPreview = (account: BillingAccount | null)
 
 	return {
 		status: account.status,
-		meteringEnabled: limits.enabled,
 		limitsEnabled: limits.enabled,
 		billingCadence: account.billingCadence,
 		currency: account.currency,
@@ -129,7 +126,6 @@ export const buildBillingSummary = async ({
 		},
 		enforcementMode: limits.enforcementMode,
 		limitsEnabled: limits.enabled,
-		meteringEnabled: limits.enabled,
 	};
 };
 

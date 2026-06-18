@@ -24,7 +24,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			workspaceAdmins,
 			billingAccounts,
 			pastDueWorkspaces,
-			meteringEnabledWorkspaces,
+			limitsEnabledWorkspaces,
 		] = await Promise.all([
 			db.collection('workspaces').countDocuments({}),
 			db.collection('users').countDocuments({ status: 'active', workspaceId: { $ne: null } }),
@@ -45,8 +45,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				billing: {
 					accountsLinked: billingAccounts,
 					pastDueWorkspaces,
-					limitsEnabledWorkspaces: meteringEnabledWorkspaces,
-					meteringEnabledWorkspaces,
+					limitsEnabledWorkspaces,
 				},
 			},
 		});

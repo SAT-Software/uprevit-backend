@@ -2,7 +2,6 @@ import { ObjectId } from 'mongodb';
 import {
 	BILLING_ACCOUNTS_COLLECTION,
 	type BillingAccount,
-	type EnforcementMode,
 	type UsageLimits,
 	type WorkspaceLimits,
 } from '../../models/billing';
@@ -20,19 +19,6 @@ export const DEFAULT_LIMITS: WorkspaceLimits = {
 	ssoAllowed: false,
 };
 
-type LegacyBillingAccount = {
-	limits?: Partial<WorkspaceLimits>;
-	usageLimits?: Partial<UsageLimits>;
-	included?: {
-		seatMonths?: number;
-		exports?: number;
-		uploadGb?: number;
-		sso?: boolean;
-	};
-	meteringEnabled?: boolean;
-	workspacePreferences?: { enforcementMode?: EnforcementMode };
-};
-
 export const limitsToUsageLimits = (limits: WorkspaceLimits): UsageLimits => ({
 	seats: limits.seats,
 	exports: limits.exports,
@@ -40,53 +26,13 @@ export const limitsToUsageLimits = (limits: WorkspaceLimits): UsageLimits => ({
 	ssoAllowed: limits.ssoAllowed,
 });
 
-export type NormalizableBillingAccount = LegacyBillingAccount & {
+export type NormalizableBillingAccount = {
 	limits?: Partial<WorkspaceLimits> | WorkspaceLimits;
 };
 
 export const normalizeLimits = (
 	account?: NormalizableBillingAccount | null,
-): WorkspaceLimits => {
-	if (account?.limits && typeof account.limits.enabled === 'boolean') {
-		return { ...DEFAULT_LIMITS, ...account.limits };
-	}
-
-	const legacyUsage = account?.usageLimits;
-	const legacyIncluded = account?.included;
-
-	return {
-		enabled: account?.meteringEnabled ?? DEFAULT_LIMITS.enabled,
-		enforcementMode: account?.workspacePreferences?.enforcementMode ?? DEFAULT_LIMITS.enforcementMode,
-		seats: typeof legacyUsage?.seats === 'number'
-			? legacyUsage.seats
-			: typeof legacyIncluded?.seatMonths === 'number'
-				? legacyIncluded.seatMonths
-				: DEFAULT_LIMITS.seats,
-		exports: typeof legacyUsage?.exports === 'number'
-			? legacyUsage.exports
-			: typeof legacyIncluded?.exports === 'number'
-				? legacyIncluded.exports
-				: DEFAULT_LIMITS.exports,
-		uploadGb: typeof legacyUsage?.uploadGb === 'number'
-			? legacyUsage.uploadGb
-			: typeof legacyIncluded?.uploadGb === 'number'
-				? legacyIncluded.uploadGb
-				: DEFAULT_LIMITS.uploadGb,
-		ssoAllowed: typeof legacyUsage?.ssoAllowed === 'boolean'
-			? legacyUsage.ssoAllowed
-			: typeof legacyIncluded?.sso === 'boolean'
-				? legacyIncluded.sso
-				: DEFAULT_LIMITS.ssoAllowed,
-	};
-};
-
-/**
- * @deprecated Use normalizeLimits instead.
- * @param {LegacyBillingAccount | null} account
- * @return {UsageLimits}
- */
-export const normalizeUsageLimits = (account?: LegacyBillingAccount | null): UsageLimits =>
-	limitsToUsageLimits(normalizeLimits(account));
+): WorkspaceLimits => ({ ...DEFAULT_LIMITS, ...account?.limits });
 
 export const ensureBillingAccountIndexes = async (): Promise<void> => {
 	if (hasEnsuredBillingIndexes) return;

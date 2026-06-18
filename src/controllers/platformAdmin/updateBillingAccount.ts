@@ -26,7 +26,6 @@ const ENFORCEMENT_MODES: EnforcementMode[] = ['overage', 'block'];
 
 type UpdateBillingInput = {
 	status?: BillingAccountStatus;
-	meteringEnabled?: boolean;
 	limitsEnabled?: boolean;
 	billingCadence?: BillingCadence;
 	currency?: string;
@@ -36,7 +35,6 @@ type UpdateBillingInput = {
 	periodEnd?: string;
 	ssoEnabled?: boolean;
 	limits?: Partial<WorkspaceLimits>;
-	usageLimits?: Partial<Pick<WorkspaceLimits, 'seats' | 'exports' | 'uploadGb' | 'ssoAllowed'>>;
 	enforcementMode?: EnforcementMode;
 };
 
@@ -111,7 +109,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			updates.periodEnd = parsedPeriodEnd.date;
 		}
 
-		const seatInput = input.limits?.seats ?? input.usageLimits?.seats;
+		const seatInput = input.limits?.seats;
 		if (seatInput !== undefined) {
 			return ResponseWrapper.badRequest('Seat limits are mirrored from Chargebee and cannot be edited manually');
 		}
@@ -131,15 +129,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return true;
 		};
 
-		const exportLimitResult = applyNumericLimit('exports', input.limits?.exports ?? input.usageLimits?.exports);
+		const exportLimitResult = applyNumericLimit('exports', input.limits?.exports);
 		if (typeof exportLimitResult !== 'boolean') return exportLimitResult;
 		limitsChanged = limitsChanged || exportLimitResult;
 
-		const uploadLimitResult = applyNumericLimit('uploadGb', input.limits?.uploadGb ?? input.usageLimits?.uploadGb);
+		const uploadLimitResult = applyNumericLimit('uploadGb', input.limits?.uploadGb);
 		if (typeof uploadLimitResult !== 'boolean') return uploadLimitResult;
 		limitsChanged = limitsChanged || uploadLimitResult;
 
-		const ssoAllowedInput = input.limits?.ssoAllowed ?? input.usageLimits?.ssoAllowed;
+		const ssoAllowedInput = input.limits?.ssoAllowed;
 		if (ssoAllowedInput !== undefined) {
 			if (typeof ssoAllowedInput !== 'boolean') {
 				return ResponseWrapper.badRequest('ssoAllowed must be a boolean');
@@ -150,10 +148,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		if (typeof input.limitsEnabled === 'boolean') {
 			limits.enabled = input.limitsEnabled;
-			limitsChanged = true;
-		}
-		if (typeof input.meteringEnabled === 'boolean') {
-			limits.enabled = input.meteringEnabled;
 			limitsChanged = true;
 		}
 		if (input.enforcementMode !== undefined) {

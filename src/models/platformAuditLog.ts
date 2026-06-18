@@ -27,7 +27,6 @@ export type PlatformAuditTargetType =
 	| 'user'
 	| 'billing_account'
 	| 'usage_event'
-	| 'usage_snapshot'
 	| 'chargebee_customer'
 	| 'system';
 

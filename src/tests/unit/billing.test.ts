@@ -147,30 +147,28 @@ describe('workspace freezes', () => {
 
 describe('metric enforcement', () => {
 	const workspaceId = new ObjectId();
+	const phase3BillingAccount = (
+		limits: Partial<typeof DEFAULT_LIMITS> = {},
+		overrides: Record<string, unknown> = {},
+	) => ({
+		_id: new ObjectId(),
+		workspaceId,
+		billingCadence: 'monthly',
+		createdAt: new Date(),
+		limits: { ...DEFAULT_LIMITS, ...limits },
+		...overrides,
+	});
 
 	beforeEach(() => {
 		jest.clearAllMocks();
 	});
 
-	it('allows usage when metering is disabled', async () => {
+	it('allows usage when limits are disabled', async () => {
 		dbModule.getDb.mockResolvedValue({
 			collection: jest.fn((name: string) => {
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: false,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							included: {
-								seatMonths: DEFAULT_LIMITS.seats,
-								exports: DEFAULT_LIMITS.exports,
-								uploadGb: DEFAULT_LIMITS.uploadGb,
-								sso: DEFAULT_LIMITS.ssoAllowed,
-							},
-						})),
+						findOne: jest.fn(async () => phase3BillingAccount({ enabled: false, enforcementMode: 'block' })),
 						createIndex: jest.fn(async () => undefined),
 					};
 				}
@@ -199,14 +197,13 @@ describe('metric enforcement', () => {
 			collection: jest.fn((name: string) => {
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							included: { seatMonths: 1, exports: 1, uploadGb: 1, sso: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 1,
+							exports: 1,
+							uploadGb: 1,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -225,12 +222,6 @@ describe('metric enforcement', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 0),
-					};
-				}
-				if (name === 'billingAddOnEvents') {
-					return {
-						createIndex: jest.fn(async () => undefined),
-						findOne: jest.fn(async () => null),
 					};
 				}
 				return defaultCollectionFallback();
@@ -254,14 +245,13 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							usageLimits: { seats: 5, exports: 5, uploadGb: 10, ssoAllowed: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 5,
+							exports: 5,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -295,17 +285,21 @@ describe('metric enforcement', () => {
 			collection: jest.fn((name: string) => {
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							periodStart: new Date('2026-06-01T00:00:00.000Z'),
-							periodEnd: new Date('2026-06-30T23:59:59.999Z'),
-							createdAt: new Date('2026-06-01T00:00:00.000Z'),
-							workspacePreferences: { enforcementMode: 'block' },
-							usageLimits: { seats: 5, exports: 5, uploadGb: 10, ssoAllowed: false },
-						})),
+						findOne: jest.fn(async () => phase3BillingAccount(
+							{
+								enabled: true,
+								enforcementMode: 'block',
+								seats: 5,
+								exports: 5,
+								uploadGb: 10,
+								ssoAllowed: false,
+							},
+							{
+								periodStart: new Date('2026-06-01T00:00:00.000Z'),
+								periodEnd: new Date('2026-06-30T23:59:59.999Z'),
+								createdAt: new Date('2026-06-01T00:00:00.000Z'),
+							},
+						)),
 						createIndex: jest.fn(async () => undefined),
 					};
 				}
@@ -350,14 +344,13 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							included: { seatMonths: 2, exports: 10, uploadGb: 10, sso: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 2,
+							exports: 10,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -370,12 +363,6 @@ describe('metric enforcement', () => {
 							]),
 						})),
 						createIndex: jest.fn(async () => undefined),
-					};
-				}
-				if (name === 'billingAddOnEvents') {
-					return {
-						createIndex: jest.fn(async () => undefined),
-						findOne: jest.fn(async () => null),
 					};
 				}
 				return defaultCollectionFallback();
@@ -399,14 +386,13 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							usageLimits: { seats: 2, exports: 10, uploadGb: 10, ssoAllowed: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 2,
+							exports: 10,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -435,14 +421,13 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'overage' },
-							usageLimits: { seats: 2, exports: 10, uploadGb: 10, ssoAllowed: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'overage',
+							seats: 2,
+							exports: 10,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -471,14 +456,13 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: false,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							usageLimits: { seats: 2, exports: 10, uploadGb: 10, ssoAllowed: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: false,
+							enforcementMode: 'block',
+							seats: 2,
+							exports: 10,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -507,14 +491,13 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							usageLimits: { seats: 5, exports: 10, uploadGb: 10, ssoAllowed: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 5,
+							exports: 10,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -538,14 +521,13 @@ describe('metric enforcement', () => {
 			collection: jest.fn((name: string) => {
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							usageLimits: { seats: 1, exports: 10, uploadGb: 10, ssoAllowed: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 1,
+							exports: 10,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -565,19 +547,18 @@ describe('metric enforcement', () => {
 		expect(result.reason).toContain('Seat limit reached');
 	});
 
-	it('enforces legacy-only included limits for export checks', async () => {
+	it('enforces phase 3 export limits', async () => {
 		dbModule.getDb.mockResolvedValue({
 			collection: jest.fn((name: string) => {
 				if (name === 'billingAccounts') {
 					return {
-						findOne: jest.fn(async () => ({
-							_id: new ObjectId(),
-							workspaceId,
-							meteringEnabled: true,
-							billingCadence: 'monthly',
-							createdAt: new Date(),
-							workspacePreferences: { enforcementMode: 'block' },
-							included: { seatMonths: 5, exports: 1, uploadGb: 10, sso: false },
+						findOne: jest.fn(async () => phase3BillingAccount({
+							enabled: true,
+							enforcementMode: 'block',
+							seats: 5,
+							exports: 1,
+							uploadGb: 10,
+							ssoAllowed: false,
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -733,11 +714,17 @@ describe('upload commit helpers', () => {
 		).mockResolvedValue({
 			_id: billingAccountId,
 			workspaceId,
-			meteringEnabled: true,
 			billingCadence: 'monthly',
 			createdAt: new Date(),
-			workspacePreferences: { enforcementMode: 'block' },
-			included: { seatMonths: 1, exports: 1, uploadGb: 0.001, sso: false },
+			limits: {
+				...DEFAULT_LIMITS,
+				enabled: true,
+				enforcementMode: 'block',
+				seats: 1,
+				exports: 1,
+				uploadGb: 0.001,
+				ssoAllowed: false,
+			},
 		} as any);
 
 		dbModule.getDb.mockResolvedValue({
@@ -751,12 +738,6 @@ describe('upload commit helpers', () => {
 							]),
 						})),
 						createIndex: jest.fn(async () => undefined),
-					};
-				}
-				if (name === 'billingAddOnEvents') {
-					return {
-						createIndex: jest.fn(async () => undefined),
-						findOne: jest.fn(async () => null),
 					};
 				}
 				if (name === 'users') {
