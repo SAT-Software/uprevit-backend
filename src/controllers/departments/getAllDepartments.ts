@@ -4,7 +4,7 @@ import { ObjectId } from 'mongodb';
 import { Department } from '../../models/department';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from '../../utils/authUtils';
+import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 import { enrichDepartmentsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
@@ -56,10 +56,10 @@ type DepartmentWithUsers = Omit<Department, 'users'> & {
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if(!auth.isValid) {
-			return auth.error;
-		}
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context } = tenantResult;
 
 		const db = await getDb();
 
@@ -71,10 +71,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (listQueryResult.error) return listQueryResult.error;
 
 		const { limit, page, skip, sort, order, filters } = listQueryResult.value!;
-		const workspaceId = event.queryStringParameters?.workspaceId;
+		const requestedWorkspaceId = event.queryStringParameters?.workspaceId;
 
-		if (!workspaceId) return ResponseWrapper.badRequest('Workspace ID is required.');
-		if (!ObjectId.isValid(workspaceId)) return ResponseWrapper.badRequest('Invalid workspaceId');
+		if (requestedWorkspaceId) {
+			if (!ObjectId.isValid(requestedWorkspaceId)) return ResponseWrapper.badRequest('Invalid workspaceId');
+
+			const workspaceMismatch = assertWorkspaceMatch(requestedWorkspaceId, context.workspaceId);
+			if (workspaceMismatch) return workspaceMismatch;
+		}
 
 		const isArchiveParam = event.queryStringParameters?.isArchive;
 		let isArchive = false;
@@ -91,8 +95,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		sortObj[sortField] = order === 'desc' ? -1 : 1;
 
 		const filter = isArchive
-			? { isArchived: true, workspace_id: new ObjectId(workspaceId) }
-			: { isArchived: { $ne: true }, workspace_id: new ObjectId(workspaceId) };
+			? { isArchived: true, workspace_id: context.workspaceId }
+			: { isArchived: { $ne: true }, workspace_id: context.workspaceId };
 
 		const pipeline = [
 			{ $match: filter },
@@ -144,7 +148,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			departments.map(async (department) => {
 				if (!department.users?.length) return department;
 
-				const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(department.users);
+				const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(department.users, {
+					workspaceId: context.workspaceId,
+					pendingOwnerId: context.cognitoSub,
+				});
 
 				return {
 					...department,
@@ -153,7 +160,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}),
 		);
 
-		const departmentsWithSignedUrls = await enrichDepartmentsWithImageUrls(departmentsWithSignedAvatars);
+		const departmentsWithSignedUrls = await enrichDepartmentsWithImageUrls(departmentsWithSignedAvatars, {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		});
 
 		const totalPages = Math.ceil(totalCount / limit);
 

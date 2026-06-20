@@ -8,6 +8,7 @@ import { ResponseWrapper } from "../../utils/responseWrapper";
 import { validateMissingFields } from "../../utils/validationUtils";
 import { createPresignedUrl, type UploadScope } from "../../utils/s3-storage";
 import type { Product } from "../../models/product";
+import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
 
 const PRODUCT_ASSET_CONTENT_TYPES = new Set([
 	"image/png",
@@ -65,6 +66,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest(`Unsupported contentType: ${input.contentType}`);
 		}
 
+		const sizeBytes = typeof input.sizeBytes === 'number' && input.sizeBytes > 0
+			? Math.floor(input.sizeBytes)
+			: undefined;
+
 		const userContext = await getAuthenticatedUserContext(auth.payload.sub);
 
 		if (!userContext) {
@@ -78,6 +83,18 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			});
 
 			return ResponseWrapper.created({ message: "Presigned URL generated successfully.", uploadUrl, key, expiresIn: 3600 });
+		}
+
+		if (userContext.workspaceId) {
+			const uploadCheck = await assertUsageActionAllowed(userContext.workspaceId, 'upload');
+			if (!uploadCheck.allowed) return ResponseWrapper.forbidden(uploadCheck.reason);
+
+			if (sizeBytes) {
+				const limitCheck = await checkUploadWouldExceedLimit(userContext.workspaceId, sizeBytes);
+				if (!limitCheck.allowed) {
+					return ResponseWrapper.forbidden(limitCheck.reason ?? 'Upload limit reached');
+				}
+			}
 		}
 
 		let productId: string | undefined;

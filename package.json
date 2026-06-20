@@ -1,5 +1,5 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "scripts": {
     "install:src": "npm ci --prefix src --no-audit --no-fund",
     "reinstall:src": "rm -rf src/node_modules && npm run install:src",
@@ -10,7 +10,8 @@
     "deploy": "sam deploy --stack-name uprevit-test --region us-east-1 --no-confirm-changeset",
     "prepare:sam-env": "node scripts/prepare-sam-env.mjs",
     "start:local": "npm run prepare:sam-env && AWS_PROFILE=uprevit-amit sam local start-api --env-vars .sam-local-env.json",
-    "seed:documentation-videos": "npm --prefix src run seed:documentation-videos --"
+    "seed:documentation-videos": "npm --prefix src run seed:documentation-videos --",
+    "bootstrap:platform-admin": "npm --prefix src run bootstrap:platform-admin --"
   },
   "devDependencies": {
     "esbuild": "^0.25.5"

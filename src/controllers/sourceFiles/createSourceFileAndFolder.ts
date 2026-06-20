@@ -1,12 +1,16 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from "../../utils/authUtils";
+import { requireTenantContext, tenantObjectIdFilter } from "../../utils/tenantContext";
 import { validateAllObjectIds, validateEnum, validateMissingFields } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
 import { SourceFile } from "../../models/sourceFiles";
+import type { Product } from "../../models/product";
 import { ObjectId } from "mongodb";
 import { recordAuditEvent } from "../../utils/auditLogV2";
+import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
+import { getBillingAccountByWorkspaceId, normalizeLimits } from "../../utils/billing/billingAccounts";
+import { recordCommittedUploadBytes } from "../../utils/billing/uploadCommit";
 
 /**
  * @param {APIGatewayProxyEvent} event
@@ -14,15 +18,16 @@ import { recordAuditEvent } from "../../utils/auditLogV2";
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context, auth } = tenantResult;
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is missing.');
 
 		const input = JSON.parse(event.body);
 
 		const missingFieldsResult = validateMissingFields({
-			workspace_id: input.workspace_id,
 			name: input.name,
 			type: input.type,
 		});
@@ -36,15 +41,35 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if(isValidEnum) return isValidEnum
 
 		const objectIdValidation = validateAllObjectIds({
-			workspace_id: input.workspace_id,
 			...(input.parentId && { 'parentId': input.parentId }),
 			...(input.product_id && { 'product_id': input.product_id })
 		});
 		if (objectIdValidation) return objectIdValidation;
 
+		const sizeBytes = input.type === 'file' && typeof input.sizeBytes === 'number' && input.sizeBytes > 0
+			? Math.floor(input.sizeBytes)
+			: undefined;
+
+		if (input.type === 'file') {
+			const uploadCheck = await assertUsageActionAllowed(context.workspaceId, 'upload');
+			if (!uploadCheck.allowed) return ResponseWrapper.forbidden(uploadCheck.reason);
+
+			const billingAccount = await getBillingAccountByWorkspaceId(context.workspaceId);
+			if (billingAccount && normalizeLimits(billingAccount).enabled && !sizeBytes) {
+				return ResponseWrapper.badRequest('sizeBytes is required for file uploads when usage limits are enabled');
+			}
+
+			if (sizeBytes) {
+				const limitCheck = await checkUploadWouldExceedLimit(context.workspaceId, sizeBytes);
+				if (!limitCheck.allowed) {
+					return ResponseWrapper.forbidden(limitCheck.reason ?? 'Upload limit reached');
+				}
+			}
+		}
+
 		const db = await getDb();
 		const sourceFilesCollection = db.collection<SourceFile>('sourceFiles');
-		const workspaceId = ObjectId.createFromHexString(input.workspace_id);
+		const workspaceId = context.workspaceId;
 		const parentId = input.parentId ? ObjectId.createFromHexString(input.parentId) : null;
 		const productId = typeof input.product_id === 'string' ? ObjectId.createFromHexString(input.product_id) : null;
 
@@ -54,6 +79,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		if (productId && parentId) {
 			return ResponseWrapper.badRequest('product_id can only be set on top-level folders.');
+		}
+
+		if (productId) {
+			const product = await db.collection<Product>('products').findOne(
+				tenantObjectIdFilter(productId, workspaceId),
+			);
+			if (!product) return ResponseWrapper.notFound('Product not found.');
 		}
 
 		const trimmedName = input.name.trim();
@@ -86,10 +118,20 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			...(input.type === 'file' && {
 				...(input.url && { url: input.url }),
 				...(input.key && { key: input.key }),
+				...(sizeBytes && { sizeBytes }),
 			}),
 		};
 
 		await sourceFilesCollection.insertOne(newSourceFile);
+
+		if (newSourceFile.type === 'file' && sizeBytes && newSourceFile.key) {
+			await recordCommittedUploadBytes({
+				workspaceId,
+				uploadKey: newSourceFile.key,
+				sizeBytes,
+				metadata: { sourceFileId: newSourceFile._id.toString() },
+			});
+		}
 
 		const isFolder = newSourceFile.type === 'folder';
 		await recordAuditEvent({

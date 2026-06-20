@@ -16,6 +16,7 @@ import {
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateAllObjectIds } from '../../utils/validationUtils';
 import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
+import { assertUsageActionAllowed } from '../../utils/billing/enforcement';
 
 /**
  * Queues a product export job from request body format.
@@ -85,6 +86,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (product.workspace_id.toString() !== userContext.workspaceId.toString()) {
 			return ResponseWrapper.forbidden('You are not authorized to export this product');
 		}
+
+		const exportCheck = await assertUsageActionAllowed(userContext.workspaceId, 'export', 1);
+		if (!exportCheck.allowed) return ResponseWrapper.forbidden(exportCheck.reason);
 
 		const job = await createQueuedProductExportJob({
 			productId: productObjectId,

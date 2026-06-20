@@ -8,10 +8,10 @@ import {
 	type AuditLogV2,
 	type AuditScopeType,
 } from '../../models/auditLogV2';
-import { authenticateRequest } from '../../utils/authUtils';
 import { getDb } from '../../utils/db';
 import { logError, logInfo } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 
 const ADMIN_ONLY_SCOPES: AuditScopeType[] = ['department', 'project', 'archive'];
 const MAX_SEARCH_LENGTH = 200;
@@ -50,10 +50,12 @@ const parseActions = (rawActions: string | undefined): AuditAction[] | null => {
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
-		const workspaceId = event.queryStringParameters?.workspaceId;
+		const { context, auth } = tenantResult;
+
+		const requestedWorkspaceId = event.queryStringParameters?.workspaceId;
 		const scopeTypeRaw = event.queryStringParameters?.scopeType;
 		const scopeId = event.queryStringParameters?.scopeId;
 		const search = event.queryStringParameters?.search?.trim();
@@ -69,8 +71,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			requestId: event.requestContext?.requestId,
 		});
 
-		if (!workspaceId || !ObjectId.isValid(workspaceId)) {
-			return ResponseWrapper.badRequest('workspaceId query parameter must be a valid ObjectId.');
+		if (requestedWorkspaceId) {
+			if (!ObjectId.isValid(requestedWorkspaceId)) {
+				return ResponseWrapper.badRequest('workspaceId query parameter must be a valid ObjectId.');
+			}
+
+			const workspaceMismatch = assertWorkspaceMatch(requestedWorkspaceId, context.workspaceId);
+			if (workspaceMismatch) return workspaceMismatch;
 		}
 
 		if (!scopeTypeRaw || !AUDIT_SCOPE_TYPES.includes(scopeTypeRaw as AuditScopeType)) {
@@ -106,7 +113,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const collection = db.collection<AuditLogV2>(AUDIT_LOG_V2_COLLECTION);
 
 		const query: Record<string, unknown> = {
-			workspaceId: new ObjectId(workspaceId),
+			workspaceId: context.workspaceId,
 		};
 
 		if (!adminUser) {

@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from "../../utils/authUtils";
+import { assertWorkspaceMatch, requireTenantContext, tenantObjectIdFilter } from "../../utils/tenantContext";
 import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { ObjectId } from "mongodb";
@@ -14,31 +14,44 @@ import { createPresignedGetUrl } from "../../utils/s3-storage";
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if(!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
-		const workspaceId = event.queryStringParameters?.workspaceId;
-		if (!workspaceId) return ResponseWrapper.badRequest('Missing required query parameter: workspaceId');
-
+		const { context } = tenantResult;
+		const requestedWorkspaceId = event.queryStringParameters?.workspaceId;
 		const id = event.queryStringParameters?.id;
+
 		if (!id) return ResponseWrapper.badRequest('Missing required query parameter: id');
 
-		const validationError = validateAllObjectIds({ workspaceId, id });
+		const validationError = validateAllObjectIds({ id });
 		if (validationError) return validationError;
+
+		if (requestedWorkspaceId) {
+			if (!ObjectId.isValid(requestedWorkspaceId)) {
+				return ResponseWrapper.badRequest('Invalid workspaceId');
+			}
+
+			const workspaceMismatch = assertWorkspaceMatch(requestedWorkspaceId, context.workspaceId);
+			if (workspaceMismatch) return workspaceMismatch;
+		}
 
 		const db = await getDb();
 		const sourceFilesCollection = db.collection<SourceFile>('sourceFiles');
 
-		const query = {
-			workspace_id: new ObjectId(workspaceId),
-			_id: new ObjectId(id),
-		};
+		const sourceFileOrFolder = await sourceFilesCollection.findOne(
+			tenantObjectIdFilter(id, context.workspaceId),
+		);
 
-		const sourceFileOrFolder = await sourceFilesCollection.findOne(query);
+		if (!sourceFileOrFolder) {
+			return ResponseWrapper.notFound('Folder or file not found.');
+		}
 
-		if (sourceFileOrFolder?.type === 'file' && sourceFileOrFolder.key) {
+		if (sourceFileOrFolder.type === 'file' && sourceFileOrFolder.key) {
 			try {
-				sourceFileOrFolder.url = await createPresignedGetUrl(sourceFileOrFolder.key);
+				sourceFileOrFolder.url = await createPresignedGetUrl(sourceFileOrFolder.key, {
+					workspaceId: context.workspaceId,
+					pendingOwnerId: context.cognitoSub,
+				});
 			} catch (error) {
 				logError('Failed to generate signed URL for source file', error);
 			}

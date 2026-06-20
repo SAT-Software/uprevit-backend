@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-19
+
+### Added
+
+- Added workspace tenancy enforcement across critical list, create, and resource-by-id API handlers.
+- Added platform operator APIs and SAM routes for workspace administration.
+- Added billing domain model with workspace and platform-admin billing HTTP APIs.
+- Added Chargebee integration with usage sync, webhooks, invoice detail, and PDF download APIs.
+- Added soft user removal, member reactivation, and workspace access freeze enforcement.
+- Added CloudFront signed URL delivery for documentation videos with S3 fallback.
+- Added billing backfill scripts and npm targets for usage data migration.
+
+### Updated
+
+- Updated usage enforcement to meter uploads, seats, and queued exports with live usage limits.
+- Updated CloudFront signing key loading from SSM Parameter Store at runtime.
+- Updated package versions to `0.5.0`.
+
+### Fixed
+
+- Fixed Chargebee webhook retry behavior, subscription mirroring, and past due sync.
+- Fixed Cognito rollback on failed user reactivation and seat overage scenarios.
+- Fixed SAM deploy CI parameter override handling for empty CloudFormation values.
+- Fixed tenant validation for invalid workspace IDs and scoped S3 GET key checks.
+
 ## [0.4.0] - 2026-05-28
 
 ### Added

@@ -52,15 +52,18 @@ export const markProductExportJobFailed = markExportJobFailed;
 
 export const getProductExportJobByIdForUser = async ({
 	jobId,
+	workspaceId,
 	requestedBySub,
 	target,
 }: {
 	jobId: ObjectId;
+	workspaceId: ObjectId;
 	requestedBySub: string;
 	target?: ExportJobTarget;
 }): Promise<ExportJobDocument | null> => {
 	return getExportJobByIdForUser({
 		jobId,
+		workspaceId,
 		requestedBySub,
 		target,
 	});

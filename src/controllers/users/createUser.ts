@@ -6,6 +6,8 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
+import { isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
 
 /**
  * Create a user
@@ -15,30 +17,38 @@ import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		// Parse the request body from the event
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context } = tenantResult;
+
+		if (!isWorkspaceAdmin(context.cognitoGroups)) {
+			return ResponseWrapper.forbidden('Insufficient permissions');
+		}
+
 		if (!event.body) {
 			return ResponseWrapper.badRequest('Request body is required');
 		}
 
 		const input: User = JSON.parse(event.body);
 
-		// Validate required fields
 		if (!input.name || !input.email || !input.userType) {
 			return ResponseWrapper.badRequest('Missing required fields: name, email, and userType are required');
 		}
 
 		const db = await getDb();
-		
+		const normalizedAvatar = normalizePersistedAssetReference(input.profileAvatar, '');
+
 		const user = await db.collection<User>('users').insertOne({
 			name: input.name,
-			profileAvatar: normalizePersistedAssetReference(input.profileAvatar, ''),
+			profileAvatar: normalizedAvatar,
 			designation: input.designation,
 			email: input.email,
 			phone: input.phone,
 			userType: input.userType,
-			location: '',
+			location: input.location ?? '',
 			cognitoSub: '',
-			workspaceId: null,
+			workspaceId: context.workspaceId,
 			status: 'invited',
 		});
 
@@ -46,9 +56,18 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			entity: 'user',
 			entityId: user.insertedId.toString(),
 			action: AuditLogAction.CREATE,
-			actionBy: user.insertedId.toString(),
+			actionBy: context.userId.toString(),
 			actionAt: new Date(),
 			active: true,
+		});
+
+		await recordCommittedUploadIfNew({
+			workspaceId: context.workspaceId,
+			previousKey: '',
+			newKey: normalizedAvatar,
+			sizeBytes: (input as { profileAvatarSizeBytes?: number; sizeBytes?: number }).profileAvatarSizeBytes
+				?? (input as { sizeBytes?: number }).sizeBytes,
+			metadata: { assetType: 'profile_avatar' },
 		});
 
 		return ResponseWrapper.created({

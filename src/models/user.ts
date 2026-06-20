@@ -12,4 +12,6 @@ export type User = {
 	cognitoSub: string;
 	workspaceId: ObjectId | null;
 	status: 'invited' | 'active' | 'inactive';
+	removedAt?: Date;
+	removedByUserId?: ObjectId;
 };

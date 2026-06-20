@@ -68,6 +68,17 @@ jobs:
       UPLOADS_BUCKET: ${{ vars.UPLOADS_BUCKET }}
       EXPORTS_BUCKET: ${{ vars.EXPORTS_BUCKET }}
       EXPORT_JOB_QUEUE_URL: ${{ vars.EXPORT_JOB_QUEUE_URL }}
+      CHARGEBEE_SITE: ${{ vars.CHARGEBEE_SITE }}
+      CHARGEBEE_WEBHOOK_USERNAME: ${{ vars.CHARGEBEE_WEBHOOK_USERNAME }}
+      CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: ${{ vars.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID }}
+      CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: ${{ vars.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY }}
+      CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: ${{ vars.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY }}
+      CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: ${{ vars.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID }}
+      CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: ${{ vars.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY }}
+      CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: ${{ vars.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY }}
+      DOCUMENTATION_CLOUDFRONT_DOMAIN: ${{ vars.DOCUMENTATION_CLOUDFRONT_DOMAIN }}
+      DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID: ${{ vars.DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID }}
+      DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM: ${{ vars.DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM }}
     
     permissions:
       id-token: write
@@ -122,22 +133,51 @@ jobs:
         run: sam build --use-container
 
       - name: Deploy SAM Application
-        run: >-
-          sam deploy
-          --stack-name "$STACK_NAME"
-          --region "${{ env.AWS_REGION }}"
-          --resolve-s3
-          --s3-prefix "$STACK_NAME"
-          --capabilities CAPABILITY_IAM
-          --no-confirm-changeset
-          --no-fail-on-empty-changeset
-          --parameter-overrides
-          "MongoDbUri=$MONGODB_URI"
-          "DbName=$DB_NAME"
-          "UserPoolId=$USER_POOL_ID"
-          "ClientId=$CLIENT_ID"
-          "UploadsBucket=$UPLOADS_BUCKET"
-          "ExportsBucket=$EXPORTS_BUCKET"
-          "StandardSymbolsBucket=uprevit-standard-symbols"
-          "DocumentationFilesBucket=uprevit-documentation-files"
-          "ExportJobQueueUrl=$EXPORT_JOB_QUEUE_URL"
+        env:
+          CHARGEBEE_API_KEY: ${{ secrets.CHARGEBEE_API_KEY }}
+          CHARGEBEE_WEBHOOK_PASSWORD: ${{ secrets.CHARGEBEE_WEBHOOK_PASSWORD }}
+        run: |
+          mapfile -t parameter_overrides < <(python - <<'PY'
+          import os
+
+          parameters = {
+              "MongoDbUri": os.environ["MONGODB_URI"],
+              "DbName": os.environ["DB_NAME"],
+              "UserPoolId": os.environ["USER_POOL_ID"],
+              "ClientId": os.environ["CLIENT_ID"],
+              "UploadsBucket": os.environ["UPLOADS_BUCKET"],
+              "ExportsBucket": os.environ["EXPORTS_BUCKET"],
+              "StandardSymbolsBucket": "uprevit-standard-symbols",
+              "DocumentationFilesBucket": "uprevit-documentation-files",
+              "DocumentationCloudFrontDomain": os.environ.get("DOCUMENTATION_CLOUDFRONT_DOMAIN", ""),
+              "DocumentationCloudFrontKeyPairId": os.environ.get("DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID", ""),
+              "DocumentationCloudFrontPrivateKeyParam": os.environ.get("DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM", ""),
+              "ExportJobQueueUrl": os.environ.get("EXPORT_JOB_QUEUE_URL", ""),
+              "ChargebeeSite": os.environ.get("CHARGEBEE_SITE", ""),
+              "ChargebeeApiKey": os.environ.get("CHARGEBEE_API_KEY", ""),
+              "ChargebeeWebhookUsername": os.environ.get("CHARGEBEE_WEBHOOK_USERNAME", ""),
+              "ChargebeeWebhookPassword": os.environ.get("CHARGEBEE_WEBHOOK_PASSWORD", ""),
+              "ChargebeeSeatAddonItemPriceId": os.environ.get("CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID", ""),
+              "ChargebeeSeatAddonItemPriceIdMonthly": os.environ.get("CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY", ""),
+              "ChargebeeSeatAddonItemPriceIdYearly": os.environ.get("CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY", ""),
+              "ChargebeeSsoAddonItemPriceId": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID", ""),
+              "ChargebeeSsoAddonItemPriceIdMonthly": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY", ""),
+              "ChargebeeSsoAddonItemPriceIdYearly": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY", ""),
+          }
+
+          for key, value in parameters.items():
+              if value:
+                  print(f"{key}={value}")
+          PY
+          )
+
+          sam deploy \
+            --stack-name "$STACK_NAME" \
+            --region "${{ env.AWS_REGION }}" \
+            --resolve-s3 \
+            --s3-prefix "$STACK_NAME" \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+            "${parameter_overrides[@]}"

@@ -4,7 +4,7 @@ import { ObjectId } from 'mongodb';
 import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from '../../utils/authUtils';
+import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 
@@ -67,11 +67,10 @@ const ARCHIVE_FILTER_FIELDS: Record<string, ListFilterField> = {
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-	   
-		const auth = await authenticateRequest(event);
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
-		if(!auth.isValid) return auth.error;
-
+		const { context } = tenantResult;
 
 		const db = await getDb();
 
@@ -86,18 +85,24 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const isLatest = event.queryStringParameters?.isLatest || 'true';
 		const statusFilter = event.queryStringParameters?.status;
 		const filterParam = event.queryStringParameters?.filter;
-		const workspaceId = event.queryStringParameters?.workspaceId;
+		const requestedWorkspaceId = event.queryStringParameters?.workspaceId;
 		const projectId = event.queryStringParameters?.projectId;
 		const departmentId = event.queryStringParameters?.departmentId;
 
-		// Build filter object
-		const filter: any = {};
-		let statusValues: string[] | null = null;
+		if (requestedWorkspaceId) {
+			if (!ObjectId.isValid(requestedWorkspaceId)) {
+				return ResponseWrapper.badRequest('Invalid workspaceId');
+			}
 
-		if (workspaceId) {
-			if (!ObjectId.isValid(workspaceId)) return ResponseWrapper.badRequest('Invalid workspaceId');
-			filter.workspace_id = new ObjectId(workspaceId);
+			const workspaceMismatch = assertWorkspaceMatch(requestedWorkspaceId, context.workspaceId);
+			if (workspaceMismatch) return workspaceMismatch;
 		}
+
+		// Build filter object
+		const filter: Record<string, unknown> = {
+			workspace_id: context.workspaceId,
+		};
+		let statusValues: string[] | null = null;
 
 		if (projectId) {
 			if (!ObjectId.isValid(projectId)) return ResponseWrapper.badRequest('Invalid projectId');

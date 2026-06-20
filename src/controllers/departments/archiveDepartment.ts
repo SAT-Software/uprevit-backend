@@ -1,12 +1,11 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import type { Department } from '../../models/department';
-import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateBoolean } from '../../utils/validationUtils';
-import { authenticateWithRole } from '../../utils/authUtils';
 import { recordAuditEvent } from '../../utils/auditLogV2';
+import { isWorkspaceAdmin, requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 
 /**
  * Archive a department
@@ -16,10 +15,13 @@ import { recordAuditEvent } from '../../utils/auditLogV2';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
-		const auth = await authenticateWithRole(event, 'admin');
-		if(!auth.isValid) {
-			return auth.error;
+		const { context, auth } = tenantResult;
+
+		if (!isWorkspaceAdmin(context.cognitoGroups)) {
+			return ResponseWrapper.forbidden('Insufficient permissions');
 		}
 
 		if (!event.pathParameters?.id) {
@@ -48,19 +50,16 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const isBoolean = validateBoolean(isArchived, 'isArchived');
 		if (isBoolean) return isBoolean;
 
+		const departmentFilter = tenantObjectIdFilter(departmentId, context.workspaceId);
 
-		const departmentRecord: Department | null = await db.collection<Department>('departments').findOne({
-			_id: new ObjectId(departmentId),
-		});
+		const departmentRecord: Department | null = await db.collection<Department>('departments').findOne(departmentFilter);
 
 		if (!departmentRecord) {
 			return ResponseWrapper.notFound('Department not found');
 		}
 
 		const department = await db.collection<Department>('departments').updateOne(
-			{
-				_id: new ObjectId(departmentId),
-			},
+			departmentFilter,
 			{
 				$set: {
 					isArchived: isArchived,
@@ -73,7 +72,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		try {
 			await recordAuditEvent({
-				workspaceId: departmentRecord.workspace_id.toString(),
+				workspaceId: context.workspaceId.toString(),
 				scope: { type: 'department', id: departmentId },
 				entity: { type: 'department', id: departmentId },
 				action,
@@ -91,7 +90,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		} catch (auditError) {
 			logError('Department archive audit event failed', auditError, {
 				departmentName: departmentRecord.department_name,
-				workspaceId: departmentRecord.workspace_id.toString(),
+				workspaceId: context.workspaceId.toString(),
 				action,
 				departmentId,
 			});

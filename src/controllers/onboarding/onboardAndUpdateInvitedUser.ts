@@ -1,13 +1,14 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { getDb } from "../../utils/db";
-import { ObjectId } from "mongodb";
-import { authenticateRequest } from "../../utils/authUtils";
+import { requireTenantContext } from "../../utils/tenantContext";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
 import { validateMissingFields } from "../../utils/validationUtils";
 import { updateAuditLog } from "../../utils/auditLog";
 import { AuditLogAction } from "../../models/auditLog";
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from '../../utils/billing/enforcement';
+import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 
 /**
  * @param {APIGatewayProxyEvent} event
@@ -15,28 +16,46 @@ import { normalizePersistedAssetReference } from '../../utils/s3-storage';
  */
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return ResponseWrapper.unauthorized("Invalid authentication payload");
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
+		const { context } = tenantResult;
 
 		if (!event.body) return ResponseWrapper.badRequest("Request body is required.");
 
 
 		const input = JSON.parse(event.body);
 
-		const validationResult = validateMissingFields({ name: input.name, userId: input.user_id });
+		const validationResult = validateMissingFields({ name: input.name });
 		if (validationResult) return validationResult;
 
 
 		const db = await getDb();
 
-		// 2. Update user profile in MongoDB
+		const existingUser = await db.collection('users').findOne({
+			cognitoSub: context.cognitoSub,
+			workspaceId: context.workspaceId,
+		});
+
+		const normalizedAvatar = normalizePersistedAssetReference(
+			input.profileAvatar,
+			typeof existingUser?.profileAvatar === 'string' ? existingUser.profileAvatar : '',
+		);
+
+		const previousStatus = existingUser?.status ?? 'invited';
+		const activatingUser = previousStatus !== 'active';
+
+		if (activatingUser) {
+			const seatCheck = await assertSeatActivationAllowed(context.workspaceId, 1);
+			if (!seatCheck.allowed) return ResponseWrapper.forbidden(seatCheck.reason);
+		}
+
 		const updateResult = await db.collection("users").updateOne(
-			{ _id: new ObjectId(input.user_id as string) },
+			{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
 			{
 				$set: {
 					name: input.name,
-					profileAvatar: normalizePersistedAssetReference(input.profileAvatar, ''),
+					profileAvatar: normalizedAvatar,
 					designation: input.designation || '',
 					location: input.location || '',
 					status: 'active',
@@ -44,17 +63,36 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 			}
 		);
 
-		if (updateResult.modifiedCount === 0) {
+		if (updateResult.matchedCount === 0) {
 			return ResponseWrapper.notFound("User not found or no changes were made.");
+		}
+
+		if (activatingUser) {
+			const postActivationCheck = await verifySeatLimitAfterActivation(context.workspaceId);
+			if (!postActivationCheck.allowed) {
+				await db.collection("users").updateOne(
+					{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
+					{ $set: { status: previousStatus } },
+				);
+				return ResponseWrapper.forbidden(postActivationCheck.reason);
+			}
 		}
         
 		await updateAuditLog({
 			entity: 'user',
-			entityId: input.user_id as string,
+			entityId: context.userId.toString(),
 			action: AuditLogAction.UPDATE,
-			actionBy: input.name,
 			actionAt: new Date(),
 			active: true,
+			actionBy: input.name,
+		});
+
+		await recordCommittedUploadIfNew({
+			workspaceId: context.workspaceId,
+			previousKey: typeof existingUser?.profileAvatar === 'string' ? existingUser.profileAvatar : '',
+			newKey: normalizedAvatar,
+			sizeBytes: input.profileAvatarSizeBytes ?? input.sizeBytes,
+			metadata: { assetType: 'profile_avatar' },
 		});
 
 		return ResponseWrapper.success({ message: "Profile updated successfully." });

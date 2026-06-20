@@ -4,7 +4,7 @@ import { validateAllObjectIds, validateMissingFields } from '../../utils/validat
 import { getDb } from '../../utils/db';
 import { Product } from '../../models/product';
 import { ObjectId } from 'mongodb';
-import { authenticateRequest } from '../../utils/authUtils';
+import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import {
 	addCustomField,
 	deleteCustomField,
@@ -22,6 +22,10 @@ import { addOperationalParameters, deleteOperationalParameters, updateOperationa
 import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion, updateLabelTagTaggedImage, updateLabelTagLegend } from './productData/label-tags';
 import { SymbolsGraphics } from '../../types/products/symbols-graphics';
 import { recordAuditEvent } from '../../utils/auditLogV2';
+import {
+	assertNewUploadCommitsAllowed,
+	recordUploadCommitsFromPayload,
+} from '../../utils/billing/uploadCommit';
 
 const validTabs = [
 	'product-information',
@@ -228,9 +232,10 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-	const auth = await authenticateRequest(event);
+	const tenantResult = await requireTenantContext(event);
+	if (!tenantResult.ok) return tenantResult.response;
 
-	if (!auth.isValid) return auth.error;
+	const { context, auth } = tenantResult;
 
 	try {
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required to update product data');
@@ -255,8 +260,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest(`Invalid tab parameter. Must be one of: ${validTabs.join(', ')}`);
 
 		const db = await getDb();
+		const productTenantFilter = tenantObjectIdFilter(input.id!, context.workspaceId);
 
-		const product = await db.collection<Product>('products').findOne({ _id: new ObjectId(input.id) });
+		const product = await db.collection<Product>('products').findOne(productTenantFilter);
 
 		if (!product) return ResponseWrapper.notFound('Product not found, please check the provided product id.');
 
@@ -356,7 +362,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (addLabelComponentResult.error) return addLabelComponentResult.error;
 
 			const isDuplicateAddLabelComponent = await db.collection<Product>('products').findOne({
-				_id: new ObjectId(input.id),
+				...productTenantFilter,
 				'label_components.data.component_number': input.data[0].component_number,
 			});
 			if (isDuplicateAddLabelComponent) return ResponseWrapper.conflict('Component number already exists, please use a different component number.');
@@ -370,7 +376,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (updateLabelComponentResult.error) return updateLabelComponentResult.error;
 
 			const isDuplicateUpdateLabelComponent = await db.collection<Product>('products').findOne({
-				_id: new ObjectId(input.id),
+				...productTenantFilter,
 				'label_components.data': {
 					$elemMatch: {
 						_id: {$ne: new ObjectId(input.data.id)},
@@ -406,7 +412,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const entity = input.data[0].entity?.toLowerCase();
 			if(entity === 'barcodes') {
 				const isDuplicateBarcode = await db.collection<Product>('products').findOne({
-					_id: new ObjectId(input.id),
+					...productTenantFilter,
 					'symbols_graphics.data': {
 						$elemMatch: {
 							entity: 'Barcodes',
@@ -418,7 +424,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				if (isDuplicateBarcode) return ResponseWrapper.conflict('Barcode description already exists, please use a different barcode description.');
 			} else if (entity !== 'other components') {
 				const isDuplicategraphics = await db.collection<Product>('products').findOne({
-					_id: new ObjectId(input.id),
+					...productTenantFilter,
 					'symbols_graphics.data': {
 						$elemMatch:{
 							entity: input.data[0].entity,
@@ -460,7 +466,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const entity = input.data.entity?.toLowerCase();
 			if(entity === 'barcodes') {
 				const isDuplicateBarcode = await db.collection<Product>('products').findOne({
-					_id: new ObjectId(input.id),
+					...productTenantFilter,
 					'symbols_graphics.data': {
 						$elemMatch: {
 							_id: {$ne: new ObjectId(input.data.id)},
@@ -473,7 +479,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				if (isDuplicateBarcode) return ResponseWrapper.conflict('Barcode description already exists, please use a different barcode description.');
 			} else if (entity !== 'other components') {
 				const isDuplicategraphics = await db.collection<Product>('products').findOne({
-					_id: new ObjectId(input.id),
+					...productTenantFilter,
 					'symbols_graphics.data': {
 						$elemMatch:{
 							_id: {$ne: new ObjectId(input.data.id)},
@@ -631,6 +637,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			});
 		}
 
+		const uploadCommitCheck = await assertNewUploadCommitsAllowed(context.workspaceId, input.data);
+		if (!uploadCommitCheck.allowed) {
+			return ResponseWrapper.forbidden(uploadCommitCheck.reason);
+		}
+
 		const options: { arrayFilters?: any[] } = {};
 		if ('arrayFilters' in updateQuery) {
 			options.arrayFilters = (updateQuery as any).arrayFilters;
@@ -639,14 +650,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const updateResult = await db
 			.collection<Product>('products')
-			.updateOne({ _id: new ObjectId(input.id) }, updateQuery, options);
+			.updateOne(productTenantFilter, updateQuery, options);
 		if (updateResult.modifiedCount === 0) {
 			return ResponseWrapper.notFound(
 				'Product data not modified successfully, please check the data and try again.',
 			);
 		}
 
-		const updatedProduct = await db.collection<Product>('products').findOne({ _id: new ObjectId(input.id) });
+		const updatedProduct = await db.collection<Product>('products').findOne(productTenantFilter);
 		const auditMeta = PRODUCT_DATA_ACTION_AUDIT_META[input.action];
 
 		if (updatedProduct && auditMeta) {
@@ -676,6 +687,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				meta: payloadMeta,
 			});
 		}
+
+		await recordUploadCommitsFromPayload(context.workspaceId, input.data);
 
 		return ResponseWrapper.success({
 			message: 'Product updated successfully',

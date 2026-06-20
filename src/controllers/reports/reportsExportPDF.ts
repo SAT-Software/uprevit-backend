@@ -1,11 +1,10 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
-import { ObjectId } from 'mongodb';
 import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { StatusCodes } from '../../utils/statusCodes';
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from '../../utils/authUtils';
+import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
 import { EXPORT_LIMITS } from '../../types/reports';
 import { validateConditions, buildExportPipeline } from '../../utils/reports/queryBuilder';
@@ -17,8 +16,10 @@ import { generateReportsPDFExport } from '../../utils/reports/exportReportsPDF';
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context } = tenantResult;
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
 
@@ -37,6 +38,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const objectIdValidation = validateObjectIds({ workspaceId: input.workspaceId });
 		if (objectIdValidation) return objectIdValidation;
 
+		const workspaceMismatch = assertWorkspaceMatch(
+			input.workspaceId,
+			context.workspaceId,
+			'You are not authorized to export reports for this workspace',
+		);
+		if (workspaceMismatch) return workspaceMismatch;
+
 		if (input.conditionLogic && !['AND', 'OR'].includes(input.conditionLogic)) {
 			return ResponseWrapper.badRequest('conditionLogic must be either "AND" or "OR"');
 		}
@@ -46,8 +54,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (conditionError) return conditionError;
 		}
 
-		const workspaceId = ObjectId.createFromHexString(input.workspaceId);
-		const pipeline = buildExportPipeline(input, workspaceId, EXPORT_LIMITS.PDF);
+		const pipeline = buildExportPipeline(input, context.workspaceId, EXPORT_LIMITS.PDF);
 
 		const db = await getDb();
 		const products = (await db.collection<Product>('products').aggregate(pipeline).toArray()) as any[];

@@ -10,6 +10,9 @@ import { authenticateWithRole } from "../../utils/authUtils";
 import { User } from "../../models/user";
 import { AdminAddUserToGroupCommand, AdminUpdateUserAttributesCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 import { movePendingWorkspaceAssetToWorkspace, normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { createBillingAccountForWorkspace } from '../../utils/billing/billingAccounts';
+import { assertSeatActivationAllowed } from '../../utils/billing/enforcement';
+import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 
 const cognito = new CognitoIdentityProviderClient();
 
@@ -21,8 +24,15 @@ const resolveAdminName = (name: unknown, email: string): string => {
 };
 
 /**
- * @param {APIGatewayProxyEvent} event 
- * @return  {Promise<APIGatewayProxyResult>}
+ * Platform provisioning: onboarding flow that creates a new workspace and binds
+ * the authenticated admin user to it.
+ *
+ * Not tenant-scoped to an existing workspace — creates a new tenant. Same
+ * platform-role caveat as {@link createWorkspace}; do not treat Cognito `admin`
+ * as authorization to mutate arbitrary workspaces.
+ *
+ * @param {APIGatewayProxyEvent} event
+ * @return {Promise<APIGatewayProxyResult>}
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -66,7 +76,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			userIds: [],
 		});
 
-		const workspaceId = workspace.insertedId
+		const workspaceId = workspace.insertedId;
+
+		await createBillingAccountForWorkspace(workspaceId);
 
 		const workspaceLogo = normalizedLogo
 			? await movePendingWorkspaceAssetToWorkspace(normalizedLogo, workspaceId.toString())
@@ -79,6 +91,16 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			);
 		}
 
+		if (workspaceLogo) {
+			await recordCommittedUploadIfNew({
+				workspaceId,
+				previousKey: '',
+				newKey: workspaceLogo,
+				sizeBytes: input.logoSizeBytes ?? input.sizeBytes,
+				metadata: { assetType: 'workspace_logo' },
+			});
+		}
+
 		await updateAuditLog({
 			entity: 'workspace',
 			entityId: workspaceId.toString(),
@@ -87,6 +109,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			actionAt: new Date(),
 			active: true,
 		});
+
+		const seatCheck = await assertSeatActivationAllowed(workspaceId, 1);
+		if (!seatCheck.allowed) return ResponseWrapper.forbidden(seatCheck.reason);
 
 		const user = await db.collection<User>('users').insertOne({
 			name: adminName,
@@ -128,7 +153,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			Username: normalizedEmail,
 			GroupName: "admin",
 		}));
-		
 
 		return ResponseWrapper.created({
 			message: 'Onboarding successful, workspace created',

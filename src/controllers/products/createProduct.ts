@@ -4,7 +4,7 @@ import type { Product } from '../../models/product';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateEnum, validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
-import { authenticateRequest } from '../../utils/authUtils';
+import { requireTenantContext } from '../../utils/tenantContext';
 import { logError } from '../../utils/logger';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 
@@ -16,20 +16,18 @@ import { recordAuditEvent } from '../../utils/auditLogV2';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	let userId: string | undefined;
-	let workspaceId: string | undefined;
 	
 	try {
-		const auth = await authenticateRequest(event);	
-		if(!auth.isValid) return auth.error;
-		
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context, auth } = tenantResult;
 		userId = auth.payload?.sub;
 
 		if (!event.body) return ResponseWrapper.badRequest('Request body is required');
 
 		const input = JSON.parse(event.body);
 		if(!input)return ResponseWrapper.badRequest('Invalid JSON in request body');
-		
-		workspaceId = input.workspace_id;
 	
 
 		const missingFieldsResult = validateMissingFields({
@@ -52,7 +50,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const objectIdValidation = validateObjectIds({
 			'project_id': input.project_id,
 			'department_id': input.department_id!,
-			'workspace_id': input.workspace_id,
 		});
 
 		if(objectIdValidation) return objectIdValidation;
@@ -62,7 +59,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const projectObjectId = new ObjectId(input.project_id);
 		const departmentObjectId = new ObjectId(input.department_id);
-		const workspaceObjectId = new ObjectId(input.workspace_id);
+		const workspaceObjectId = context.workspaceId;
 
 		const existingProduct = await db.collection<Product>('products').findOne({
 			product_plan_number: input.product_plan_number,
@@ -162,10 +159,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product: product,
 		});
 	} catch (err) {
-		logError('Create product handler failed', err, {
-			userId,
-			workspaceId,
-		});
+		logError('Create product handler failed', err, { userId });
 		return ResponseWrapper.internalServerError('Failed to create product');
 	}
 };

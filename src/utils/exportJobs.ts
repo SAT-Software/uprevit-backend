@@ -10,11 +10,12 @@ import {
 } from '../models/exportJob';
 import type { PersistedReportExportRequest } from '../types/reports';
 import { getDb } from './db';
+import { recordCompletedExport } from './billing/usageRecording';
 
 const DEFAULT_EXPORT_FILE_TTL_HOURS = 24;
 const EXPORT_JOBS_PAGE_LIMIT = 10;
 const TERMINAL_EXPORT_JOB_STATUSES: ExportJobStatus[] = ['completed', 'failed'];
-const ACTIVE_EXPORT_JOB_STATUSES: ExportJobStatus[] = ['queued', 'processing'];
+export const ACTIVE_EXPORT_JOB_STATUSES: ExportJobStatus[] = ['queued', 'processing'];
 
 let hasEnsuredExportJobIndexes = false;
 
@@ -195,7 +196,7 @@ export const markExportJobCompleted = async ({
 	const collection = await getCollection();
 	const now = completedAt ?? new Date();
 
-	return collection.findOneAndUpdate(
+	const completedJob = await collection.findOneAndUpdate(
 		{
 			_id: jobId,
 			status: { $nin: TERMINAL_EXPORT_JOB_STATUSES },
@@ -216,6 +217,16 @@ export const markExportJobCompleted = async ({
 		},
 		{ returnDocument: 'after' },
 	);
+
+	if (completedJob?.workspaceId) {
+		await recordCompletedExport({
+			workspaceId: completedJob.workspaceId,
+			jobId,
+			occurredAt: now,
+		});
+	}
+
+	return completedJob;
 };
 
 export const markExportJobFailed = async ({
@@ -250,21 +261,42 @@ export const markExportJobFailed = async ({
 	);
 };
 
+export const countActiveExportJobs = async ({
+	workspaceId,
+	periodStart,
+	periodEnd,
+}: {
+	workspaceId: ObjectId;
+	periodStart: Date;
+	periodEnd: Date;
+}): Promise<number> => {
+	const collection = await getCollection();
+	return collection.countDocuments({
+		workspaceId,
+		status: { $in: ACTIVE_EXPORT_JOB_STATUSES },
+		createdAt: { $gte: periodStart, $lte: periodEnd },
+	});
+};
+
 export const getExportJobById = async ({
 	jobId,
+	workspaceId,
 }: {
 	jobId: ObjectId;
+	workspaceId: ObjectId;
 }): Promise<ExportJobDocument | null> => {
 	const collection = await getCollection();
-	return collection.findOne({ _id: jobId });
+	return collection.findOne({ _id: jobId, workspaceId });
 };
 
 export const getExportJobByIdForUser = async ({
 	jobId,
+	workspaceId,
 	requestedBySub,
 	target,
 }: {
 	jobId: ObjectId;
+	workspaceId: ObjectId;
 	requestedBySub: string;
 	target?: ExportJobTarget;
 }): Promise<ExportJobDocument | null> => {
@@ -272,10 +304,12 @@ export const getExportJobByIdForUser = async ({
 
 	const query: {
 		_id: ObjectId;
+		workspaceId: ObjectId;
 		requestedBySub: string;
 		target?: ExportJobTarget;
 	} = {
 		_id: jobId,
+		workspaceId,
 		requestedBySub,
 	};
 

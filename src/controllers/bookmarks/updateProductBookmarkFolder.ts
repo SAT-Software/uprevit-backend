@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from "../../utils/authUtils";
+import { requireTenantContext } from "../../utils/tenantContext";
 import { validateAllObjectIds, validateMissingFields } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
 import { UserBookmarks } from "../../models/bookmarks";
@@ -16,8 +16,10 @@ import { AuditLogAction } from "../../models/auditLog";
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if(!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context, auth } = tenantResult;
 
 		const folderId = event.pathParameters?.folderId;
 		if(!folderId) return ResponseWrapper.badRequest('Folder ID is missing from path parameters.');
@@ -27,26 +29,25 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const input = JSON.parse(event.body);
 
 		const missingFieldsResult = validateMissingFields({
-			user_id: input.user_id,
 			folder_name: input.folder_name,
 		});
 		if (missingFieldsResult) return missingFieldsResult;
 
 		const objectIdValidation = validateAllObjectIds({
-			'user_id': input.user_id,
-			'folderId': folderId
+			folderId,
 		});
-		if (objectIdValidation) return objectIdValidation
+		if (objectIdValidation) return objectIdValidation;
 
 		const db = await getDb();
 		const bookmarksCollection = db.collection<UserBookmarks>('bookmarks');
-		const userId = ObjectId.createFromHexString(input.user_id);
+		const userId = context.userId;
 		const productBookmarkFolderId = ObjectId.createFromHexString(folderId);
 
 		const trimmedFolderName = input.folder_name.trim();
 
 		const existingFolderWithSameName = await bookmarksCollection.findOne({
 			user_id: userId,
+			workspace_id: context.workspaceId,
 			product_folders: {
 				$elemMatch: {
 					folder_name: trimmedFolderName,
@@ -62,6 +63,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const result = await bookmarksCollection.updateOne(
 			{
 				user_id: userId,
+				workspace_id: context.workspaceId,
 				'product_folders._id': productBookmarkFolderId
 			},
 			{

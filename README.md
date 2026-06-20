@@ -19,6 +19,13 @@ The required runtime keys are:
 - `UPLOADS_BUCKET`: The S3 bucket used for uploaded files
 - `EXPORTS_BUCKET`: The S3 bucket used for generated exports
 - `DOCUMENTATION_FILES_BUCKET`: The S3 bucket for documentation media (`uprevit-documentation-files`)
+- `DOCS_VIDEO_URL_EXPIRES_IN_SECONDS`: Signed URL lifetime in seconds (default `86400` when using CloudFront)
+
+Documentation video CloudFront signing (on `GetDocumentationVideoSignedUrlFunction` only, or in GitHub for deploy):
+
+- `DOCUMENTATION_CLOUDFRONT_DOMAIN`: e.g. `d123.cloudfront.net`
+- `DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID`: from CloudFront key management
+- `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY`: PEM private key (`env.json` locally — do not commit; deployed Lambdas load the PEM from SSM at runtime using `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM`)
 - `EXPORT_JOB_QUEUE_URL`: The SQS queue URL used by export jobs
 
 AWS SAM `--env-vars` expects Lambda environment variable names, not CloudFormation parameter names like `MongoDbUri` or `UserPoolId`.
@@ -36,7 +43,7 @@ Branch to environment mapping:
 
 Release branches (for example `release/x.y.z`) do not trigger deployment. Deployments happen when the release is merged to `main` (prod) or back to `develop` (develop).
 
-The deploy workflow reads non-secret configuration from GitHub environment variables and loads `MONGODB_URI` from AWS Systems Manager Parameter Store using `MONGODB_URI_PARAM`.
+The deploy workflow reads non-secret configuration from GitHub environment variables. It loads `MONGODB_URI` from AWS Systems Manager Parameter Store using `MONGODB_URI_PARAM`, and passes `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM` (the SSM path for the CloudFront signing PEM) so the documentation video Lambda can load the key at runtime.
 
 After a successful deploy, the backend API base URL comes from the CloudFormation stack output `ApiBaseUrl`. That is the base URL the frontend should use for production.
 
@@ -165,6 +172,18 @@ npm run seed:documentation-videos
 From the repo root: `npm run seed:documentation-videos -- --dry-run` (forwards flags to `src/`).
 
 Requires `AWS_REGION` and credentials with `s3:PutObject` on `DOCUMENTATION_FILES_BUCKET` (default `uprevit-documentation-files`).
+
+### CloudFront signed video URLs
+
+`GET /docs/videos/{videoKey}/signed-url` returns a **CloudFront signed URL** when domain, key pair id, and private key PEM are set.
+
+**GitHub (per environment):** variables `DOCUMENTATION_CLOUDFRONT_DOMAIN`, `DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID`, and `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM` (SSM Parameter Store path only — not the PEM itself). Store the full private PEM in AWS Systems Manager as a **SecureString** at that path (multiline PEM is fine). The key pair id must be the CloudFront public key ID for the public key generated from that exact private key.
+
+**Local:** copy `GetDocumentationVideoSignedUrlFunction` from `env.example.json` into `env.json` with the same three values.
+
+If those are empty, the API falls back to **S3 presigned GET**.
+
+After deploy, confirm the `.mp4` host is `*.cloudfront.net` in the browser Network tab.
 
 ## Unit Tests
 

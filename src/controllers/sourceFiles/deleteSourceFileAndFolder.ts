@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from "../../utils/authUtils";
+import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { Collection, ObjectId } from "mongodb";
@@ -13,14 +13,19 @@ import { deleteObjectByKey } from "../../utils/s3-storage";
  * Recursively finds all descendant node IDs for a given parent folder.
  * @param {Collection<SourceFile>} collection The MongoDB collection to search.
  * @param {ObjectId} parentId The ID of the parent folder.
+ * @param {ObjectId} workspaceId The workspace scope for descendant lookup.
  * @return {Promise<ObjectId[]>} A promise that resolves to an array of descendant IDs.
  */
-async function findDescendantIds(collection: Collection<SourceFile>, parentId: ObjectId): Promise<ObjectId[]> {
+async function findDescendantIds(
+	collection: Collection<SourceFile>,
+	parentId: ObjectId,
+	workspaceId: ObjectId,
+): Promise<ObjectId[]> {
 	let idsToDelete = [parentId];
-	const children = await collection.find({ parentId: parentId }).toArray();
+	const children = await collection.find({ parentId, workspace_id: workspaceId }).toArray();
 	for (const child of children) {
 		if (child.type === 'folder') {
-			const descendantIds = await findDescendantIds(collection, child._id);
+			const descendantIds = await findDescendantIds(collection, child._id, workspaceId);
 			idsToDelete = idsToDelete.concat(descendantIds);
 		} else {
 			idsToDelete.push(child._id);
@@ -35,8 +40,10 @@ async function findDescendantIds(collection: Collection<SourceFile>, parentId: O
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if(!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context, auth } = tenantResult;
 
 		const id = event.pathParameters?.id;
 		if (!id) return ResponseWrapper.badRequest('Missing required path parameter: id');
@@ -48,7 +55,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const sourceFilesCollection = db.collection<SourceFile>('sourceFiles');
 		const fileObjectId = new ObjectId(id);
 
-		const fileOrFolder = await sourceFilesCollection.findOne({ _id: fileObjectId });
+		const fileOrFolder = await sourceFilesCollection.findOne(
+			tenantObjectIdFilter(id, context.workspaceId),
+		);
 		if (!fileOrFolder) {
 			return ResponseWrapper.notFound('File or folder not found.');
 		}
@@ -56,13 +65,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		let idsToDelete: ObjectId[];
 
 		if (fileOrFolder.type === 'folder') {
-			idsToDelete = await findDescendantIds(sourceFilesCollection, fileObjectId);
+			idsToDelete = await findDescendantIds(sourceFilesCollection, fileObjectId, context.workspaceId);
 		} else {
 			idsToDelete = [fileObjectId];
 		}
 
 		const filesToDelete = await sourceFilesCollection
-			.find({ _id: { $in: idsToDelete }, type: 'file' })
+			.find({ _id: { $in: idsToDelete }, workspace_id: context.workspaceId, type: 'file' })
 			.toArray();
 		const keysToDelete = filesToDelete
 			.map((item) => (typeof item.key === 'string' ? item.key.trim() : ''))
@@ -76,7 +85,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}
 		}
 
-		await sourceFilesCollection.deleteMany({ _id: { $in: idsToDelete } });
+		await sourceFilesCollection.deleteMany({
+			_id: { $in: idsToDelete },
+			workspace_id: context.workspaceId,
+		});
 
 		await recordAuditEvent({
 			workspaceId: fileOrFolder.workspace_id.toString(),

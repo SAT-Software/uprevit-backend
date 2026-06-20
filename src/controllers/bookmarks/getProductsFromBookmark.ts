@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from "../../utils/authUtils";
+import { requireTenantContext } from "../../utils/tenantContext";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
 import { UserBookmarks } from "../../models/bookmarks";
@@ -14,28 +14,28 @@ import { ObjectId } from "mongodb";
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context } = tenantResult;
 
 		const folderIdParam = event.pathParameters?.folderId;
-		const userIdParam = event.queryStringParameters?.userId;
 
 		if (!folderIdParam) return ResponseWrapper.badRequest("Folder ID is missing from path parameters.");
-		if (!userIdParam) return ResponseWrapper.badRequest("User ID is missing from query string parameters.");
 
 		const objectIdValidation = validateAllObjectIds({
 			folderId: folderIdParam,
-			userId: userIdParam,
 		});
 		if (objectIdValidation) return objectIdValidation;
 
 		const folderId = ObjectId.createFromHexString(folderIdParam);
-		const userId = ObjectId.createFromHexString(userIdParam);
+		const userId = context.userId;
+		const workspaceId = context.workspaceId;
 
 		const db = await getDb();
 
 		const pipeline = [
-			{ $match: { user_id: userId } },
+			{ $match: { user_id: userId, workspace_id: workspaceId } },
 			{ $unwind: "$product_folders" },
 			{ $match: { "product_folders._id": folderId } },
 			{
@@ -43,6 +43,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					from: "products",
 					localField: "product_folders.products",
 					foreignField: "_id",
+					pipeline: [
+						{
+							$match: {
+								workspace_id: workspaceId,
+							},
+						},
+					],
 					as: "bookmarkedProducts",
 				},
 			},

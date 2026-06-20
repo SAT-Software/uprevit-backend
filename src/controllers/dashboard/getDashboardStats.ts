@@ -3,8 +3,7 @@ import { getDb } from '../../utils/db';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { validateAllObjectIds } from '../../utils/validationUtils';
-import { authenticateRequest } from '../../utils/authUtils';
+import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 
 /**
  * API endpoint to get dashboard statistics for a workspace
@@ -14,29 +13,23 @@ import { authenticateRequest } from '../../utils/authUtils';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-	    // Extract workspaceId from query parameters
-	    const workspaceId = event.queryStringParameters?.id;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
 
-	    if (!workspaceId) {
-	        return ResponseWrapper.badRequest('Missing required fields: id (workspaceId) is required');
-	    }
+		const { context } = tenantResult;
+		const requestedWorkspaceId = event.queryStringParameters?.id;
 
-		const validationResult = validateAllObjectIds({
-			'_id': workspaceId,
-		});
-			
-		if (validationResult) {
-			return validationResult;
-		}
+		if (requestedWorkspaceId) {
+			if (!ObjectId.isValid(requestedWorkspaceId)) {
+				return ResponseWrapper.badRequest('Invalid workspace id');
+			}
 
-		const auth = await authenticateRequest(event);
-
-		if (!auth.isValid) {
-			return auth.error;
+			const workspaceMismatch = assertWorkspaceMatch(requestedWorkspaceId, context.workspaceId);
+			if (workspaceMismatch) return workspaceMismatch;
 		}
 
 		const db = await getDb();
-		const workspaceObjectId = new ObjectId(workspaceId);
+		const workspaceObjectId = context.workspaceId;
 
 		// Count departments for the workspace
 		const departmentsPromise = db.collection('departments').countDocuments({

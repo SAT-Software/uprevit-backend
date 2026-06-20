@@ -8,12 +8,19 @@ import { validateMissingFields } from '../../utils/validationUtils';
 import { authenticateWithRole } from '../../utils/authUtils';
 import { logError } from '../../utils/logger';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { createBillingAccountForWorkspace } from '../../utils/billing/billingAccounts';
 
 
 /**
- * API endpoint to create a workspace - only admin can create a workspace
+ * Platform provisioning: creates a new tenant workspace.
+ *
+ * Not scoped to the caller's existing workspace — intentional for onboarding.
+ * Cognito `admin` here means workspace admin during first-time setup, not a
+ * cross-tenant platform operator. Before exposing broadly, gate with a dedicated
+ * platform role (e.g. `platform-admin`) or restrict to internal-only callers.
+ *
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
- * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format 
+ * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -44,7 +51,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const db = await getDb();
 		
-		const workspace = await db.collection<Workspace>('workspaces').insertOne({
+		const workspaceInsert = await db.collection<Workspace>('workspaces').insertOne({
 			workspaceName: input.workspaceName,
 			companyName: input.companyName,
 			description: input.description || '',
@@ -58,9 +65,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			userIds: input.userIds || []
 		});
 
+		await createBillingAccountForWorkspace(workspaceInsert.insertedId);
+
 		await updateAuditLog({
 			entity: 'workspace',
-			entityId: workspace.insertedId.toString(),
+			entityId: workspaceInsert.insertedId.toString(),
 			action: AuditLogAction.CREATE,
 			actionBy: auth.payload?.name?.toString()!,
 			actionAt: new Date(),
@@ -69,7 +78,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		return ResponseWrapper.created({
 			message: 'Workspace created successfully',
-			workspace: workspace,
+			workspace: workspaceInsert,
 		});
 		
 	} catch (err) {

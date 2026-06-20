@@ -1,10 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
-import { ObjectId } from 'mongodb';
 import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { authenticateRequest } from '../../utils/authUtils';
+import { assertWorkspaceMatch, requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { validateAllObjectIds } from '../../utils/validationUtils';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 
@@ -16,8 +15,10 @@ import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context } = tenantResult;
 
 		const productId = event.queryStringParameters?.id;
 		const workspaceId = event.queryStringParameters?.workspaceId;
@@ -28,8 +29,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest("Product id - 'id' is required in query parameters");
 		}
 
-		if (!workspaceId) {
-			return ResponseWrapper.badRequest("Workspace id - 'workspaceId' is required in query parameters");
+		if (workspaceId) {
+			const workspaceMismatch = assertWorkspaceMatch(workspaceId, context.workspaceId);
+			if (workspaceMismatch) return workspaceMismatch;
 		}
 
 		if (limit < 1 || limit > 100) {
@@ -40,24 +42,24 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Page must be greater than 0');
 		}
 
-		const validationResult = validateAllObjectIds({ '_id': productId, 'workspaceId': workspaceId });
+		const validationResult = validateAllObjectIds({ '_id': productId });
 		if (validationResult) return validationResult;
 
 		const db = await getDb();
-		const productObjectId = new ObjectId(productId);
-		const workspaceObjectId = new ObjectId(workspaceId);
 		const skip = (page - 1) * limit;
 
 		// First, find the product to get its product_plan_number
-		const product = await db.collection<Product>('products').findOne({ _id: productObjectId });
+		const product = await db.collection<Product>('products').findOne(
+			tenantObjectIdFilter(productId, context.workspaceId),
+		);
 
 		if (!product) {
 			return ResponseWrapper.notFound('Product not found');
 		}
 
-		const matchFilter = { 
+		const matchFilter = {
 			product_plan_number: product.product_plan_number,
-			workspace_id: workspaceObjectId 
+			workspace_id: context.workspaceId,
 		};
 
 		// Find all versions with the same product_plan_number, sorted by version descending
