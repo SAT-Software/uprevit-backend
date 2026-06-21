@@ -1,5 +1,5 @@
 {
-  "version": "0.5.0",
+  "version": "0.5.1",
   "scripts": {
     "install:src": "npm ci --prefix src --no-audit --no-fund",
     "reinstall:src": "rm -rf src/node_modules && npm run install:src",
