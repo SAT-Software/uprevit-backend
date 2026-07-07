@@ -20,6 +20,18 @@ const pickText = (meta: Record<string, unknown> | undefined, keys: string[]): st
 	return undefined;
 };
 
+const pickChangeText = (
+	changes: AuditLogV2Change[],
+	paths: string[],
+	side: 'from' | 'to',
+): string | undefined => {
+	const change = changes.find((entry) => paths.includes(entry.path));
+	if (!change) return undefined;
+
+	const value = side === 'from' ? change.from : change.to;
+	return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+};
+
 const formatFieldName = (path: string) => {
 	const normalized = path
 		.split('.')
@@ -161,7 +173,12 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 		`updated label tag legend${listChangedFields(changes)}`,
 	'product.label_tags.completion.updated': ({ meta }) =>
 		`${meta?.tabCompleted ? 'marked' : 'unmarked'} label tags tab as complete`,
-	'source_files.folder.created': ({ meta }) => `created folder${pickText(meta, ['folderName', 'name']) ? ` "${pickText(meta, ['folderName', 'name'])}"` : ''}`,
+	'source_files.folder.created': ({ meta }) => {
+		const folder = pickText(meta, ['folderName', 'name']);
+		const product = pickText(meta, ['productName']);
+		if (folder && product) return `created folder "${folder}" linked to "${product}"`;
+		return `created folder${folder ? ` "${folder}"` : ''}`;
+	},
 	'source_files.folder.renamed': ({ meta }) => {
 		const from = pickText(meta, ['fromName']);
 		const to = pickText(meta, ['toName', 'folderName', 'name']);
@@ -169,8 +186,20 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 		return `renamed folder${to ? ` to "${to}"` : ''}`;
 	},
 	'source_files.folder.deleted': ({ meta }) => `deleted folder${pickText(meta, ['folderName', 'name']) ? ` "${pickText(meta, ['folderName', 'name'])}"` : ''}`,
-	'source_files.folder.product_linked': ({ meta }) => `linked folder${pickText(meta, ['folderName', 'name']) ? ` "${pickText(meta, ['folderName', 'name'])}"` : ''} to a product`,
-	'source_files.folder.product_unlinked': ({ meta }) => `unlinked folder${pickText(meta, ['folderName', 'name']) ? ` "${pickText(meta, ['folderName', 'name'])}"` : ''} from product`,
+	'source_files.folder.product_linked': ({ meta, changes }) => {
+		const folder = pickText(meta, ['folderName', 'name']);
+		const product = pickText(meta, ['toProductName', 'productName'])
+			?? pickChangeText(changes, ['product', 'product_id'], 'to');
+		if (folder && product) return `linked folder "${folder}" to "${product}"`;
+		return `linked folder${folder ? ` "${folder}"` : ''} to a product`;
+	},
+	'source_files.folder.product_unlinked': ({ meta, changes }) => {
+		const folder = pickText(meta, ['folderName', 'name']);
+		const product = pickText(meta, ['fromProductName', 'productName'])
+			?? pickChangeText(changes, ['product', 'product_id'], 'from');
+		if (folder && product) return `unlinked folder "${folder}" from "${product}"`;
+		return `unlinked folder${folder ? ` "${folder}"` : ''} from product`;
+	},
 	'source_files.file.uploaded': ({ meta }) => `uploaded file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`,
 	'source_files.file.deleted': ({ meta }) => `deleted file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`,
 };

@@ -156,7 +156,14 @@ const getValueByPath = (source: Record<string, unknown> | null | undefined, path
 	return normalizeValue(current);
 };
 
-const valuesDiffer = (first: unknown, second: unknown) => JSON.stringify(first) !== JSON.stringify(second);
+const normalizeEmptyValue = (value: unknown): unknown => {
+	if (value === null || value === undefined) return null;
+	if (typeof value === 'string' && value.trim() === '') return null;
+	return value;
+};
+
+const valuesDiffer = (first: unknown, second: unknown) =>
+	JSON.stringify(normalizeEmptyValue(first)) !== JSON.stringify(normalizeEmptyValue(second));
 
 export const buildChangesFromPaths = ({
 	before,
