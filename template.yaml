@@ -1074,6 +1074,23 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/bookmarks/deleteProductFromBookmark.ts]
 
+  GetAllBookmarkedProductsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/bookmarks/getAllBookmarkedProducts.lambdaHandler
+      Events:
+        GetAllBookmarkedProducts:
+          Type: Api
+          Properties:
+            Path: /bookmarks/products/all
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/bookmarks/getAllBookmarkedProducts.ts]
+
   GetProductsFromBookmarkFunction:
     Type: AWS::Serverless::Function
     Properties:
