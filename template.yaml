@@ -1163,6 +1163,23 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/dashboard/getDashboardStats.ts]
 
+  GetDashboardActivityStatsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/dashboard/getDashboardActivityStats.lambdaHandler
+      Events:
+        GetDashboardActivityStats:
+          Type: Api
+          Properties:
+            Path: /dashboard/activity
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/dashboard/getDashboardActivityStats.ts]
+
   # ──────────────────────────────────────────────────────────────────────────
   # SOURCE FILES
   # ──────────────────────────────────────────────────────────────────────────
