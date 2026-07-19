@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
-import { requireTenantContext, tenantObjectIdFilter } from "../../utils/tenantContext";
+import { requireTenantContext } from "../../utils/tenantContext";
 import { validateAllObjectIds, validateEnum, validateMissingFields } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
 import { SourceFile } from "../../models/sourceFiles";
