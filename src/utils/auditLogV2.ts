@@ -15,7 +15,13 @@ import { buildAuditEventSummary } from './auditEventCatalog';
 import { logError } from './logger';
 
 let hasEnsuredAuditLogV2Indexes = false;
-const actorEmailCache = new Map<string, string | null>();
+
+type ResolvedActorProfile = {
+	email?: string;
+	profileAvatar?: string;
+};
+
+const actorProfileCache = new Map<string, ResolvedActorProfile | null>();
 
 type AuditWhere = {
 	module: 'products' | 'projects' | 'departments' | 'source-files' | 'archive';
@@ -64,7 +70,7 @@ const getClaimString = (claims: Partial<CognitoAccessTokenPayload>, keys: string
 
 const isLikelyEmail = (value: string) => /^\S+@\S+\.\S+$/.test(value);
 
-const resolveActorEmail = async ({
+const resolveActorProfile = async ({
 	db,
 	workspaceId,
 	auth,
@@ -72,19 +78,25 @@ const resolveActorEmail = async ({
 	db: Db;
 	workspaceId: string;
 	auth: Partial<CognitoAccessTokenPayload>;
-}): Promise<string | undefined> => {
+}): Promise<ResolvedActorProfile> => {
 	const emailClaim = getClaimString(auth, ['email']);
-	if (emailClaim) return emailClaim;
-
 	const usernameClaim = getClaimString(auth, ['username', 'cognito:username']);
-	if (usernameClaim && isLikelyEmail(usernameClaim)) return usernameClaim;
+	const emailFromUsername = usernameClaim && isLikelyEmail(usernameClaim) ? usernameClaim : undefined;
+	const fallbackEmail = emailClaim ?? emailFromUsername;
 
 	const sub = getClaimString(auth, ['sub']);
-	if (!sub || !ObjectId.isValid(workspaceId)) return undefined;
+	if (!sub || !ObjectId.isValid(workspaceId)) {
+		return { email: fallbackEmail };
+	}
 
 	const cacheKey = `${workspaceId}:${sub}`;
-	if (actorEmailCache.has(cacheKey)) {
-		return actorEmailCache.get(cacheKey) ?? undefined;
+	if (actorProfileCache.has(cacheKey)) {
+		const cached = actorProfileCache.get(cacheKey);
+		if (!cached) return { email: fallbackEmail };
+		return {
+			email: cached.email ?? fallbackEmail,
+			profileAvatar: cached.profileAvatar,
+		};
 	}
 
 	try {
@@ -94,15 +106,25 @@ const resolveActorEmail = async ({
 				workspaceId: new ObjectId(workspaceId),
 			},
 			{
-				projection: { email: 1 },
+				projection: { email: 1, profileAvatar: 1 },
 			},
 		);
 
-		const resolvedEmail = typeof user?.email === 'string' && user.email.trim() ? user.email.trim() : undefined;
-		actorEmailCache.set(cacheKey, resolvedEmail ?? null);
-		return resolvedEmail;
+		const resolvedEmail = typeof user?.email === 'string' && user.email.trim()
+			? user.email.trim()
+			: fallbackEmail;
+		const resolvedProfileAvatar = typeof user?.profileAvatar === 'string' && user.profileAvatar.trim()
+			? user.profileAvatar.trim()
+			: undefined;
+		const profile: ResolvedActorProfile = {
+			email: resolvedEmail,
+			profileAvatar: resolvedProfileAvatar,
+		};
+
+		actorProfileCache.set(cacheKey, profile);
+		return profile;
 	} catch {
-		return undefined;
+		return { email: fallbackEmail };
 	}
 };
 
@@ -134,7 +156,14 @@ const getValueByPath = (source: Record<string, unknown> | null | undefined, path
 	return normalizeValue(current);
 };
 
-const valuesDiffer = (first: unknown, second: unknown) => JSON.stringify(first) !== JSON.stringify(second);
+const normalizeEmptyValue = (value: unknown): unknown => {
+	if (value === null || value === undefined) return null;
+	if (typeof value === 'string' && value.trim() === '') return null;
+	return value;
+};
+
+const valuesDiffer = (first: unknown, second: unknown) =>
+	JSON.stringify(normalizeEmptyValue(first)) !== JSON.stringify(normalizeEmptyValue(second));
 
 export const buildChangesFromPaths = ({
 	before,
@@ -196,12 +225,12 @@ export const recordAuditEvent = async (input: RecordAuditEventInput) => {
 		const groups = parseGroups(input.auth['cognito:groups']);
 		const actorRole: 'admin' | 'user' = groups.includes('admin') ? 'admin' : 'user';
 		const usernameClaim = getClaimString(input.auth, ['username', 'cognito:username']);
-		const actorEmail = await resolveActorEmail({
+		const actorProfile = await resolveActorProfile({
 			db,
 			workspaceId: input.workspaceId,
 			auth: input.auth,
 		});
-		const actorName = getClaimString(input.auth, ['name']) ?? actorEmail ?? usernameClaim ?? 'Unknown User';
+		const actorName = getClaimString(input.auth, ['name']) ?? actorProfile.email ?? usernameClaim ?? 'Unknown User';
 
 		const computedChanges = input.changes ?? buildChangesFromPaths({
 			before: input.before,
@@ -214,7 +243,6 @@ export const recordAuditEvent = async (input: RecordAuditEventInput) => {
 			action: input.action,
 			changes: computedChanges,
 			meta: input.meta,
-			actorName,
 		});
 
 		const payload: AuditLogV2 = {
@@ -228,7 +256,8 @@ export const recordAuditEvent = async (input: RecordAuditEventInput) => {
 			actor: {
 				userId: input.auth.sub,
 				name: actorName,
-				email: actorEmail,
+				email: actorProfile.email,
+				profileAvatar: actorProfile.profileAvatar,
 				role: actorRole,
 			},
 			where: input.where,

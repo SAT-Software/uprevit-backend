@@ -8,7 +8,7 @@ import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantCo
 /**
  * API endpoint to get dashboard statistics for a workspace
  * @param event - API Gateway Lambda Proxy Input Format
- * @returns Dashboard statistics including counts for departments, projects, products, and source files
+ * @returns Dashboard statistics including counts for departments, projects, products, source files, and archives
  */
 
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
@@ -40,6 +40,21 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const sourceFilesPromise = db.collection('sourceFiles').countDocuments({
 			workspace_id: workspaceObjectId,
 			type: 'file',
+		});
+
+		const archivedDepartmentsPromise = db.collection('departments').countDocuments({
+			workspace_id: workspaceObjectId,
+			isArchived: true,
+		});
+
+		const archivedProjectsPromise = db.collection('projects').countDocuments({
+			workspace_id: workspaceObjectId,
+			isArchived: true,
+		});
+
+		const archivedProductsPromise = db.collection('products').countDocuments({
+			workspace_id: workspaceObjectId,
+			status: 'archived',
 		});
 
 		const projectAndProductStatsPromise = db.collection('projects').aggregate([
@@ -79,10 +94,20 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				}
 			}
 		]).toArray();
-			
-		const [totalDepartments, totalSourceFiles, projectAndProductStats] = await Promise.all([
+
+		const [
+			totalDepartments,
+			totalSourceFiles,
+			archivedDepartments,
+			archivedProjects,
+			archivedProducts,
+			projectAndProductStats,
+		] = await Promise.all([
 			departmentsPromise,
 			sourceFilesPromise,
+			archivedDepartmentsPromise,
+			archivedProjectsPromise,
+			archivedProductsPromise,
 			projectAndProductStatsPromise,
 		]);
 
@@ -95,6 +120,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				total_projects: stats.totalProjects,
 				total_products: stats.totalProducts,
 				total_source_files: totalSourceFiles,
+				total_archives: archivedDepartments + archivedProjects + archivedProducts,
 			},
 		});
 	} catch (err) {
