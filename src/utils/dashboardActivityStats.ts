@@ -108,7 +108,19 @@ async function aggregateProductActivity(
 						'update',
 					],
 				},
-				productObjectId: { $toObjectId: '$scope.id' },
+				productObjectId: {
+					$convert: {
+						input: '$scope.id',
+						to: 'objectId',
+						onError: null,
+						onNull: null,
+					},
+				},
+			},
+		},
+		{
+			$match: {
+				productObjectId: { $ne: null },
 			},
 		},
 		{
@@ -251,7 +263,19 @@ async function aggregateSourceFileActivity(
 				activityType: {
 					$cond: [{ $eq: ['$action', 'create'] }, 'create', 'update'],
 				},
-				fileObjectId: { $toObjectId: '$entity.id' },
+				fileObjectId: {
+					$convert: {
+						input: '$entity.id',
+						to: 'objectId',
+						onError: null,
+						onNull: null,
+					},
+				},
+			},
+		},
+		{
+			$match: {
+				fileObjectId: { $ne: null },
 			},
 		},
 		{
