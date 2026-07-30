@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-07-29
+
+### Added
+
+- Added dashboard activity statistics API for recent workspace activity on the revamped dashboard.
+- Added get-all bookmarked products API to support the products bookmarked tab.
+- Added source folder file counts on bookmark and source file folder retrieval responses.
+- Added richer audit logging for source file and folder operations with product linkage details.
+- Added user profile avatars on audit log entries.
+
+### Updated
+
+- Updated dashboard stats API to include archived department, project, and product counts.
+- Updated TypeScript version and related build configuration.
+- Updated package versions to `0.6.0`.
+
+### Fixed
+
+- Fixed bookmark filtering and dashboard activity stats edge cases.
+- Fixed an unused import that blocked deploy lint for source file creation.
+
 ## [0.5.1] - 2026-06-21
 
 ### Fixed
