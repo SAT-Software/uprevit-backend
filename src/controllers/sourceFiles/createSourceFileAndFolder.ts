@@ -1,13 +1,14 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
-import { requireTenantContext, tenantObjectIdFilter } from "../../utils/tenantContext";
+import { requireTenantContext } from "../../utils/tenantContext";
 import { validateAllObjectIds, validateEnum, validateMissingFields } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
 import { SourceFile } from "../../models/sourceFiles";
-import type { Product } from "../../models/product";
 import { ObjectId } from "mongodb";
 import { recordAuditEvent } from "../../utils/auditLogV2";
+import type { AuditLogV2Change } from "../../models/auditLogV2";
+import { resolveWorkspaceProductName } from "../../utils/sourceFilesAudit";
 import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
 import { getBillingAccountByWorkspaceId, normalizeLimits } from "../../utils/billing/billingAccounts";
 import { recordCommittedUploadBytes } from "../../utils/billing/uploadCommit";
@@ -81,11 +82,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('product_id can only be set on top-level folders.');
 		}
 
+		let linkedProductName: string | null = null;
 		if (productId) {
-			const product = await db.collection<Product>('products').findOne(
-				tenantObjectIdFilter(productId, workspaceId),
-			);
-			if (!product) return ResponseWrapper.notFound('Product not found.');
+			linkedProductName = await resolveWorkspaceProductName(db, productId, workspaceId);
+			if (!linkedProductName) return ResponseWrapper.notFound('Product not found.');
 		}
 
 		const trimmedName = input.name.trim();
@@ -134,30 +134,57 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const isFolder = newSourceFile.type === 'folder';
-		await recordAuditEvent({
-			workspaceId: workspaceId.toString(),
-			scope: { type: 'source-files', id: workspaceId.toString() },
-			entity: { type: isFolder ? 'source_folder' : 'source_file', id: newSourceFile._id.toString() },
-			action: 'create',
-			eventKey: isFolder ? 'source_files.folder.created' : 'source_files.file.uploaded',
-			visibility: 'all',
-			where: {
-				module: 'source-files',
-				parentId: parentId?.toString() ?? undefined,
-			},
-			auth: auth.payload,
-			after: {
-				name: newSourceFile.name,
-				type: newSourceFile.type,
-				url: newSourceFile.url,
-				key: newSourceFile.key,
-				product_id: newSourceFile.product_id?.toString() ?? null,
-			},
-			changedPaths: ['name', 'type', 'url', 'key', 'product_id'],
-			meta: isFolder
-				? { folderName: newSourceFile.name }
-				: { fileName: newSourceFile.name },
-		});
+
+		if (isFolder) {
+			const changes: AuditLogV2Change[] = [{
+				path: 'name',
+				from: null,
+				to: newSourceFile.name,
+			}];
+
+			if (linkedProductName) {
+				changes.push({
+					path: 'product',
+					from: null,
+					to: linkedProductName,
+				});
+			}
+
+			await recordAuditEvent({
+				workspaceId: workspaceId.toString(),
+				scope: { type: 'source-files', id: workspaceId.toString() },
+				entity: { type: 'source_folder', id: newSourceFile._id.toString() },
+				action: 'create',
+				eventKey: 'source_files.folder.created',
+				visibility: 'all',
+				where: {
+					module: 'source-files',
+					parentId: parentId?.toString() ?? undefined,
+				},
+				auth: auth.payload,
+				changes,
+				meta: {
+					folderName: newSourceFile.name,
+					...(linkedProductName && { productName: linkedProductName }),
+				},
+			});
+		} else {
+			await recordAuditEvent({
+				workspaceId: workspaceId.toString(),
+				scope: { type: 'source-files', id: workspaceId.toString() },
+				entity: { type: 'source_file', id: newSourceFile._id.toString() },
+				action: 'create',
+				eventKey: 'source_files.file.uploaded',
+				visibility: 'all',
+				where: {
+					module: 'source-files',
+					parentId: parentId?.toString() ?? undefined,
+				},
+				auth: auth.payload,
+				changes: [],
+				meta: { fileName: newSourceFile.name },
+			});
+		}
 
 		return ResponseWrapper.created({
 			message: input.type === 'file'  ? 'Source file created successfully.' : 'Source folder created successfully.',

@@ -5,7 +5,6 @@ type SummaryContext = {
 	action: AuditAction;
 	changes: AuditLogV2Change[];
 	meta?: Record<string, unknown>;
-	actorName: string;
 };
 
 type SummaryBuilder = (context: SummaryContext) => string;
@@ -19,6 +18,18 @@ const pickText = (meta: Record<string, unknown> | undefined, keys: string[]): st
 	}
 
 	return undefined;
+};
+
+const pickChangeText = (
+	changes: AuditLogV2Change[],
+	paths: string[],
+	side: 'from' | 'to',
+): string | undefined => {
+	const change = changes.find((entry) => paths.includes(entry.path));
+	if (!change) return undefined;
+
+	const value = side === 'from' ? change.from : change.to;
+	return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 };
 
 const formatFieldName = (path: string) => {
@@ -48,164 +59,182 @@ const subjectForScope = (eventKey: string) => {
 	return 'record';
 };
 
-const withActor = (actorName: string, message: string) => `${actorName} ${message}`;
-
 const productItemSummary = (
-	actorName: string,
 	verb: 'added' | 'updated' | 'deleted',
 	label: string,
 	changes: AuditLogV2Change[],
-) => withActor(actorName, `${verb} ${label}${verb === 'updated' ? listChangedFields(changes) : ''}`);
+) => `${verb} ${label}${verb === 'updated' ? listChangedFields(changes) : ''}`;
 
 const summaryBuilders: Record<string, SummaryBuilder> = {
-	'department.created': ({ actorName, meta }) => {
+	'department.created': ({ meta }) => {
 		const name = pickText(meta, ['departmentName', 'name']);
-		return withActor(actorName, `created department${name ? ` "${name}"` : ''}`);
+		return `created department${name ? ` "${name}"` : ''}`;
 	},
-	'department.updated': ({ actorName, meta, changes }) => {
+	'department.updated': ({ meta, changes }) => {
 		const name = pickText(meta, ['departmentName', 'name']);
-		return withActor(actorName, `updated department${name ? ` "${name}"` : ''}${listChangedFields(changes)}`);
+		return `updated department${name ? ` "${name}"` : ''}${listChangedFields(changes)}`;
 	},
-	'department.archived': ({ actorName, meta }) => {
+	'department.archived': ({ meta }) => {
 		const name = pickText(meta, ['departmentName', 'name']);
-		return withActor(actorName, `archived department${name ? ` "${name}"` : ''}`);
+		return `archived department${name ? ` "${name}"` : ''}`;
 	},
-	'department.restored': ({ actorName, meta }) => {
+	'department.restored': ({ meta }) => {
 		const name = pickText(meta, ['departmentName', 'name']);
-		return withActor(actorName, `restored department${name ? ` "${name}"` : ''}`);
+		return `restored department${name ? ` "${name}"` : ''}`;
 	},
-	'project.created': ({ actorName, meta }) => {
+	'project.created': ({ meta }) => {
 		const name = pickText(meta, ['projectName', 'name']);
-		return withActor(actorName, `created project${name ? ` "${name}"` : ''}`);
+		return `created project${name ? ` "${name}"` : ''}`;
 	},
-	'project.updated': ({ actorName, meta, changes }) => {
+	'project.updated': ({ meta, changes }) => {
 		const name = pickText(meta, ['projectName', 'name']);
-		return withActor(actorName, `updated project${name ? ` "${name}"` : ''}${listChangedFields(changes)}`);
+		return `updated project${name ? ` "${name}"` : ''}${listChangedFields(changes)}`;
 	},
-	'project.archived': ({ actorName, meta }) => {
+	'project.archived': ({ meta }) => {
 		const name = pickText(meta, ['projectName', 'name']);
-		return withActor(actorName, `archived project${name ? ` "${name}"` : ''}`);
+		return `archived project${name ? ` "${name}"` : ''}`;
 	},
-	'project.restored': ({ actorName, meta }) => {
+	'project.restored': ({ meta }) => {
 		const name = pickText(meta, ['projectName', 'name']);
-		return withActor(actorName, `restored project${name ? ` "${name}"` : ''}`);
+		return `restored project${name ? ` "${name}"` : ''}`;
 	},
-	'product.created': ({ actorName, meta }) => {
+	'product.created': ({ meta }) => {
 		const name = pickText(meta, ['productName', 'name']);
-		return withActor(actorName, `created product${name ? ` "${name}"` : ''}`);
+		return `created product${name ? ` "${name}"` : ''}`;
 	},
-	'product.updated': ({ actorName, meta, changes }) => {
+	'product.updated': ({ meta, changes }) => {
 		const name = pickText(meta, ['productName', 'name']);
-		return withActor(actorName, `updated product${name ? ` "${name}"` : ''}${listChangedFields(changes)}`);
+		return `updated product${name ? ` "${name}"` : ''}${listChangedFields(changes)}`;
 	},
-	'product.submitted': ({ actorName, meta }) => {
+	'product.submitted': ({ meta }) => {
 		const name = pickText(meta, ['productName', 'name']);
-		return withActor(actorName, `submitted product${name ? ` "${name}"` : ''}`);
+		return `submitted product${name ? ` "${name}"` : ''}`;
 	},
-	'product.archived': ({ actorName, meta }) => {
+	'product.archived': ({ meta }) => {
 		const name = pickText(meta, ['productName', 'name']);
-		return withActor(actorName, `archived product${name ? ` "${name}"` : ''}`);
+		return `archived product${name ? ` "${name}"` : ''}`;
 	},
-	'product.restored': ({ actorName, meta }) => {
+	'product.restored': ({ meta }) => {
 		const name = pickText(meta, ['productName', 'name']);
-		return withActor(actorName, `restored product${name ? ` "${name}"` : ''}`);
+		return `restored product${name ? ` "${name}"` : ''}`;
 	},
-	'product.version.created': ({ actorName, meta }) => {
+	'product.version.created': ({ meta }) => {
 		const name = pickText(meta, ['productName', 'name']);
 		const fromVersion = meta?.fromVersion;
 		const toVersion = meta?.toVersion;
 		const versionText = typeof fromVersion === 'number' && typeof toVersion === 'number'
 			? ` from v${fromVersion} to v${toVersion}`
 			: '';
-		return withActor(actorName, `created a new version${versionText}${name ? ` for product "${name}"` : ''}`);
+		return `created a new version${versionText}${name ? ` for product "${name}"` : ''}`;
 	},
-	'product.product_information.updated': ({ actorName, changes }) =>
-		withActor(actorName, `updated product information${listChangedFields(changes)}`),
-	'product.product_information.custom_field.added': ({ actorName }) =>
-		withActor(actorName, 'added custom field in product information'),
-	'product.product_information.custom_field.updated': ({ actorName, changes }) =>
-		withActor(actorName, `updated custom field in product information${listChangedFields(changes)}`),
-	'product.product_information.custom_field.deleted': ({ actorName }) =>
-		withActor(actorName, 'deleted custom field from product information'),
-	'product.product_information.completion.updated': ({ actorName, meta }) =>
-		withActor(actorName, `${meta?.tabCompleted ? 'marked' : 'unmarked'} product information tab as complete`),
-	'product.compliance_item.added': ({ actorName }) => productItemSummary(actorName, 'added', 'compliance item', []),
-	'product.compliance_item.updated': ({ actorName, changes }) => productItemSummary(actorName, 'updated', 'compliance item', changes),
-	'product.compliance_item.deleted': ({ actorName }) => productItemSummary(actorName, 'deleted', 'compliance item', []),
-	'product.compliance_information.completion.updated': ({ actorName, meta }) =>
-		withActor(actorName, `${meta?.tabCompleted ? 'marked' : 'unmarked'} compliance information tab as complete`),
-	'product.languages_information.updated': ({ actorName, changes }) =>
-		withActor(actorName, `updated languages information${listChangedFields(changes)}`),
-	'product.label_component.added': ({ actorName }) => productItemSummary(actorName, 'added', 'label component', []),
-	'product.label_component.updated': ({ actorName, changes }) => productItemSummary(actorName, 'updated', 'label component', changes),
-	'product.label_component.deleted': ({ actorName }) => productItemSummary(actorName, 'deleted', 'label component', []),
-	'product.label_components.completion.updated': ({ actorName, meta }) =>
-		withActor(actorName, `${meta?.tabCompleted ? 'marked' : 'unmarked'} label components tab as complete`),
-	'product.symbol_graphic.added': ({ actorName }) => productItemSummary(actorName, 'added', 'symbol/graphic item', []),
-	'product.symbol_graphic.updated': ({ actorName, changes }) => productItemSummary(actorName, 'updated', 'symbol/graphic item', changes),
-	'product.symbol_graphic.deleted': ({ actorName }) => productItemSummary(actorName, 'deleted', 'symbol/graphic item', []),
-	'product.symbol_graphics.completion.updated': ({ actorName, meta }) =>
-		withActor(actorName, `${meta?.tabCompleted ? 'marked' : 'unmarked'} symbols and graphics tab as complete`),
-	'product.product_specification.added': ({ actorName }) => productItemSummary(actorName, 'added', 'product specification data', []),
-	'product.product_specification.updated': ({ actorName, changes }) => productItemSummary(actorName, 'updated', 'product specification data', changes),
-	'product.product_specification.deleted': ({ actorName }) => productItemSummary(actorName, 'deleted', 'product specification data', []),
-	'product.product_specifications.completion.updated': ({ actorName, meta }) =>
-		withActor(actorName, `${meta?.tabCompleted ? 'marked' : 'unmarked'} product specifications tab as complete`),
-	'product.operational_parameter.added': ({ actorName }) => productItemSummary(actorName, 'added', 'operational parameter data', []),
-	'product.operational_parameter.updated': ({ actorName, changes }) => productItemSummary(actorName, 'updated', 'operational parameter data', changes),
-	'product.operational_parameter.deleted': ({ actorName }) => productItemSummary(actorName, 'deleted', 'operational parameter data', []),
-	'product.operational_parameters.completion.updated': ({ actorName, meta }) =>
-		withActor(actorName, `${meta?.tabCompleted ? 'marked' : 'unmarked'} operational parameters tab as complete`),
-	'product.label_tag.added': ({ actorName }) => productItemSummary(actorName, 'added', 'label tag', []),
-	'product.label_tag.updated': ({ actorName, changes }) => productItemSummary(actorName, 'updated', 'label tag', changes),
-	'product.label_tag.deleted': ({ actorName }) => productItemSummary(actorName, 'deleted', 'label tag', []),
-	'product.label_tag.tagged_image.updated': ({ actorName, changes }) =>
-		withActor(actorName, `updated label tag tagged image${listChangedFields(changes)}`),
-	'product.label_tag.legend.updated': ({ actorName, changes }) =>
-		withActor(actorName, `updated label tag legend${listChangedFields(changes)}`),
-	'product.label_tags.completion.updated': ({ actorName, meta }) =>
-		withActor(actorName, `${meta?.tabCompleted ? 'marked' : 'unmarked'} label tags tab as complete`),
-	'source_files.folder.created': ({ actorName, meta }) => withActor(actorName, `created folder${pickText(meta, ['folderName', 'name']) ? ` "${pickText(meta, ['folderName', 'name'])}"` : ''}`),
-	'source_files.folder.renamed': ({ actorName, meta }) => {
+	'product.product_information.updated': ({ changes }) =>
+		`updated product information${listChangedFields(changes)}`,
+	'product.product_information.custom_field.added': () =>
+		'added custom field in product information',
+	'product.product_information.custom_field.updated': ({ changes }) =>
+		`updated custom field in product information${listChangedFields(changes)}`,
+	'product.product_information.custom_field.deleted': () =>
+		'deleted custom field from product information',
+	'product.product_information.completion.updated': ({ meta }) =>
+		`${meta?.tabCompleted ? 'marked' : 'unmarked'} product information tab as complete`,
+	'product.compliance_item.added': () => productItemSummary('added', 'compliance item', []),
+	'product.compliance_item.updated': ({ changes }) => productItemSummary('updated', 'compliance item', changes),
+	'product.compliance_item.deleted': () => productItemSummary('deleted', 'compliance item', []),
+	'product.compliance_information.completion.updated': ({ meta }) =>
+		`${meta?.tabCompleted ? 'marked' : 'unmarked'} compliance information tab as complete`,
+	'product.languages_information.updated': ({ changes }) =>
+		`updated languages information${listChangedFields(changes)}`,
+	'product.label_component.added': () => productItemSummary('added', 'label component', []),
+	'product.label_component.updated': ({ changes }) => productItemSummary('updated', 'label component', changes),
+	'product.label_component.deleted': () => productItemSummary('deleted', 'label component', []),
+	'product.label_components.completion.updated': ({ meta }) =>
+		`${meta?.tabCompleted ? 'marked' : 'unmarked'} label components tab as complete`,
+	'product.symbol_graphic.added': () => productItemSummary('added', 'symbol/graphic item', []),
+	'product.symbol_graphic.updated': ({ changes }) => productItemSummary('updated', 'symbol/graphic item', changes),
+	'product.symbol_graphic.deleted': () => productItemSummary('deleted', 'symbol/graphic item', []),
+	'product.symbol_graphics.completion.updated': ({ meta }) =>
+		`${meta?.tabCompleted ? 'marked' : 'unmarked'} symbols and graphics tab as complete`,
+	'product.product_specification.added': () => productItemSummary('added', 'product specification data', []),
+	'product.product_specification.updated': ({ changes }) => productItemSummary('updated', 'product specification data', changes),
+	'product.product_specification.deleted': () => productItemSummary('deleted', 'product specification data', []),
+	'product.product_specifications.completion.updated': ({ meta }) =>
+		`${meta?.tabCompleted ? 'marked' : 'unmarked'} product specifications tab as complete`,
+	'product.operational_parameter.added': () => productItemSummary('added', 'operational parameter data', []),
+	'product.operational_parameter.updated': ({ changes }) => productItemSummary('updated', 'operational parameter data', changes),
+	'product.operational_parameter.deleted': () => productItemSummary('deleted', 'operational parameter data', []),
+	'product.operational_parameters.completion.updated': ({ meta }) =>
+		`${meta?.tabCompleted ? 'marked' : 'unmarked'} operational parameters tab as complete`,
+	'product.label_tag.added': () => productItemSummary('added', 'label tag', []),
+	'product.label_tag.updated': ({ changes }) => productItemSummary('updated', 'label tag', changes),
+	'product.label_tag.deleted': () => productItemSummary('deleted', 'label tag', []),
+	'product.label_tag.tagged_image.updated': ({ changes }) =>
+		`updated label tag tagged image${listChangedFields(changes)}`,
+	'product.label_tag.legend.updated': ({ changes }) =>
+		`updated label tag legend${listChangedFields(changes)}`,
+	'product.label_tags.completion.updated': ({ meta }) =>
+		`${meta?.tabCompleted ? 'marked' : 'unmarked'} label tags tab as complete`,
+	'source_files.folder.created': ({ meta }) => {
+		const folder = pickText(meta, ['folderName', 'name']);
+		const product = pickText(meta, ['productName']);
+		if (folder && product) return `created folder "${folder}" linked to "${product}"`;
+		return `created folder${folder ? ` "${folder}"` : ''}`;
+	},
+	'source_files.folder.renamed': ({ meta }) => {
 		const from = pickText(meta, ['fromName']);
 		const to = pickText(meta, ['toName', 'folderName', 'name']);
-		if (from && to) return withActor(actorName, `renamed folder from "${from}" to "${to}"`);
-		return withActor(actorName, `renamed folder${to ? ` to "${to}"` : ''}`);
+		if (from && to) return `renamed folder from "${from}" to "${to}"`;
+		return `renamed folder${to ? ` to "${to}"` : ''}`;
 	},
-	'source_files.folder.deleted': ({ actorName, meta }) => withActor(actorName, `deleted folder${pickText(meta, ['folderName', 'name']) ? ` "${pickText(meta, ['folderName', 'name'])}"` : ''}`),
-	'source_files.folder.product_linked': ({ actorName, meta }) => withActor(actorName, `linked folder${pickText(meta, ['folderName', 'name']) ? ` "${pickText(meta, ['folderName', 'name'])}"` : ''} to a product`),
-	'source_files.folder.product_unlinked': ({ actorName, meta }) => withActor(actorName, `unlinked folder${pickText(meta, ['folderName', 'name']) ? ` "${pickText(meta, ['folderName', 'name'])}"` : ''} from product`),
-	'source_files.file.uploaded': ({ actorName, meta }) => withActor(actorName, `uploaded file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`),
-	'source_files.file.deleted': ({ actorName, meta }) => withActor(actorName, `deleted file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`),
+	'source_files.folder.deleted': ({ meta }) => `deleted folder${pickText(meta, ['folderName', 'name']) ? ` "${pickText(meta, ['folderName', 'name'])}"` : ''}`,
+	'source_files.folder.product_linked': ({ meta, changes }) => {
+		const folder = pickText(meta, ['folderName', 'name']);
+		const product = pickText(meta, ['toProductName', 'productName'])
+			?? pickChangeText(changes, ['product', 'product_id'], 'to');
+		if (folder && product) return `linked folder "${folder}" to "${product}"`;
+		return `linked folder${folder ? ` "${folder}"` : ''} to a product`;
+	},
+	'source_files.folder.product_unlinked': ({ meta, changes }) => {
+		const folder = pickText(meta, ['folderName', 'name']);
+		const product = pickText(meta, ['fromProductName', 'productName'])
+			?? pickChangeText(changes, ['product', 'product_id'], 'from');
+		if (folder && product) return `unlinked folder "${folder}" from "${product}"`;
+		return `unlinked folder${folder ? ` "${folder}"` : ''} from product`;
+	},
+	'source_files.file.uploaded': ({ meta }) => `uploaded file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`,
+	'source_files.file.deleted': ({ meta }) => `deleted file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`,
 };
 
 export const buildAuditEventSummary = (context: SummaryContext): string => {
 	const builder = summaryBuilders[context.eventKey];
-	if (builder) return builder(context);
+	const summary = builder
+		? builder(context)
+		: (() => {
+			const subject = subjectForScope(context.eventKey);
+			const changed = listChangedFields(context.changes);
 
-	const subject = subjectForScope(context.eventKey);
-	const changed = listChangedFields(context.changes);
+			switch (context.action) {
+			case 'create':
+				return `created ${subject}`;
+			case 'update':
+				return `updated ${subject}${changed}`;
+			case 'delete':
+				return `deleted ${subject}`;
+			case 'archive':
+				return `archived ${subject}`;
+			case 'restore':
+				return `restored ${subject}`;
+			case 'submit':
+				return `submitted ${subject}`;
+			case 'move':
+				return `moved ${subject}`;
+			case 'link':
+				return `linked ${subject}`;
+			case 'unlink':
+				return `unlinked ${subject}`;
+			default:
+				return `updated ${subject}`;
+			}
+		})();
 
-	switch (context.action) {
-	case 'create':
-		return withActor(context.actorName, `created ${subject}`);
-	case 'update':
-		return withActor(context.actorName, `updated ${subject}${changed}`);
-	case 'delete':
-		return withActor(context.actorName, `deleted ${subject}`);
-	case 'archive':
-		return withActor(context.actorName, `archived ${subject}`);
-	case 'restore':
-		return withActor(context.actorName, `restored ${subject}`);
-	case 'submit':
-		return withActor(context.actorName, `submitted ${subject}`);
-	case 'move':
-		return withActor(context.actorName, `moved ${subject}`);
-	case 'link':
-		return withActor(context.actorName, `linked ${subject}`);
-	case 'unlink':
-		return withActor(context.actorName, `unlinked ${subject}`);
-	default:
-		return withActor(context.actorName, `updated ${subject}`);
-	}
+	return summary.charAt(0).toUpperCase() + summary.slice(1);
 };

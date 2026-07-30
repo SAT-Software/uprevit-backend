@@ -39,6 +39,7 @@ export type AuditLogV2 = {
 		userId?: string;
 		name: string;
 		email?: string;
+		profileAvatar?: string;
 		role?: 'admin' | 'user';
 	};
 	where: {

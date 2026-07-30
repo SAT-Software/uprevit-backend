@@ -60,13 +60,12 @@ const toEventKey = (scopeType: AuditLogV2['scope']['type'], action: AuditAction)
 	return `${scopeType}.updated`;
 };
 
-const createSummary = (actorName: string, eventKey: string, action: AuditAction) =>
+const createSummary = (eventKey: string, action: AuditAction) =>
 	buildAuditEventSummary({
 		eventKey,
 		action,
 		changes: [],
 		meta: { name: 'legacy record' },
-		actorName,
 	});
 
 const inferVisibility = (scopeType: AuditLogV2['scope']['type']): AuditLogV2['visibility'] =>
@@ -150,7 +149,7 @@ async function run() {
 			},
 			action,
 			eventKey,
-			summary: createSummary(actorName, eventKey, action),
+			summary: createSummary(eventKey, action),
 			actor: {
 				name: actorName,
 				role: 'user',

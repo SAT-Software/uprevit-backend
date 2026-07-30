@@ -9,6 +9,7 @@ import {
 	type AuditScopeType,
 } from '../../models/auditLogV2';
 import { getDb } from '../../utils/db';
+import { enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 import { logError, logInfo } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
@@ -182,20 +183,33 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			collection.countDocuments(query),
 		]);
 
+		const signingOptions = {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		};
+		const signedActors = await enrichUsersWithProfileAvatarUrls(
+			logs.map((log) => log.actor),
+			signingOptions,
+		);
+		const logsWithSignedAvatars = logs.map((log, index) => ({
+			...log,
+			actor: signedActors[index] ?? log.actor,
+		}));
+
 		logInfo('✅ auditLogs/getAuditLogs result', {
 			page,
 			limit,
 			totalCount,
-			returnedCount: logs.length,
-			firstLogId: logs[0]?._id?.toString(),
-			lastLogId: logs.length ? logs[logs.length - 1]?._id?.toString() : undefined,
+			returnedCount: logsWithSignedAvatars.length,
+			firstLogId: logsWithSignedAvatars[0]?._id?.toString(),
+			lastLogId: logsWithSignedAvatars.length ? logsWithSignedAvatars[logsWithSignedAvatars.length - 1]?._id?.toString() : undefined,
 			requestId: event.requestContext?.requestId,
 		});
 
 		return ResponseWrapper.success({
 			message: 'Audit logs fetched successfully',
 			result: {
-				logs,
+				logs: logsWithSignedAvatars,
 				pagination: {
 					page,
 					limit,

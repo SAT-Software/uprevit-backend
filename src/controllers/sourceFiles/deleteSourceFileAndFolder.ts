@@ -7,6 +7,8 @@ import { validateAllObjectIds } from "../../utils/validationUtils";
 import { Collection, ObjectId } from "mongodb";
 import { SourceFile } from "../../models/sourceFiles";
 import { recordAuditEvent } from "../../utils/auditLogV2";
+import type { AuditLogV2Change } from "../../models/auditLogV2";
+import { resolveWorkspaceProductName } from "../../utils/sourceFilesAudit";
 import { deleteObjectByKey } from "../../utils/s3-storage";
 
 /**
@@ -90,29 +92,64 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			workspace_id: context.workspaceId,
 		});
 
-		await recordAuditEvent({
-			workspaceId: fileOrFolder.workspace_id.toString(),
-			scope: { type: 'source-files', id: fileOrFolder.workspace_id.toString() },
-			entity: { type: fileOrFolder.type === 'folder' ? 'source_folder' : 'source_file', id },
-			action: 'delete',
-			eventKey: fileOrFolder.type === 'folder' ? 'source_files.folder.deleted' : 'source_files.file.deleted',
-			visibility: 'all',
-			where: {
-				module: 'source-files',
-				parentId: fileOrFolder.parentId?.toString() ?? undefined,
-			},
-			auth: auth.payload,
-			before: {
-				name: fileOrFolder.name,
-				type: fileOrFolder.type,
-				url: fileOrFolder.url,
-				product_id: fileOrFolder.product_id?.toString() ?? null,
-			},
-			changedPaths: ['name', 'type', 'url', 'product_id'],
-			meta: fileOrFolder.type === 'folder'
-				? { folderName: fileOrFolder.name }
-				: { fileName: fileOrFolder.name },
-		});
+		const isFolder = fileOrFolder.type === 'folder';
+		let linkedProductName: string | null = null;
+
+		if (isFolder && fileOrFolder.product_id) {
+			linkedProductName = await resolveWorkspaceProductName(
+				db,
+				fileOrFolder.product_id,
+				context.workspaceId,
+			);
+		}
+
+		if (isFolder) {
+			const changes: AuditLogV2Change[] = [{
+				path: 'name',
+				from: fileOrFolder.name,
+				to: null,
+			}];
+
+			if (linkedProductName) {
+				changes.push({
+					path: 'product',
+					from: linkedProductName,
+					to: null,
+				});
+			}
+
+			await recordAuditEvent({
+				workspaceId: fileOrFolder.workspace_id.toString(),
+				scope: { type: 'source-files', id: fileOrFolder.workspace_id.toString() },
+				entity: { type: 'source_folder', id },
+				action: 'delete',
+				eventKey: 'source_files.folder.deleted',
+				visibility: 'all',
+				where: {
+					module: 'source-files',
+					parentId: fileOrFolder.parentId?.toString() ?? undefined,
+				},
+				auth: auth.payload,
+				changes,
+				meta: { folderName: fileOrFolder.name },
+			});
+		} else {
+			await recordAuditEvent({
+				workspaceId: fileOrFolder.workspace_id.toString(),
+				scope: { type: 'source-files', id: fileOrFolder.workspace_id.toString() },
+				entity: { type: 'source_file', id },
+				action: 'delete',
+				eventKey: 'source_files.file.deleted',
+				visibility: 'all',
+				where: {
+					module: 'source-files',
+					parentId: fileOrFolder.parentId?.toString() ?? undefined,
+				},
+				auth: auth.payload,
+				changes: [],
+				meta: { fileName: fileOrFolder.name },
+			});
+		}
 
 		return ResponseWrapper.success({
 			message: 'Source file or folder and its contents deleted successfully.',
