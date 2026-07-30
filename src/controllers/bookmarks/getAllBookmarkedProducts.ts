@@ -9,6 +9,10 @@ import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantCo
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 
+const MAX_FILTER_LENGTH = 200;
+
+const escapeRegex = (pattern: string): string => pattern.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
 const ALLOWED_SORT_FIELDS = [
 	'product_name',
 	'product_plan_number',
@@ -169,10 +173,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const isArchiveOnlyStatus = statusValues?.length === 1 && statusValues[0] === 'archived';
 
 		if (filterParam) {
+			if (filterParam.length > MAX_FILTER_LENGTH) {
+				return ResponseWrapper.badRequest(`filter must not exceed ${MAX_FILTER_LENGTH} characters.`);
+			}
+
+			const pattern = escapeRegex(filterParam);
 			filter.$or = [
-				{ product_name: { $regex: filterParam, $options: 'i' } },
-				{ product_plan_number: { $regex: filterParam, $options: 'i' } },
-				{ product_description: { $regex: filterParam, $options: 'i' } },
+				{ product_name: { $regex: pattern, $options: 'i' } },
+				{ product_plan_number: { $regex: pattern, $options: 'i' } },
+				{ product_description: { $regex: pattern, $options: 'i' } },
 			];
 		}
 
