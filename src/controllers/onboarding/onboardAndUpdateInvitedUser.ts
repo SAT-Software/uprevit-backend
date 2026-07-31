@@ -6,9 +6,13 @@ import { logError } from '../../utils/logger';
 import { validateMissingFields } from "../../utils/validationUtils";
 import { updateAuditLog } from "../../utils/auditLog";
 import { AuditLogAction } from "../../models/auditLog";
+import type { User } from '../../models/user';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from '../../utils/billing/enforcement';
 import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
+import { AdminUpdateUserAttributesCommand, CognitoIdentityProviderClient } from '@aws-sdk/client-cognito-identity-provider';
+
+const cognito = new CognitoIdentityProviderClient();
 
 /**
  * @param {APIGatewayProxyEvent} event
@@ -32,17 +36,18 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 		const db = await getDb();
 
-		const existingUser = await db.collection('users').findOne({
+		const existingUser = await db.collection<User>('users').findOne({
 			cognitoSub: context.cognitoSub,
 			workspaceId: context.workspaceId,
 		});
+		if (!existingUser) return ResponseWrapper.notFound("User not found or no changes were made.");
 
 		const normalizedAvatar = normalizePersistedAssetReference(
 			input.profileAvatar,
 			typeof existingUser?.profileAvatar === 'string' ? existingUser.profileAvatar : '',
 		);
 
-		const previousStatus = existingUser?.status ?? 'invited';
+		const previousStatus = existingUser.status;
 		const activatingUser = previousStatus !== 'active';
 
 		if (activatingUser) {
@@ -75,6 +80,20 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 					{ $set: { status: previousStatus } },
 				);
 				return ResponseWrapper.forbidden(postActivationCheck.reason);
+			}
+
+			try {
+				await cognito.send(new AdminUpdateUserAttributesCommand({
+					UserPoolId: process.env.USER_POOL_ID!,
+					Username: existingUser.email,
+					UserAttributes: [{ Name: 'custom:status', Value: 'active' }],
+				}));
+			} catch (error) {
+				await db.collection('users').updateOne(
+					{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
+					{ $set: { status: previousStatus } },
+				);
+				throw error;
 			}
 		}
         
