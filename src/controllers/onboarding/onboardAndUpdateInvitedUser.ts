@@ -55,60 +55,34 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 			if (!seatCheck.allowed) return ResponseWrapper.forbidden(seatCheck.reason);
 		}
 
-		const profileUpdate = {
-			name: input.name,
-			profileAvatar: normalizedAvatar,
-			designation: input.designation || '',
-			location: input.location || '',
-			status: 'active' as const,
-		};
 		const updateResult = await db.collection("users").updateOne(
 			{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
-			{ $set: profileUpdate }
+			{
+				$set: {
+					name: input.name,
+					profileAvatar: normalizedAvatar,
+					designation: input.designation || '',
+					location: input.location || '',
+					status: 'active',
+				},
+			}
 		);
 
 		if (updateResult.matchedCount === 0) {
 			return ResponseWrapper.notFound("User not found or no changes were made.");
 		}
 
-		// Undo this activation only if no other operation has changed the user since.
-		const rollbackActivation = () => db.collection<User>('users').updateOne(
-			{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId, ...profileUpdate },
-			{
-				$set: {
-					name: existingUser.name,
-					profileAvatar: existingUser.profileAvatar ?? '',
-					designation: existingUser.designation ?? '',
-					location: existingUser.location ?? '',
-					status: previousStatus,
-				},
-			},
-		);
-
 		if (activatingUser) {
 			const postActivationCheck = await verifySeatLimitAfterActivation(context.workspaceId);
 			if (!postActivationCheck.allowed) {
-				await rollbackActivation();
+				await db.collection("users").updateOne(
+					{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
+					{ $set: { status: previousStatus } },
+				);
 				return ResponseWrapper.forbidden(postActivationCheck.reason);
 			}
 		}
 
-		// Also runs for users who are already active, repairing any earlier MongoDB and Cognito mismatch.
-		try {
-			await cognito.send(new AdminUpdateUserAttributesCommand({
-				UserPoolId: process.env.USER_POOL_ID!,
-				Username: existingUser.email,
-				UserAttributes: [{ Name: 'custom:status', Value: 'active' }],
-			}));
-		} catch (error) {
-			if (!activatingUser) {
-				logError('Failed to sync Cognito status for active user', error);
-			} else {
-				await rollbackActivation();
-				throw error;
-			}
-		}
-        
 		await updateAuditLog({
 			entity: 'user',
 			entityId: context.userId.toString(),
@@ -125,6 +99,19 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 			sizeBytes: input.profileAvatarSizeBytes ?? input.sizeBytes,
 			metadata: { assetType: 'profile_avatar' },
 		});
+
+		// Runs on every save so a retry repairs any MongoDB and Cognito status mismatch.
+		// A failed activation is not rolled back; the user stays on onboarding and resubmits.
+		try {
+			await cognito.send(new AdminUpdateUserAttributesCommand({
+				UserPoolId: process.env.USER_POOL_ID!,
+				Username: existingUser.email,
+				UserAttributes: [{ Name: 'custom:status', Value: 'active' }],
+			}));
+		} catch (error) {
+			if (activatingUser) throw error;
+			logError('Failed to sync Cognito status for active user', error);
+		}
 
 		return ResponseWrapper.success({ message: "Profile updated successfully." });
 
