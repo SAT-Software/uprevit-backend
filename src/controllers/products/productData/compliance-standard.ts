@@ -37,7 +37,7 @@ export function addComplianceStandard(
 			throw new Error('Data for adding compliance standards must be a non-empty array.');
 
 		for (const standard of newComplianceStandards) {
-			if (!standard.standard || !standard.standard_description)
+			if (typeof standard.standard !== 'string' || !standard.standard.trim() || !standard.standard_description)
 				throw new Error('Both standard and standard_description are required for each compliance standard');
 		}
 
@@ -95,6 +95,8 @@ export function updateComplianceStandard(
 		});
 
 		if (missingFieldsValidation) throw new Error(missingFieldsValidation.body);
+		if (typeof updatedComplianceStandard.standard !== 'string' || !updatedComplianceStandard.standard.trim())
+			throw new Error('Standard must be a non-empty string');
 
 		const objectIdValidation = validateObjectIds({
 			id: updatedComplianceStandard.id,

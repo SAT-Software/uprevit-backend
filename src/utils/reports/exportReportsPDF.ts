@@ -91,7 +91,7 @@ export async function generateReportsPDFExport(products: ProductForExport[]): Pr
 			{ label: 'Target Date', widthPct: 0.10 },
 			{ label: 'Market Geography', widthPct: 0.13 },
 			{ label: 'Class of Device', widthPct: 0.13 },
-			{ label: 'Basic UDI-DI', widthPct: 0.13 },
+			{ label: 'Basic UDI', widthPct: 0.13 },
 			{ label: 'Description', widthPct: 0.10 },
 		];
 

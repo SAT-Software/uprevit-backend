@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-09-27
+
+### Added
+
+- Added department, project, and product description filters to report queries and exports.
+- Added the linked product to the current source folder response, resolved through parent folders.
+
+### Updated
+
+- Updated the Basic UDI-DI label to Basic UDI in product and report exports.
+- Updated package versions to `0.7.0`.
+
+### Fixed
+
+- Fixed duplicate compliance standards being added to a product or created by renaming a standard.
+- Fixed Cognito status not updating when an invited user completes onboarding.
+
 ## [0.6.0] - 2026-07-29
 
 ### Added
