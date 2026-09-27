@@ -648,12 +648,18 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const namePatterns = names.map((name: string) => new RegExp(
 				'^\\s*' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+') + '\\s*$', 'i',
 			));
-			writeFilter['compliance_information.data'] = {
-				$not: { $elemMatch: {
-					standard: { $in: namePatterns },
-					...(input.action === 'update_compliance_standard' ? { _id: { $ne: new ObjectId(input.data.id) } } : {}),
-				} },
-			};
+			if (input.action === 'add_compliance_standard') {
+				writeFilter['compliance_information.data'] = {
+					$not: { $elemMatch: { standard: { $in: namePatterns } } },
+				};
+			} else {
+				const standardId = new ObjectId(input.data.id);
+				// Keeping the current name is allowed, even if older data already has duplicates.
+				writeFilter.$or = [
+					{ 'compliance_information.data': { $elemMatch: { _id: standardId, standard: { $in: namePatterns } } } },
+					{ 'compliance_information.data': { $not: { $elemMatch: { _id: { $ne: standardId }, standard: { $in: namePatterns } } } } },
+				];
+			}
 		}
 
 		const uploadCommitCheck = await assertNewUploadCommitsAllowed(context.workspaceId, input.data);
