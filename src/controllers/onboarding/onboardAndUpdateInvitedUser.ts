@@ -76,27 +76,26 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 			const postActivationCheck = await verifySeatLimitAfterActivation(context.workspaceId);
 			if (!postActivationCheck.allowed) {
 				await db.collection("users").updateOne(
-					{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
+					{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId, status: 'active' },
 					{ $set: { status: previousStatus } },
 				);
 				return ResponseWrapper.forbidden(postActivationCheck.reason);
 			}
-
-			try {
-				await cognito.send(new AdminUpdateUserAttributesCommand({
-					UserPoolId: process.env.USER_POOL_ID!,
-					Username: existingUser.email,
-					UserAttributes: [{ Name: 'custom:status', Value: 'active' }],
-				}));
-			} catch (error) {
-				await db.collection('users').updateOne(
-					{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
-					{ $set: { status: previousStatus } },
-				);
-				throw error;
-			}
 		}
-        
+
+		// Runs on every save so a retry repairs any MongoDB and Cognito status mismatch.
+		// A failed sync is not rolled back; the request fails and the user resubmits.
+		let cognitoSyncError: unknown;
+		try {
+			await cognito.send(new AdminUpdateUserAttributesCommand({
+				UserPoolId: process.env.USER_POOL_ID!,
+				Username: existingUser.email,
+				UserAttributes: [{ Name: 'custom:status', Value: 'active' }],
+			}));
+		} catch (error) {
+			cognitoSyncError = error;
+		}
+
 		await updateAuditLog({
 			entity: 'user',
 			entityId: context.userId.toString(),
@@ -113,6 +112,8 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 			sizeBytes: input.profileAvatarSizeBytes ?? input.sizeBytes,
 			metadata: { assetType: 'profile_avatar' },
 		});
+
+		if (cognitoSyncError) throw cognitoSyncError;
 
 		return ResponseWrapper.success({ message: "Profile updated successfully." });
 
