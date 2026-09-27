@@ -72,27 +72,40 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 			return ResponseWrapper.notFound("User not found or no changes were made.");
 		}
 
+		// Undo this activation only if no other operation has changed the status since.
+		const rollbackActivation = () => db.collection<User>('users').updateOne(
+			{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId, status: 'active' },
+			{
+				$set: {
+					name: existingUser.name,
+					profileAvatar: existingUser.profileAvatar ?? '',
+					designation: existingUser.designation ?? '',
+					location: existingUser.location ?? '',
+					status: previousStatus,
+				},
+			},
+		);
+
 		if (activatingUser) {
 			const postActivationCheck = await verifySeatLimitAfterActivation(context.workspaceId);
 			if (!postActivationCheck.allowed) {
-				await db.collection("users").updateOne(
-					{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
-					{ $set: { status: previousStatus } },
-				);
+				await rollbackActivation();
 				return ResponseWrapper.forbidden(postActivationCheck.reason);
 			}
+		}
 
-			try {
-				await cognito.send(new AdminUpdateUserAttributesCommand({
-					UserPoolId: process.env.USER_POOL_ID!,
-					Username: existingUser.email,
-					UserAttributes: [{ Name: 'custom:status', Value: 'active' }],
-				}));
-			} catch (error) {
-				await db.collection('users').updateOne(
-					{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
-					{ $set: { status: previousStatus } },
-				);
+		// Also runs for users who are already active, repairing any earlier MongoDB and Cognito mismatch.
+		try {
+			await cognito.send(new AdminUpdateUserAttributesCommand({
+				UserPoolId: process.env.USER_POOL_ID!,
+				Username: existingUser.email,
+				UserAttributes: [{ Name: 'custom:status', Value: 'active' }],
+			}));
+		} catch (error) {
+			if (!activatingUser) {
+				logError('Failed to sync Cognito status for active user', error);
+			} else {
+				await rollbackActivation();
 				throw error;
 			}
 		}
