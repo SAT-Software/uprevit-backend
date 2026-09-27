@@ -296,7 +296,7 @@ export async function generateProductPDFExport(productData: Product) {
 				["Commercial/Clinical", d.commercial_clinical],
 				["Manufacturing Location", d.manufacturing_location],
 				["Class of Device", d.class_of_device || ""],
-				["Basic UDI-DI", d.basic_udi_di || ""],
+				["Basic UDI", d.basic_udi_di || ""],
 			);
 		}
 

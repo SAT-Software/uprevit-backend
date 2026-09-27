@@ -6,6 +6,7 @@ import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
 import { ObjectId } from "mongodb";
 import { SourceFile } from "../../models/sourceFiles";
+import { Product } from "../../models/product";
 import { createPresignedGetUrl } from "../../utils/s3-storage";
 
 /**
@@ -58,9 +59,29 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 
+		let linkedFolder = sourceFileOrFolder;
+		const visited = new Set<string>();
+		while (!linkedFolder.product_id && linkedFolder.parentId) {
+			const parentId = linkedFolder.parentId.toString();
+			if (visited.has(parentId)) break;
+			visited.add(parentId);
+			const parent = await sourceFilesCollection.findOne({
+				...tenantObjectIdFilter(parentId, context.workspaceId),
+				type: 'folder',
+			});
+			if (!parent) break;
+			linkedFolder = parent;
+		}
+		const linkedProduct = linkedFolder.product_id
+			? await db.collection<Product>('products').findOne(
+				tenantObjectIdFilter(linkedFolder.product_id.toString(), context.workspaceId),
+				{ projection: { _id: 1, product_name: 1 } },
+			)
+			: null;
+
 		return ResponseWrapper.success({
 			message: 'Parent folder fetched successfully.',
-			result: sourceFileOrFolder
+			result: { ...sourceFileOrFolder, linked_product: linkedProduct }
 		})
         
 	} catch (error) {

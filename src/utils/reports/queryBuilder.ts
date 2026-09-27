@@ -196,6 +196,34 @@ function buildConditionsMatch(conditions: QueryCondition[], conditionLogic?: Con
 	};
 }
 
+function buildParentLookups(conditions: QueryCondition[], workspaceId: ObjectId): Document[] {
+	const pipeline: Document[] = [];
+	for (const parent of ['department', 'project']) {
+		const fields = [`${parent}_name`, `${parent}_description`];
+		if (parent === 'project') fields.push('project_number');
+		if (!conditions.some((condition) => fields.includes(condition.field))) continue;
+
+		const alias = `report_${parent}`;
+		pipeline.push({
+			$lookup: {
+				from: `${parent}s`,
+				let: { parentId: { $convert: { input: `$${parent}_id`, to: 'objectId', onError: null, onNull: null } } },
+				pipeline: [
+					{ $match: { workspace_id: workspaceId, $expr: { $eq: ['$_id', '$$parentId'] } } },
+					{ $project: Object.fromEntries(fields.map((field) => [field, 1])) },
+				],
+				as: alias,
+			},
+		});
+		pipeline.push({
+			$set: Object.fromEntries(fields.map((field) => [
+				field, { $ifNull: [{ $arrayElemAt: [`$${alias}.${field}`, 0] }, null] },
+			])),
+		});
+	}
+	return pipeline;
+}
+
 export function buildAggregationPipeline(
 	request: ReportsQueryRequest | ReportsExportRequest,
 	workspaceId: ObjectId,
@@ -210,6 +238,7 @@ export function buildAggregationPipeline(
 	pipeline.push({ $match: baseMatch });
 
 	if (conditions && conditions.length > 0) {
+		pipeline.push(...buildParentLookups(conditions, workspaceId));
 		pipeline.push({
 			$match: buildConditionsMatch(conditions, conditionLogic),
 		});
@@ -271,6 +300,7 @@ export function buildExportPipeline(
 	});
 
 	if (conditions && conditions.length > 0) {
+		pipeline.push(...buildParentLookups(conditions, workspaceId));
 		pipeline.push({
 			$match: buildConditionsMatch(conditions, conditionLogic),
 		});

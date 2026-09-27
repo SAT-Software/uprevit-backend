@@ -74,7 +74,7 @@ export async function generateReportsExcelExport(products: ProductForExport[]): 
 			{ header: 'Commercial/Clinical', key: 'commercial_clinical', width: 18 },
 			{ header: 'Manufacturing Location', key: 'manufacturing_location', width: 20 },
 			{ header: 'Class of Device', key: 'class_of_device', width: 20 },
-			{ header: 'Basic UDI-DI', key: 'basic_udi_di', width: 20 },
+			{ header: 'Basic UDI', key: 'basic_udi_di', width: 20 },
 			{ header: 'Product Info Complete', key: 'product_info_complete', width: 18 },
 			{ header: 'Compliance Complete', key: 'compliance_complete', width: 18 },
 			{ header: 'Symbols Complete', key: 'symbols_complete', width: 16 },

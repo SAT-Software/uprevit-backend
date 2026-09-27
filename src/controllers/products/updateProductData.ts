@@ -3,7 +3,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
 import { getDb } from '../../utils/db';
 import { Product } from '../../models/product';
-import { ObjectId } from 'mongodb';
+import { ObjectId, type Filter } from 'mongodb';
 import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import {
 	addCustomField,
@@ -637,6 +637,31 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			});
 		}
 
+		const writeFilter: Filter<Product> = { ...productTenantFilter };
+		const changesComplianceStandard = input.action === 'add_compliance_standard' || input.action === 'update_compliance_standard';
+		if (changesComplianceStandard) {
+			const standards = input.action === 'add_compliance_standard' ? input.data : [input.data];
+			const names = standards.map((item: { standard: string }) => item.standard.trim().replace(/\s+/g, ' ').toLowerCase());
+			if (new Set(names).size !== names.length) {
+				return ResponseWrapper.conflict('The same standard cannot be added more than once.');
+			}
+			const namePatterns = names.map((name: string) => new RegExp(
+				'^\\s*' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s+') + '\\s*$', 'i',
+			));
+			if (input.action === 'add_compliance_standard') {
+				writeFilter['compliance_information.data'] = {
+					$not: { $elemMatch: { standard: { $in: namePatterns } } },
+				};
+			} else {
+				const standardId = new ObjectId(input.data.id);
+				// Keeping the current name is allowed, even if older data already has duplicates.
+				writeFilter.$or = [
+					{ 'compliance_information.data': { $elemMatch: { _id: standardId, standard: { $in: namePatterns } } } },
+					{ 'compliance_information.data': { $not: { $elemMatch: { _id: { $ne: standardId }, standard: { $in: namePatterns } } } } },
+				];
+			}
+		}
+
 		const uploadCommitCheck = await assertNewUploadCommitsAllowed(context.workspaceId, input.data);
 		if (!uploadCommitCheck.allowed) {
 			return ResponseWrapper.forbidden(uploadCommitCheck.reason);
@@ -650,7 +675,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const updateResult = await db
 			.collection<Product>('products')
-			.updateOne(productTenantFilter, updateQuery, options);
+			.updateOne(writeFilter, updateQuery, options);
+		if (changesComplianceStandard && updateResult.matchedCount === 0) {
+			return ResponseWrapper.conflict('This standard has already been added to the product.');
+		}
 		if (updateResult.modifiedCount === 0) {
 			return ResponseWrapper.notFound(
 				'Product data not modified successfully, please check the data and try again.',
