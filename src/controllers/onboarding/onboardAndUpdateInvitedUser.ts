@@ -55,26 +55,25 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 			if (!seatCheck.allowed) return ResponseWrapper.forbidden(seatCheck.reason);
 		}
 
+		const profileUpdate = {
+			name: input.name,
+			profileAvatar: normalizedAvatar,
+			designation: input.designation || '',
+			location: input.location || '',
+			status: 'active' as const,
+		};
 		const updateResult = await db.collection("users").updateOne(
 			{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId },
-			{
-				$set: {
-					name: input.name,
-					profileAvatar: normalizedAvatar,
-					designation: input.designation || '',
-					location: input.location || '',
-					status: 'active',
-				},
-			}
+			{ $set: profileUpdate }
 		);
 
 		if (updateResult.matchedCount === 0) {
 			return ResponseWrapper.notFound("User not found or no changes were made.");
 		}
 
-		// Undo this activation only if no other operation has changed the status since.
+		// Undo this activation only if no other operation has changed the user since.
 		const rollbackActivation = () => db.collection<User>('users').updateOne(
-			{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId, status: 'active' },
+			{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId, ...profileUpdate },
 			{
 				$set: {
 					name: existingUser.name,
