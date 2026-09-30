@@ -22,6 +22,7 @@ import { addOperationalParameters, deleteOperationalParameters, updateOperationa
 import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion, updateLabelTagTaggedImage, updateLabelTagLegend } from './productData/label-tags';
 import { SymbolsGraphics } from '../../types/products/symbols-graphics';
 import { recordAuditEvent } from '../../utils/auditLogV2';
+import { CONTENT_LOCKED_MESSAGE, editableStatusFilter, isContentLocked } from '../../utils/productLifecycle';
 import {
 	assertNewUploadCommitsAllowed,
 	recordUploadCommitsFromPayload,
@@ -265,6 +266,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const product = await db.collection<Product>('products').findOne(productTenantFilter);
 
 		if (!product) return ResponseWrapper.notFound('Product not found, please check the provided product id.');
+		if (isContentLocked(product.status)) return ResponseWrapper.conflict(CONTENT_LOCKED_MESSAGE);
 
 		let updateQuery = {};
 		let updatedData = {};
@@ -637,7 +639,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			});
 		}
 
-		const writeFilter: Filter<Product> = { ...productTenantFilter };
+		const writeFilter: Filter<Product> = { ...productTenantFilter, ...editableStatusFilter };
 		const changesComplianceStandard = input.action === 'add_compliance_standard' || input.action === 'update_compliance_standard';
 		if (changesComplianceStandard) {
 			const standards = input.action === 'add_compliance_standard' ? input.data : [input.data];
@@ -676,6 +678,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const updateResult = await db
 			.collection<Product>('products')
 			.updateOne(writeFilter, updateQuery, options);
+		if (updateResult.matchedCount === 0) {
+			const current = await db.collection<Product>('products').findOne(productTenantFilter, { projection: { status: 1 } });
+			if (current && isContentLocked(current.status)) return ResponseWrapper.conflict(CONTENT_LOCKED_MESSAGE);
+		}
 		if (changesComplianceStandard && updateResult.matchedCount === 0) {
 			return ResponseWrapper.conflict('This standard has already been added to the product.');
 		}

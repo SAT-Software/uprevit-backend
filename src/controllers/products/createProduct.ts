@@ -3,7 +3,7 @@ import { getDb } from '../../utils/db';
 import type { Product } from '../../models/product';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { validateEnum, validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
+import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
 import { requireTenantContext } from '../../utils/tenantContext';
 import { logError } from '../../utils/logger';
 import { recordAuditEvent } from '../../utils/auditLogV2';
@@ -35,16 +35,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			'product_plan_number': input.product_plan_number,
 			'product_name': input.product_name,
 			'product_description': input.product_description,
-			'status': input.status,
 			'version': input.version,
 		});
 
 		if(missingFieldsResult) return missingFieldsResult;
-
-
-		const enumValidation = validateEnum(['draft', 'submitted', 'archived'], input.status);
-				
-		if(enumValidation) return enumValidation;
 
 
 		const objectIdValidation = validateObjectIds({
@@ -70,7 +64,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.conflict('Product plan number already exists');
 		}
 
+		const productObjectId = new ObjectId();
 		const productData = {
+			_id: productObjectId,
+			product_lineage_id: productObjectId,
+			is_archived: false,
 			project_id: projectObjectId,
 			workspace_id: workspaceObjectId,
 			department_id: departmentObjectId,
@@ -82,7 +80,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			parent_id: null,
 			target_date: input.target_date || null,
 			actual_completion_date: input.actual_completion_date || null,
-			status: input.status,
+			status: 'draft' as const,
 			complete_count: input.complete_count || 0,
 			product_information: input.product_information || {
 				data: {
@@ -145,7 +143,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				product_plan_number: input.product_plan_number,
 				product_name: input.product_name,
 				product_description: input.product_description,
-				status: input.status,
+				status: productData.status,
 				version: input.version,
 			},
 			changedPaths: ['product_plan_number', 'product_name', 'product_description', 'status', 'version'],

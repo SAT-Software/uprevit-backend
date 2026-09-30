@@ -110,6 +110,14 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 		const name = pickText(meta, ['productName', 'name']);
 		return `submitted product${name ? ` "${name}"` : ''}`;
 	},
+	'product.released': ({ meta }) => {
+		const name = pickText(meta, ['productName', 'name']);
+		return `submitted and released product${name ? ` "${name}"` : ''}`;
+	},
+	'product.returned_to_draft': ({ meta }) => {
+		const name = pickText(meta, ['productName', 'name']);
+		return `returned product${name ? ` "${name}"` : ''} to draft`;
+	},
 	'product.archived': ({ meta }) => {
 		const name = pickText(meta, ['productName', 'name']);
 		return `archived product${name ? ` "${name}"` : ''}`;

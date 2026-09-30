@@ -12,6 +12,7 @@ export const PLATFORM_AUDIT_ACTIONS = [
 	'workspace.provision_invite.create',
 	'workspace_admin.invite.create',
 	'workspace.freeze.update',
+	'workspace.features.update',
 	'billing.account.view',
 	'billing.chargebee.view',
 	'billing.account.update',

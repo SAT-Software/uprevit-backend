@@ -6,6 +6,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
+import { buildProductStatusMatch } from '../../utils/productLifecycle';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 
 const ALLOWED_SORT_FIELDS = [
@@ -102,7 +103,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const filter: Record<string, unknown> = {
 			workspace_id: context.workspaceId,
 		};
-		let statusValues: string[] | null = null;
 
 		if (projectId) {
 			if (!ObjectId.isValid(projectId)) return ResponseWrapper.badRequest('Invalid projectId');
@@ -115,30 +115,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 		
 
-		if (statusFilter) {
-			try {
-				const statusArray = JSON.parse(statusFilter);
-				if (Array.isArray(statusArray) && statusArray.length > 0) {
-					const statusStrings = statusArray.filter(
-						(status): status is string => typeof status === 'string',
-					);
-					if (statusStrings.length > 0) {
-						filter.status = { $in: statusStrings };
-						statusValues = statusStrings;
-					}
-				}
-			} catch (e) {
-				// If parsing fails, treat as single status
-				filter.status = statusFilter;
-				statusValues = [statusFilter];
-			}
-		} else {
-			// Default status filter
-			filter.status = { $in: ['draft', 'submitted'] };
-			statusValues = ['draft', 'submitted'];
-		}
-
-		const isArchiveOnlyStatus = statusValues?.length === 1 && statusValues[0] === 'archived';
+		const { isArchive: isArchiveOnlyStatus, match: statusMatch } = buildProductStatusMatch(statusFilter);
+		Object.assign(filter, statusMatch);
 
 		// General filter parameter for text search
 		if (filterParam) {

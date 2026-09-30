@@ -24,4 +24,5 @@ export type Workspace = {
 	workspaceUsageFreeze?: WorkspaceFreeze;
 	workspaceAccessFreeze?: WorkspaceFreeze;
 	memberListIncludeInactive?: boolean;
+	approvalWorkflowsEnabled?: boolean;
 };

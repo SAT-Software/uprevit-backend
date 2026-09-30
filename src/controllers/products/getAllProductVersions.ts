@@ -5,6 +5,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { assertWorkspaceMatch, requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { validateAllObjectIds } from '../../utils/validationUtils';
+import { productLineageFilter } from '../../utils/productLifecycle';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 
 /**
@@ -48,7 +49,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const db = await getDb();
 		const skip = (page - 1) * limit;
 
-		// First, find the product to get its product_plan_number
 		const product = await db.collection<Product>('products').findOne(
 			tenantObjectIdFilter(productId, context.workspaceId),
 		);
@@ -57,12 +57,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.notFound('Product not found');
 		}
 
-		const matchFilter = {
-			product_plan_number: product.product_plan_number,
-			workspace_id: context.workspaceId,
-		};
+		const matchFilter = productLineageFilter(product);
 
-		// Find all versions with the same product_plan_number, sorted by version descending
 		const pipeline: any[] = [
 			{ $match: matchFilter },
 			buildLegacyAuditLookupStage({

@@ -11,7 +11,8 @@
 		"seed:documentation-videos": "node scripts/seedDocumentationVideos.mjs",
 		"bootstrap:platform-admin": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/bootstrapPlatformAdmin.ts",
 		"backfill:billing-accounts": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/backfillBillingAccounts.ts",
-		"fix:billing-period-anchors": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/fixBillingPeriodAnchors.ts"
+		"fix:billing-period-anchors": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/fixBillingPeriodAnchors.ts",
+		"migrate:product-lifecycle": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateProductLifecycle.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-cognito-identity-provider": "^3.679.0",
