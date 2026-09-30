@@ -1801,6 +1801,23 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/platformAdmin/updateFreezes.ts]
 
+  PlatformAdminUpdateWorkspaceFeaturesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/updateWorkspaceFeatures.lambdaHandler
+      Events:
+        PlatformAdminUpdateWorkspaceFeatures:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/features
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/updateWorkspaceFeatures.ts]
+
   PlatformAdminListUsageEventsFunction:
     Type: AWS::Serverless::Function
     Properties:

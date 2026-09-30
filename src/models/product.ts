@@ -1,6 +1,8 @@
 import { ObjectId } from 'mongodb';
 import { AuditLog } from './auditLog';
 
+export type ProductStatus = 'draft' | 'submitted' | 'in_review' | 'released' | 'obsolete';
+
 export type ProductData ={
 	data: {
 			_id?: ObjectId;
@@ -15,7 +17,7 @@ export type ProductData ={
 			parent_id?: ObjectId | null;
 			target_date?: Date | null;
 			actual_completion_date?: Date | null;
-			status: 'draft' | 'submitted' | 'archived';
+			status: ProductStatus;
 			complete_count?: number;
 		}
 }
@@ -146,7 +148,14 @@ export type Product = {
 	parent_id?: ObjectId | null;
 	target_date?: Date | null;
 	actual_completion_date?: Date | null;
-	status: 'draft' | 'submitted' | 'archived';
+	status: ProductStatus;
+	product_lineage_id?: ObjectId;
+	is_archived?: boolean;
+	archived_at?: Date;
+	archived_by?: ObjectId;
+	released_at?: Date;
+	obsoleted_at?: Date;
+	legacy_release?: boolean;
 	complete_count?: number;
 	product_information: ProductInformation;
 	compliance_information: ComplianceInformation;

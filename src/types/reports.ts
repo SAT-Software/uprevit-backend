@@ -77,7 +77,7 @@ export const TAB_CONFIG: Record<string, { path: string; isArray: boolean }> = {
 };
 
 export const ROOT_FIELDS = [
-	'status', 'department_id', 'project_id', 'product_name', 'product_description', 'product_plan_number', 'version',
+	'status', 'is_archived', 'department_id', 'project_id', 'product_name', 'product_description', 'product_plan_number', 'version',
 	'department_name', 'department_description', 'project_name', 'project_description', 'project_number',
 ];
 

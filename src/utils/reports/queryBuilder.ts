@@ -23,6 +23,10 @@ export function validateCondition(condition: QueryCondition): APIGatewayProxyRes
 		);
 	}
 
+	if (condition.field === 'is_archived' && !['equals', 'not_equals'].includes(condition.operator)) {
+		return ResponseWrapper.badRequest(`Operator '${condition.operator}' is not supported for 'is_archived'. Use equals or not_equals`);
+	}
+
 	const isNoValueOperator = NO_VALUE_OPERATORS.includes(condition.operator);
 	const isArrayOperator = ['contains_any', 'contains_all'].includes(condition.operator);
 
@@ -112,6 +116,11 @@ function buildOperatorQuery(operator: QueryOperator, value?: string | string[], 
 function buildConditionQuery(condition: QueryCondition): Document {
 	const { tab, field, operator, value } = condition;
 	const operatorQuery = buildOperatorQuery(operator, value, field);
+
+	if (field === 'is_archived') {
+		const archived = (operator === 'equals') === (value === 'true');
+		return { is_archived: archived ? true : { $ne: true } };
+	}
 
 	if (tab === 'root' || ROOT_FIELDS.includes(field)) {
 		if (operator === 'not_exists') {
