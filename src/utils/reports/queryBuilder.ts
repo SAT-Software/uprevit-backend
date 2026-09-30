@@ -117,6 +117,10 @@ function buildConditionQuery(condition: QueryCondition): Document {
 	const { tab, field, operator, value } = condition;
 	const operatorQuery = buildOperatorQuery(operator, value, field);
 
+	if (field === 'status' && value === 'archived' && (operator === 'equals' || operator === 'not_equals')) {
+		return buildConditionQuery({ ...condition, field: 'is_archived', value: 'true' });
+	}
+
 	if (field === 'is_archived') {
 		const archived = (operator === 'equals') === (value === 'true');
 		return { is_archived: archived ? true : { $ne: true } };

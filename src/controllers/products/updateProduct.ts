@@ -133,17 +133,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			break;
 
 		case 'archive':
-			await products.updateMany(productLineageFilter(existingProduct), {
+			await withTransaction((txDb, session) => txDb.collection<Product>('products').updateMany(productLineageFilter(existingProduct), {
 				$set: { is_archived: true, archived_at: new Date(), archived_by: context.userId },
-			});
+			}, { session }));
 			audit = { eventKey: 'product.archived', action: 'archive', changedPaths: ['is_archived'] };
 			break;
 
 		case 'restore':
-			await products.updateMany(productLineageFilter(existingProduct), {
+			await withTransaction((txDb, session) => txDb.collection<Product>('products').updateMany(productLineageFilter(existingProduct), {
 				$set: { is_archived: false },
 				$unset: { archived_at: '', archived_by: '' },
-			});
+			}, { session }));
 			audit = { eventKey: 'product.restored', action: 'restore', changedPaths: ['is_archived'] };
 			break;
 		}
