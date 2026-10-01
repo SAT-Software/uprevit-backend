@@ -21,7 +21,11 @@ let hasEnsuredIndexes = false;
 const ensureNotificationIndexes = async () => {
 	if (hasEnsuredIndexes) return;
 	const db = await getDb();
-	await db.collection<Notification>(NOTIFICATIONS_COLLECTION).createIndex({ userId: 1, readAt: 1, createdAt: -1 });
+	const collection = db.collection<Notification>(NOTIFICATIONS_COLLECTION);
+	await Promise.all([
+		collection.createIndex({ userId: 1, readAt: 1, createdAt: -1 }),
+		collection.createIndex({ userId: 1, createdAt: -1 }),
+	]);
 	hasEnsuredIndexes = true;
 };
 

@@ -25,7 +25,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			defaultOrder: 'desc',
 		});
 		if (listQuery.error) return listQuery.error;
-		const { page, limit, skip } = listQuery.value!;
+		const { page, limit, skip, order } = listQuery.value!;
+		const direction = order === 'asc' ? 1 : -1;
 
 		const db = await getDb();
 		const notifications = db.collection<Notification>(NOTIFICATIONS_COLLECTION);
@@ -33,7 +34,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const listFilter = event.queryStringParameters?.unread === 'true' ? { ...filter, readAt: null } : filter;
 
 		const [items, totalCount, unreadCount] = await Promise.all([
-			notifications.find(listFilter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).toArray(),
+			notifications.find(listFilter).sort({ createdAt: direction, _id: direction }).skip(skip).limit(limit).toArray(),
 			notifications.countDocuments(listFilter),
 			notifications.countDocuments({ ...filter, readAt: null }),
 		]);
