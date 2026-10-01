@@ -9,6 +9,7 @@ import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantCo
 import { recordAuditEvent } from '../../utils/auditLogV2';
 import { LifecycleConflictError, productLineageFilter } from '../../utils/productLifecycle';
 import { canManageProductTeam, findActiveWorkspaceMember } from '../../utils/productAccess';
+import { getMemberName, notify } from '../../utils/notifications';
 
 const ACTIONS = ['set-owner', 'add-contributor', 'remove-contributor'] as const;
 type Action = typeof ACTIONS[number];
@@ -102,6 +103,27 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				memberName: member?.name,
 			},
 		});
+
+		if (action !== 'remove-contributor' && !userId.equals(context.userId)) {
+			const actorName = await getMemberName(context.userId);
+			await notify({
+				workspaceId: context.workspaceId,
+				recipients: [userId],
+				...(action === 'set-owner'
+					? {
+						type: 'product.owner_assigned',
+						title: `${actorName} made you the Product Owner of ${product.product_name}`,
+						body: 'You can now edit this product and manage its team.',
+					} as const
+					: {
+						type: 'product.contributor_added',
+						title: `${actorName} added you as a contributor on ${product.product_name}`,
+						body: 'You can now edit this product.',
+					} as const),
+				link: `/products/${productId}/product-information`,
+				meta: { productId, productName: product.product_name, actorUserId: context.userId.toString() },
+			});
+		}
 
 		return ResponseWrapper.success({
 			message: 'Product team updated successfully',

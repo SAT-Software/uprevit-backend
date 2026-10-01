@@ -22,6 +22,7 @@ import {
 } from './platformInviteUtils';
 import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from './billing/enforcement';
 import { recordAuditEvent } from './auditLogV2';
+import { notify } from './notifications';
 
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
@@ -117,6 +118,7 @@ const reassignProductTeams = async (
 	db: Db,
 	workspaceId: ObjectId,
 	targetUserId: ObjectId,
+	targetName: string,
 	actorUserId: ObjectId,
 	auth: Partial<CognitoAccessTokenPayload>,
 ): Promise<void> => {
@@ -150,6 +152,19 @@ const reassignProductTeams = async (
 		changes: [{ path: 'owner_user_id', from: targetUserId.toString(), to: actorUserId.toString() }],
 		meta: { productName: product.product_name, memberName: actor?.name, reason: 'member_removed' },
 	})));
+
+	const [first] = ownedProducts;
+	await notify({
+		workspaceId,
+		recipients: [actorUserId],
+		type: 'product.ownership_transferred',
+		title: ownedProducts.length === 1
+			? `You are now the Product Owner of ${first.product_name}`
+			: `You are now the Product Owner of ${ownedProducts.length} products`,
+		body: `${targetName} was removed from the workspace, so their products moved to you.`,
+		link: ownedProducts.length === 1 ? `/products/${first._id.toString()}/product-information` : '/products',
+		meta: { productIds: ownedProducts.map((product) => product._id.toString()), removedUserId: targetUserId.toString() },
+	});
 };
 
 export const countActiveWorkspaceAdmins = async (
@@ -214,7 +229,7 @@ export const deactivateWorkspaceUser = async ({
 	}
 
 	await cleanupMembershipReferences(db, workspaceId, targetUserId, actorUserId);
-	await reassignProductTeams(db, workspaceId, targetUserId, actorUserId, auth);
+	await reassignProductTeams(db, workspaceId, targetUserId, targetUser.name || 'A member', actorUserId, auth);
 
 	await db.collection<User>('users').updateOne(
 		{ _id: targetUserId, workspaceId },

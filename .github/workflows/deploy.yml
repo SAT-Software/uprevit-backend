@@ -79,6 +79,8 @@ jobs:
       DOCUMENTATION_CLOUDFRONT_DOMAIN: ${{ vars.DOCUMENTATION_CLOUDFRONT_DOMAIN }}
       DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID: ${{ vars.DOCUMENTATION_CLOUDFRONT_KEY_PAIR_ID }}
       DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM: ${{ vars.DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM }}
+      SES_FROM_ADDRESS: ${{ vars.SES_FROM_ADDRESS }}
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
     
     permissions:
       id-token: write
@@ -163,6 +165,8 @@ jobs:
               "ChargebeeSsoAddonItemPriceId": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID", ""),
               "ChargebeeSsoAddonItemPriceIdMonthly": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY", ""),
               "ChargebeeSsoAddonItemPriceIdYearly": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY", ""),
+              "SesFromAddress": os.environ.get("SES_FROM_ADDRESS", ""),
+              "AppBaseUrl": os.environ.get("APP_BASE_URL", ""),
           }
 
           for key, value in parameters.items():
