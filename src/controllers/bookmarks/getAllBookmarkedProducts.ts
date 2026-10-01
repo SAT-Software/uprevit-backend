@@ -9,6 +9,7 @@ import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantCo
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 import { buildProductStatusMatch } from '../../utils/productLifecycle';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
+import { productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
 
 const MAX_FILTER_LENGTH = 200;
 
@@ -24,6 +25,7 @@ const ALLOWED_SORT_FIELDS = [
 	'status',
 	'target_date',
 	'complete_count',
+	'owner_name',
 	'createdBy',
 	'createdOn',
 	'modifiedBy',
@@ -44,6 +46,7 @@ const ACTIVE_FILTER_FIELDS: Record<string, ListFilterField> = {
 	version: { path: 'version', type: 'number' },
 	complete_count: { path: 'complete_count', type: 'number' },
 	progress: { path: 'complete_count', type: 'number' },
+	owner_name: { path: 'owner_name', type: 'text' },
 	createdBy: { path: 'createdBy', type: 'text' },
 	createdOn: { path: 'createdOn', type: 'date' },
 	modifiedBy: { path: 'modifiedBy', type: 'text' },
@@ -108,6 +111,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const requestedWorkspaceId = event.queryStringParameters?.workspaceId;
 		const projectId = event.queryStringParameters?.projectId;
 		const departmentId = event.queryStringParameters?.departmentId;
+		const ownerId = event.queryStringParameters?.ownerId;
 
 		if (requestedWorkspaceId) {
 			if (!ObjectId.isValid(requestedWorkspaceId)) {
@@ -147,6 +151,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (departmentId) {
 			if (!ObjectId.isValid(departmentId)) return ResponseWrapper.badRequest('Invalid departmentId');
 			filter.department_id = new ObjectId(departmentId);
+		}
+
+		if (ownerId) {
+			if (!ObjectId.isValid(ownerId)) return ResponseWrapper.badRequest('Invalid ownerId');
+			filter.owner_user_id = new ObjectId(ownerId);
 		}
 
 		const { isArchive: isArchiveOnlyStatus, match: statusMatch } = buildProductStatusMatch(statusFilter);
@@ -199,6 +208,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			},
 		];
 
+		pipeline.push(...productTeamLookupStages);
+
 		pipeline.push({
 			$addFields: {
 				project_name: { $arrayElemAt: ['$project.project_name', 0] },
@@ -249,13 +260,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			db.collection<Product>('products').aggregate(countPipeline).toArray(),
 		]);
 
+		const productsWithTeam = await signProductTeamAvatars(products, {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		});
 		const totalCount = countResult.length > 0 ? countResult[0].total : 0;
 		const totalPages = Math.ceil(totalCount / limit);
 
 		return ResponseWrapper.success({
 			message: 'Bookmarked products fetched successfully',
 			result: {
-				products,
+				products: productsWithTeam,
 				pagination: {
 					currentPage: page,
 					totalPages,

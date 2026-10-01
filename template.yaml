@@ -232,6 +232,15 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/users/deleteUser.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminDeleteUser
+                - cognito-idp:AdminDisableUser
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminRemoveUserFromGroup
+              Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
       Events:
         DeleteUser:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -637,6 +646,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/getAllProducts.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetAllProducts:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -665,6 +680,23 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/updateProduct.ts]
+
+  UpdateProductTeamFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/updateProductTeam.lambdaHandler
+      Events:
+        UpdateProductTeam:
+          Type: Api
+          Properties:
+            Path: /products/{productId}/team
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/updateProductTeam.ts]
 
   UpdateProductDataFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -1085,6 +1117,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/bookmarks/getAllBookmarkedProducts.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetAllBookmarkedProducts:
           Type: Api

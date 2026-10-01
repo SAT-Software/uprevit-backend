@@ -9,6 +9,8 @@ import { validateMissingFields } from "../../utils/validationUtils";
 import { createPresignedUrl, type UploadScope } from "../../utils/s3-storage";
 import type { Product } from "../../models/product";
 import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
+import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE } from "../../utils/productAccess";
+import { parseCognitoGroups } from "../../utils/tenantContext";
 
 const PRODUCT_ASSET_CONTENT_TYPES = new Set([
 	"image/png",
@@ -107,9 +109,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const product = await db.collection<Product>('products').findOne({
 				_id: new ObjectId(productId),
 				workspace_id: userContext.workspaceId,
-			}, { projection: { _id: 1 } });
+			}, { projection: { owner_user_id: 1, contributor_user_ids: 1 } });
 
 			if (!product) return ResponseWrapper.forbidden('You are not authorized to upload files for this product.');
+			const actor = { userId: userContext.userId, cognitoGroups: parseCognitoGroups(auth.payload['cognito:groups']) };
+			if (!canEditProduct(actor, product)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
 		}
 
 		const { uploadUrl, key } = await createPresignedUrl(input.fileName!, contentType, {

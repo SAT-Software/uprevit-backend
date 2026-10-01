@@ -1,11 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
-import type { ExcelData, LabelTags, Product, SymbolsGraphics, ProductInformation, ComplianceInformation, LabelComponents, ProductData, LanguagesInformation } from '../../models/product';
+import type { ExcelData, LabelTags, Product, SymbolsGraphics, ProductInformation, ComplianceInformation, LabelComponents, ProductData, LanguagesInformation, ProductTeamMember } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateEnum } from '../../utils/validationUtils';
 import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
+import { productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
 import {
 	createPresignedGetUrlMap,
 	createStandardSymbolPresignedGetUrlMap,
@@ -148,16 +149,16 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				scopeType: 'product',
 				updateActions: ['update', 'submit', 'delete', 'move', 'link', 'unlink', 'restore'],
 			}),
+			...productTeamLookupStages,
 		];
 
-		const products = await db.collection<Product>('products').aggregate(pipeline).toArray();
-		const product = products[0] as Product & { auditLogs: any[] };
+		const [foundProduct] = await db.collection<Product>('products').aggregate(pipeline).toArray();
 
-		if (!product) {
+		if (!foundProduct) {
 			return ResponseWrapper.notFound('Product not found');
 		}
 
-		const auditLogs = product.auditLogs || [];
+		const auditLogs = foundProduct.auditLogs || [];
 		const shouldEnrichLabelComponents = tab === 'all-tabs' || tab === 'label-components';
 		const shouldEnrichSymbolsGraphics = tab === 'all-tabs' || tab === 'symbols-graphics';
 		const shouldEnrichLabelTags = tab === 'all-tabs' || tab === 'label-tags';
@@ -165,6 +166,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			workspaceId: context.workspaceId,
 			pendingOwnerId: context.cognitoSub,
 		};
+		const [product] = await signProductTeamAvatars(
+			[foundProduct as Product & { auditLogs: any[]; owner: ProductTeamMember | null; contributors: ProductTeamMember[] }],
+			signingOptions,
+		);
 
 		const labelComponentsData = shouldEnrichLabelComponents
 			? await enrichLabelComponentsWithSignedUrls(product.label_components.data, signingOptions)
@@ -193,6 +198,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				actual_completion_date: product.actual_completion_date ?? null,
 				status: product.status,
 				complete_count: product.complete_count,
+				owner_user_id: product.owner_user_id,
+				contributor_user_ids: product.contributor_user_ids ?? [],
+				owner: product.owner,
+				contributors: product.contributors,
 			}
 		};
 

@@ -12,6 +12,38 @@ export const editableStatusFilter = { status: { $nin: CONTENT_LOCKED_STATUSES } 
 /** Thrown inside a transaction when the product changed after it was read; maps to 409. */
 export class LifecycleConflictError extends Error {}
 
+const COMPLETION_TABS = [
+	'product_information',
+	'compliance_information',
+	'label_components',
+	'symbols_graphics',
+	'product_data',
+	'operational_parameters',
+	'label_tags',
+] as const;
+
+export const TAB_INCOMPLETE_WHILE_SUBMITTED_MESSAGE = 'Return the version to Draft before marking a tab incomplete';
+
+/**
+ * Completion percentage derived from the tab flags, never from client input.
+ * @param {Product} product Version with its tab data
+ * @return {number} Rounded percentage of the seven tabs marked complete
+ */
+export const computeCompleteCount = (product: Pick<Product, typeof COMPLETION_TABS[number]>) =>
+	Math.round((COMPLETION_TABS.filter((tab) => product[tab]?.tab_completed).length / COMPLETION_TABS.length) * 100);
+
+/** Aggregation expression for the same percentage, so it can be written in the same update as a tab flag. */
+export const completeCountExpression = {
+	$round: [{
+		$multiply: [{
+			$divide: [{ $add: COMPLETION_TABS.map((tab) => ({ $cond: [{ $eq: [`$${tab}.tab_completed`, true] }, 1, 0] })) }, COMPLETION_TABS.length],
+		}, 100],
+	}, 0],
+};
+
+/** Mongo filter matching versions whose seven tabs are all marked complete. */
+export const allTabsCompletedFilter = Object.fromEntries(COMPLETION_TABS.map((tab) => [`${tab}.tab_completed`, true]));
+
 export const canCreateVersion = (product: Pick<Product, 'is_latest' | 'status' | 'is_archived'>) =>
 	product.is_latest && product.status === 'released' && !product.is_archived;
 

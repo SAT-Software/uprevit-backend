@@ -6,8 +6,10 @@ import {
 	AdminUpdateUserAttributesCommand,
 	CognitoIdentityProviderClient,
 } from '@aws-sdk/client-cognito-identity-provider';
+import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { Db, ObjectId } from 'mongodb';
 import type { Department } from '../models/department';
+import type { Product } from '../models/product';
 import type { Project } from '../models/project';
 import type { User } from '../models/user';
 import type { Workspace } from '../models/workspace';
@@ -19,6 +21,7 @@ import {
 	normalizeInviteEmail,
 } from './platformInviteUtils';
 import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from './billing/enforcement';
+import { recordAuditEvent } from './auditLogV2';
 
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
@@ -110,6 +113,45 @@ const cleanupMembershipReferences = async (
 	});
 };
 
+const reassignProductTeams = async (
+	db: Db,
+	workspaceId: ObjectId,
+	targetUserId: ObjectId,
+	actorUserId: ObjectId,
+	auth: Partial<CognitoAccessTokenPayload>,
+): Promise<void> => {
+	const products = db.collection<Product>('products');
+
+	await products.updateMany(
+		{ workspace_id: workspaceId, contributor_user_ids: targetUserId },
+		{ $pull: { contributor_user_ids: targetUserId } },
+	);
+
+	const ownedProducts = await products
+		.find({ workspace_id: workspaceId, owner_user_id: targetUserId, is_latest: true }, { projection: { product_name: 1 } })
+		.toArray();
+
+	const reassigned = await products.updateMany(
+		{ workspace_id: workspaceId, owner_user_id: targetUserId },
+		{ $set: { owner_user_id: actorUserId }, $pull: { contributor_user_ids: actorUserId } },
+	);
+	if (reassigned.modifiedCount === 0 || ownedProducts.length === 0) return;
+
+	const actor = await db.collection<User>('users').findOne({ _id: actorUserId }, { projection: { name: 1 } });
+	await Promise.all(ownedProducts.map((product) => recordAuditEvent({
+		workspaceId: workspaceId.toString(),
+		scope: { type: 'product', id: product._id.toString() },
+		entity: { type: 'product', id: product._id.toString() },
+		action: 'update',
+		eventKey: 'product.owner.changed',
+		visibility: 'all',
+		where: { module: 'products' },
+		auth,
+		changes: [{ path: 'owner_user_id', from: targetUserId.toString(), to: actorUserId.toString() }],
+		meta: { productName: product.product_name, memberName: actor?.name, reason: 'member_removed' },
+	})));
+};
+
 export const countActiveWorkspaceAdmins = async (
 	db: Db,
 	workspaceId: ObjectId,
@@ -124,10 +166,12 @@ export const deactivateWorkspaceUser = async ({
 	targetUserId,
 	workspaceId,
 	actorUserId,
+	auth,
 }: {
 	targetUserId: ObjectId;
 	workspaceId: ObjectId;
 	actorUserId: ObjectId;
+	auth: Partial<CognitoAccessTokenPayload>;
 }): Promise<User> => {
 	const db = await getDb();
 
@@ -170,6 +214,7 @@ export const deactivateWorkspaceUser = async ({
 	}
 
 	await cleanupMembershipReferences(db, workspaceId, targetUserId, actorUserId);
+	await reassignProductTeams(db, workspaceId, targetUserId, actorUserId, auth);
 
 	await db.collection<User>('users').updateOne(
 		{ _id: targetUserId, workspaceId },

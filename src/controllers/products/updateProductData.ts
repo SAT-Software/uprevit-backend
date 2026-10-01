@@ -22,7 +22,14 @@ import { addOperationalParameters, deleteOperationalParameters, updateOperationa
 import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion, updateLabelTagTaggedImage, updateLabelTagLegend } from './productData/label-tags';
 import { SymbolsGraphics } from '../../types/products/symbols-graphics';
 import { recordAuditEvent } from '../../utils/auditLogV2';
-import { CONTENT_LOCKED_MESSAGE, editableStatusFilter, isContentLocked } from '../../utils/productLifecycle';
+import {
+	completeCountExpression,
+	CONTENT_LOCKED_MESSAGE,
+	editableStatusFilter,
+	isContentLocked,
+	TAB_INCOMPLETE_WHILE_SUBMITTED_MESSAGE,
+} from '../../utils/productLifecycle';
+import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, productEditorFilter } from '../../utils/productAccess';
 import {
 	assertNewUploadCommitsAllowed,
 	recordUploadCommitsFromPayload,
@@ -266,7 +273,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const product = await db.collection<Product>('products').findOne(productTenantFilter);
 
 		if (!product) return ResponseWrapper.notFound('Product not found, please check the provided product id.');
+		if (!canEditProduct(context, product)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
 		if (isContentLocked(product.status)) return ResponseWrapper.conflict(CONTENT_LOCKED_MESSAGE);
+
+		const isCompletionAction = input.action.endsWith('_completion');
+		const marksTabIncomplete = isCompletionAction && (input.data as { tab_completed?: boolean } | undefined)?.tab_completed === false;
+		if (marksTabIncomplete && product.status === 'submitted') {
+			return ResponseWrapper.conflict(TAB_INCOMPLETE_WHILE_SUBMITTED_MESSAGE);
+		}
 
 		let updateQuery = {};
 		let updatedData = {};
@@ -639,7 +653,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			});
 		}
 
-		const writeFilter: Filter<Product> = { ...productTenantFilter, ...editableStatusFilter };
+		const writeFilter: Filter<Product> = { ...productTenantFilter, ...editableStatusFilter, ...productEditorFilter(context) };
+		if (marksTabIncomplete) writeFilter.status = 'draft';
 		const changesComplianceStandard = input.action === 'add_compliance_standard' || input.action === 'update_compliance_standard';
 		if (changesComplianceStandard) {
 			const standards = input.action === 'add_compliance_standard' ? input.data : [input.data];
@@ -675,11 +690,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			delete (updateQuery as any).arrayFilters; 
 		}
 
+		const update = isCompletionAction
+			? [{ $set: (updateQuery as { $set: Record<string, unknown> }).$set }, { $set: { complete_count: completeCountExpression } }]
+			: updateQuery;
 		const updateResult = await db
 			.collection<Product>('products')
-			.updateOne(writeFilter, updateQuery, options);
+			.updateOne(writeFilter, update, options);
 		if (updateResult.matchedCount === 0) {
-			const current = await db.collection<Product>('products').findOne(productTenantFilter, { projection: { status: 1 } });
+			const current = await db.collection<Product>('products').findOne(productTenantFilter, { projection: { status: 1, owner_user_id: 1, contributor_user_ids: 1 } });
+			if (current && !canEditProduct(context, current)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
 			if (current && isContentLocked(current.status)) return ResponseWrapper.conflict(CONTENT_LOCKED_MESSAGE);
 		}
 		if (changesComplianceStandard && updateResult.matchedCount === 0) {

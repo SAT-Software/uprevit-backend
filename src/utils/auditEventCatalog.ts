@@ -126,6 +126,21 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 		const name = pickText(meta, ['productName', 'name']);
 		return `restored product${name ? ` "${name}"` : ''}`;
 	},
+	'product.owner.changed': ({ meta }) => {
+		const name = pickText(meta, ['productName', 'name']);
+		const member = pickText(meta, ['memberName']);
+		return `made ${member ?? 'a member'} the Product Owner${name ? ` of "${name}"` : ''}`;
+	},
+	'product.contributor.added': ({ meta }) => {
+		const name = pickText(meta, ['productName', 'name']);
+		const member = pickText(meta, ['memberName']);
+		return `added ${member ?? 'a member'} as a contributor${name ? ` to "${name}"` : ''}`;
+	},
+	'product.contributor.removed': ({ meta }) => {
+		const name = pickText(meta, ['productName', 'name']);
+		const member = pickText(meta, ['memberName']);
+		return `removed ${member ?? 'a member'} as a contributor${name ? ` from "${name}"` : ''}`;
+	},
 	'product.version.created': ({ meta }) => {
 		const name = pickText(meta, ['productName', 'name']);
 		const fromVersion = meta?.fromVersion;
