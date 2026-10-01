@@ -3,6 +3,13 @@ import { AuditLog } from './auditLog';
 
 export type ProductStatus = 'draft' | 'submitted' | 'in_review' | 'released' | 'obsolete';
 
+export type ProductTeamMember = {
+	_id: ObjectId;
+	name: string;
+	email: string;
+	profileAvatar?: string;
+};
+
 export type ProductData ={
 	data: {
 			_id?: ObjectId;
@@ -19,6 +26,10 @@ export type ProductData ={
 			actual_completion_date?: Date | null;
 			status: ProductStatus;
 			complete_count?: number;
+			owner_user_id?: ObjectId;
+			contributor_user_ids?: ObjectId[];
+			owner?: ProductTeamMember | null;
+			contributors?: ProductTeamMember[];
 		}
 }
 
@@ -156,6 +167,8 @@ export type Product = {
 	released_at?: Date;
 	obsoleted_at?: Date;
 	legacy_release?: boolean;
+	owner_user_id?: ObjectId;
+	contributor_user_ids?: ObjectId[];
 	complete_count?: number;
 	product_information: ProductInformation;
 	compliance_information: ComplianceInformation;

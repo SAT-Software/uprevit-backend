@@ -9,17 +9,20 @@ import { logError } from '../../utils/logger';
 import { isWorkspaceAdmin, requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 import {
+	allTabsCompletedFilter,
+	computeCompleteCount,
 	CONTENT_LOCKED_MESSAGE,
 	editableStatusFilter,
 	LifecycleConflictError,
 	productLineageFilter,
 	releaseVersions,
 } from '../../utils/productLifecycle';
+import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError, productEditorFilter } from '../../utils/productAccess';
 
 const ACTIONS = ['update-product', 'submit', 'return-to-draft', 'archive', 'restore', 'update-status'] as const;
 type Action = Exclude<typeof ACTIONS[number], 'update-status'>;
 
-const PRODUCT_FIELDS = ['product_name', 'product_description', 'target_date', 'actual_completion_date', 'complete_count'] as const;
+const PRODUCT_FIELDS = ['product_name', 'product_description', 'target_date', 'actual_completion_date'] as const;
 
 type AuditInfo = { eventKey: string; action: AuditAction; changedPaths: string[] };
 
@@ -69,11 +72,18 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const action = input.action === 'update-status' ? fromLegacyStatus(input.data.status, existingProduct) : input.action as Action;
 		if (!action) return ResponseWrapper.badRequest('Invalid status. Must be one of: draft, submitted, archived');
 
-		if ((action === 'archive' || action === 'restore') && !isWorkspaceAdmin(context.cognitoGroups)) {
-			return ResponseWrapper.forbidden('Only workspace admins can archive or restore products');
+		if (action === 'archive' || action === 'restore') {
+			if (!isWorkspaceAdmin(context.cognitoGroups)) return ResponseWrapper.forbidden('Only workspace admins can archive or restore products');
+		} else if (!canEditProduct(context, existingProduct)) {
+			return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
 		}
 
 		let audit: AuditInfo;
+		const editorFilter = productEditorFilter(context);
+		const accessLost = async () => {
+			const current = await products.findOne(productFilter, { projection: { owner_user_id: 1, contributor_user_ids: 1 } });
+			return !current || !canEditProduct(context, current);
+		};
 
 		switch (action) {
 		case 'update-product': {
@@ -82,11 +92,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				if (input.data[field] !== undefined) updateData[field] = input.data[field];
 			}
 			if (Object.keys(updateData).length === 0) {
+				// complete_count is derived from the tab flags; older clients still send it on its own.
+				if (input.data.complete_count !== undefined) {
+					return ResponseWrapper.success({ message: 'Product updated successfully', action, product: existingProduct });
+				}
 				return ResponseWrapper.badRequest(`At least one product field is required: ${PRODUCT_FIELDS.join(', ')}`);
 			}
 
-			const updated = await products.updateOne({ ...productFilter, ...editableStatusFilter }, { $set: updateData });
-			if (updated.matchedCount === 0) return ResponseWrapper.conflict(CONTENT_LOCKED_MESSAGE);
+			const updated = await products.updateOne({ ...productFilter, ...editableStatusFilter, ...editorFilter }, { $set: updateData });
+			if (updated.matchedCount === 0) {
+				return await accessLost() ? ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE) : ResponseWrapper.conflict(CONTENT_LOCKED_MESSAGE);
+			}
 			audit = { eventKey: 'product.updated', action: 'update', changedPaths: Object.keys(updateData) };
 			break;
 		}
@@ -95,8 +111,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (existingProduct.status !== 'draft' && existingProduct.status !== 'submitted') {
 				return ResponseWrapper.conflict('Only draft or submitted versions can be submitted');
 			}
-			if (existingProduct.complete_count !== 100) {
-				return ResponseWrapper.badRequest('A product can only be submitted when it is 100% complete');
+			if (computeCompleteCount(existingProduct) !== 100) {
+				return ResponseWrapper.badRequest('A product can only be submitted when all tabs are marked complete');
 			}
 
 			const workspace = await db.collection<Workspace>('workspaces').findOne(
@@ -111,12 +127,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 			await withTransaction(async (txDb, session) => {
 				const submitted = await txDb.collection<Product>('products').updateOne(
-					{ ...productFilter, complete_count: 100, status: workflowsEnabled ? 'draft' : { $in: ['draft', 'submitted'] } },
-					{ $set: { actual_completion_date: new Date(), ...(workflowsEnabled ? { status: 'submitted' as const } : {}) } },
+					{ ...productFilter, ...editorFilter, ...allTabsCompletedFilter, status: workflowsEnabled ? 'draft' : { $in: ['draft', 'submitted'] } },
+					{ $set: { actual_completion_date: new Date(), complete_count: 100, ...(workflowsEnabled ? { status: 'submitted' as const } : {}) } },
 					{ session },
 				);
 				if (submitted.matchedCount === 0) throw new LifecycleConflictError('This version can no longer be submitted');
 				if (!workflowsEnabled) await releaseVersions(txDb, [existingProduct], { legacy: true, session });
+			}).catch(async (error) => {
+				if (error instanceof LifecycleConflictError && await accessLost()) throw new ProductAccessError(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
+				throw error;
 			});
 
 			audit = workflowsEnabled
@@ -126,7 +145,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		case 'return-to-draft':
-			if ((await products.updateOne({ ...productFilter, status: 'submitted' }, { $set: { status: 'draft' } })).matchedCount === 0) {
+			if ((await products.updateOne({ ...productFilter, ...editorFilter, status: 'submitted' }, { $set: { status: 'draft' } })).matchedCount === 0) {
+				if (await accessLost()) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
 				return ResponseWrapper.conflict('Only submitted versions can be returned to draft');
 			}
 			audit = { eventKey: 'product.returned_to_draft', action: 'update', changedPaths: ['status'] };
@@ -174,6 +194,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 	} catch (err) {
 		if (err instanceof LifecycleConflictError) return ResponseWrapper.conflict(err.message);
+		if (err instanceof ProductAccessError) return ResponseWrapper.forbidden(err.message);
 		logError('Update product handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to update product');
 	}

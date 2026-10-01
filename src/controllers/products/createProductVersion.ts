@@ -7,6 +7,7 @@ import { Product } from "../../models/product";
 import { deepCopyWithFreshIds } from "../../utils/deepCopy";
 import { recordAuditEvent } from "../../utils/auditLogV2";
 import { canCreateVersion, LifecycleConflictError, productLineageFilter } from "../../utils/productLifecycle";
+import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError } from "../../utils/productAccess";
 
 const CREATE_VERSION_CONFLICT = 'A new version can only be created from the latest released version';
 
@@ -34,6 +35,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		);
 
 		if(!currentProduct) return ResponseWrapper.notFound('Product not found');
+		if(!canEditProduct(context, currentProduct)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
 		if(!canCreateVersion(currentProduct)) {
 			return ResponseWrapper.conflict(CREATE_VERSION_CONFLICT);
 		}
@@ -51,6 +53,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				{ session },
 			);
 			if (claimed.matchedCount === 0) throw new LifecycleConflictError(CREATE_VERSION_CONFLICT);
+			const source = await products.findOne(
+				{ _id: currentProduct._id },
+				{ projection: { owner_user_id: 1, contributor_user_ids: 1 }, session },
+			);
+			if (!source || !canEditProduct(context, source)) throw new ProductAccessError(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
+			revisedUpdatedProduct.owner_user_id = source.owner_user_id;
+			revisedUpdatedProduct.contributor_user_ids = source.contributor_user_ids ?? [];
 			return products.insertOne(revisedUpdatedProduct, { session });
 		});
 
@@ -87,6 +96,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 	} catch (error) {
 		if (error instanceof LifecycleConflictError) return ResponseWrapper.conflict(error.message);
+		if (error instanceof ProductAccessError) return ResponseWrapper.forbidden(error.message);
 		logError('Create product version handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to create product version');
 	}
