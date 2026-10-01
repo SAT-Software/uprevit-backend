@@ -130,12 +130,12 @@ const reassignProductTeams = async (
 	const ownedProducts = await products
 		.find({ workspace_id: workspaceId, owner_user_id: targetUserId, is_latest: true }, { projection: { product_name: 1 } })
 		.toArray();
-	if (ownedProducts.length === 0) return;
 
-	await products.updateMany(
+	const reassigned = await products.updateMany(
 		{ workspace_id: workspaceId, owner_user_id: targetUserId },
 		{ $set: { owner_user_id: actorUserId }, $pull: { contributor_user_ids: actorUserId } },
 	);
+	if (reassigned.modifiedCount === 0 || ownedProducts.length === 0) return;
 
 	const actor = await db.collection<User>('users').findOne({ _id: actorUserId }, { projection: { name: 1 } });
 	await Promise.all(ownedProducts.map((product) => recordAuditEvent({

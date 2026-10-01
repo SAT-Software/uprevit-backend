@@ -57,11 +57,9 @@ const main = async () => {
 		if (!actor) return undefined;
 		const workspaceMembers = members.filter((member) => member.workspaceId?.equals(workspaceId));
 		const email = (actor.email ?? actor.name)?.toLowerCase();
-		const byName = workspaceMembers.filter((member) => member.name === actor.name);
 		return workspaceMembers.find((member) => actor.userId && member.cognitoSub === actor.userId)
 			?? workspaceMembers.find((member) => email && member.email.toLowerCase() === email)
-			?? workspaceMembers.find((member) => ObjectId.isValid(actor.name) && member._id?.equals(actor.name))
-			?? (byName.length === 1 ? byName[0] : undefined);
+			?? workspaceMembers.find((member) => ObjectId.isValid(actor.name) && member._id?.equals(actor.name));
 	};
 	const firstAdmin = (workspaceId: ObjectId) =>
 		members.find((member) => member.workspaceId?.equals(workspaceId) && member.userType === 'admin');
