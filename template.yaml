@@ -95,6 +95,14 @@ Parameters:
     Type: String
     Description: "Chargebee item price ID for the yearly SSO add-on"
     Default: ""
+  SesFromAddress:
+    Type: String
+    Description: "SES sender for notification emails, e.g. Uprevit <notifications@notify.uprevit.com>; empty disables emails"
+    Default: ""
+  AppBaseUrl:
+    Type: String
+    Description: "Web app base URL used for links in notification emails, e.g. https://app.uprevit.com"
+    Default: ""
 
 # ──────────────────────────────────────────────────────────────────────────
 # TOP-LEVEL METADATA  – YAML anchor for the build recipe
@@ -138,6 +146,8 @@ Globals:
         CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
         CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
         CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
+        SES_FROM_ADDRESS: !Ref SesFromAddress
+        APP_BASE_URL: !Ref AppBaseUrl
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
@@ -241,6 +251,11 @@ Resources:
                 - cognito-idp:AdminUpdateUserAttributes
                 - cognito-idp:AdminRemoveUserFromGroup
               Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
       Events:
         DeleteUser:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -669,6 +684,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/updateProduct.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
       Events:
         UpdateProduct:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -686,6 +707,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/updateProductTeam.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
       Events:
         UpdateProductTeam:
           Type: Api
@@ -697,6 +724,43 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/updateProductTeam.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # NOTIFICATIONS
+  # ──────────────────────────────────────────────────────────────────────────
+  GetNotificationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/notifications/getNotifications.lambdaHandler
+      Events:
+        GetNotifications:
+          Type: Api
+          Properties:
+            Path: /notifications
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/notifications/getNotifications.ts]
+
+  MarkNotificationsReadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/notifications/markNotificationsRead.lambdaHandler
+      Events:
+        MarkNotificationsRead:
+          Type: Api
+          Properties:
+            Path: /notifications/read
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/notifications/markNotificationsRead.ts]
 
   UpdateProductDataFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction

@@ -18,6 +18,7 @@ import {
 	releaseVersions,
 } from '../../utils/productLifecycle';
 import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError, productEditorFilter } from '../../utils/productAccess';
+import { getMemberName, notify } from '../../utils/notifications';
 
 const ACTIONS = ['update-product', 'submit', 'return-to-draft', 'archive', 'restore', 'update-status'] as const;
 type Action = Exclude<typeof ACTIONS[number], 'update-status'>;
@@ -79,6 +80,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		let audit: AuditInfo;
+		let draftOwnerId: ObjectId | undefined;
 		const editorFilter = productEditorFilter(context);
 		const accessLost = async () => {
 			const current = await products.findOne(productFilter, { projection: { owner_user_id: 1, contributor_user_ids: 1 } });
@@ -144,13 +146,20 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			break;
 		}
 
-		case 'return-to-draft':
-			if ((await products.updateOne({ ...productFilter, ...editorFilter, status: 'submitted' }, { $set: { status: 'draft' } })).matchedCount === 0) {
+		case 'return-to-draft': {
+			const returned = await products.findOneAndUpdate(
+				{ ...productFilter, ...editorFilter, status: 'submitted' },
+				{ $set: { status: 'draft' } },
+				{ returnDocument: 'after', projection: { owner_user_id: 1 } },
+			);
+			if (!returned) {
 				if (await accessLost()) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
 				return ResponseWrapper.conflict('Only submitted versions can be returned to draft');
 			}
+			draftOwnerId = returned.owner_user_id;
 			audit = { eventKey: 'product.returned_to_draft', action: 'update', changedPaths: ['status'] };
 			break;
+		}
 
 		case 'archive':
 			await withTransaction((txDb, session) => txDb.collection<Product>('products').updateMany(productLineageFilter(existingProduct), {
@@ -186,6 +195,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				productName: updatedProduct?.product_name ?? existingProduct.product_name,
 			},
 		});
+
+		if (draftOwnerId && !draftOwnerId.equals(context.userId)) {
+			const actorName = await getMemberName(context.userId);
+			await notify({
+				workspaceId: context.workspaceId,
+				recipients: [draftOwnerId],
+				type: 'product.returned_to_draft',
+				title: `${actorName} returned ${existingProduct.product_name} to Draft`,
+				body: `Version ${existingProduct.version} is no longer marked ready for review.`,
+				link: `/products/${productId}/product-information`,
+				meta: { productId, productName: existingProduct.product_name, version: existingProduct.version, actorUserId: context.userId.toString() },
+			});
+		}
 
 		return ResponseWrapper.success({
 			message: 'Product updated successfully',

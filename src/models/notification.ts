@@ -1,0 +1,22 @@
+import { ObjectId } from 'mongodb';
+
+export const NOTIFICATIONS_COLLECTION = 'notifications';
+
+export type NotificationType =
+	| 'product.owner_assigned'
+	| 'product.contributor_added'
+	| 'product.returned_to_draft'
+	| 'product.ownership_transferred';
+
+export type Notification = {
+	_id?: ObjectId;
+	workspaceId: ObjectId;
+	userId: ObjectId;
+	type: NotificationType;
+	title: string;
+	body?: string;
+	link?: string;
+	meta?: Record<string, unknown>;
+	readAt: Date | null;
+	createdAt: Date;
+};
