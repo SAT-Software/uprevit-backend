@@ -29,8 +29,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const workflowId = workflow._id!.toString();
 		const deleted = await withTransaction(async (txDb, session) => {
-			const result = await txDb.collection<Workflow>(WORKFLOWS_COLLECTION).deleteOne({ _id: workflow._id, status: 'draft' }, { session });
-			if (result.deletedCount === 0) return false;
+			const deletedWorkflow = await txDb.collection<Workflow>(WORKFLOWS_COLLECTION).findOneAndDelete(
+				{ _id: workflow._id, workspaceId: context.workspaceId, status: 'draft' }, { session },
+			);
+			if (!deletedWorkflow) return false;
 			await recordAuditEvent({
 				workspaceId: context.workspaceId.toString(),
 				scope: { type: 'workflow', id: workflowId },
@@ -40,8 +42,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				visibility: 'all',
 				where: { module: 'workflows' },
 				auth: auth.payload,
-				before: workflow as unknown as Record<string, unknown>,
-				meta: { workflowNumber: workflow.numberLabel, workflowName: workflow.name },
+				before: deletedWorkflow as unknown as Record<string, unknown>,
+				meta: { workflowNumber: deletedWorkflow.numberLabel, workflowName: deletedWorkflow.name },
 				session,
 			});
 			return true;

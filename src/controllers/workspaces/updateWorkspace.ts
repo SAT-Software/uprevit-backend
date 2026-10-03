@@ -33,7 +33,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Request body is required');
 		}
 
-		let input: Workspace;
+		let input: Partial<Workspace>;
 		
 		try {
 			input = JSON.parse(event.body!);
@@ -41,8 +41,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Invalid JSON in request body');
 		}
 
+		const workflowSettingsOnly = input.defaultWorkflowCompletionMode !== undefined && input.workspaceName === undefined;
 		const missingFieldsResult = validateMissingFields({
-			'workspaceName': input.workspaceName,
+			...(!workflowSettingsOnly && { 'workspaceName': input.workspaceName }),
 			'_id': input._id!.toString(),
 		});
 		
@@ -83,7 +84,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const userObjectIds = input.userIds ? input.userIds.map((userId) => new ObjectId(userId)) : [];
 		const normalizedLogo = normalizePersistedAssetReference(input.logo, workspaceRecord.logo ?? '');
 
-		const updateFields: Partial<Workspace> = {
+		const updateFields: Partial<Workspace> = workflowSettingsOnly ? {} : {
 			workspaceName: input.workspaceName,
 			companyName: input.companyName,
 			description: input.description,

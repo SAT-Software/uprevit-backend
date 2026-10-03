@@ -140,7 +140,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					if (!lineageId || !product) return { error: ResponseWrapper.badRequest('Pick a Product in this workflow') };
 
 					const latest = await products.findOne(
-						{ workspace_id: context.workspaceId, product_lineage_id: lineageId, is_latest: true },
+						{ workspace_id: context.workspaceId, is_latest: true, $or: [{ product_lineage_id: lineageId }, { _id: lineageId, product_lineage_id: { $exists: false } }] },
 						{ projection: { owner_user_id: 1, contributor_user_ids: 1 } },
 					);
 					const teamMember = latest && (await getProductTeam(db, context.workspaceId, latest)).find((item) => item._id.equals(userId));
