@@ -1,4 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import type { ObjectId } from 'mongodb';
 import { getDb } from '../../utils/db';
 import type { ExcelData, LabelTags, Product, SymbolsGraphics, ProductInformation, ComplianceInformation, LabelComponents, ProductData, LanguagesInformation, ProductTeamMember } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
@@ -150,6 +151,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				updateActions: ['update', 'submit', 'delete', 'move', 'link', 'unlink', 'restore'],
 			}),
 			...productTeamLookupStages,
+			{ $lookup: { from: 'workflows', localField: 'active_workflow_id', foreignField: '_id', as: 'active_workflow', pipeline: [{ $project: { numberLabel: 1 } }] } },
+			{ $addFields: { active_workflow: { $ifNull: [{ $first: '$active_workflow' }, null] } } },
 		];
 
 		const [foundProduct] = await db.collection<Product>('products').aggregate(pipeline).toArray();
@@ -167,7 +170,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			pendingOwnerId: context.cognitoSub,
 		};
 		const [product] = await signProductTeamAvatars(
-			[foundProduct as Product & { auditLogs: any[]; owner: ProductTeamMember | null; contributors: ProductTeamMember[] }],
+			[foundProduct as Product & {
+				auditLogs: any[];
+				owner: ProductTeamMember | null;
+				contributors: ProductTeamMember[];
+				active_workflow: { _id: ObjectId; numberLabel: string } | null;
+			}],
 			signingOptions,
 		);
 
@@ -202,6 +210,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				contributor_user_ids: product.contributor_user_ids ?? [],
 				owner: product.owner,
 				contributors: product.contributors,
+				active_workflow: product.active_workflow
+					? { id: product.active_workflow._id, numberLabel: product.active_workflow.numberLabel }
+					: null,
 			}
 		};
 

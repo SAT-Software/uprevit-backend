@@ -92,6 +92,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			target_date: input.target_date || null,
 			actual_completion_date: input.actual_completion_date || null,
 			status: 'draft' as const,
+			content_revision: 0,
 			product_information: input.product_information || {
 				data: {
 					_id: new ObjectId(),

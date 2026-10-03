@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { Db, ObjectId } from 'mongodb';
 import type { Product } from '../../models/product';
-import type { Workflow } from '../../models/workflow';
+import { ACTIVE_WORKFLOW_STATUSES, type Workflow } from '../../models/workflow';
 import { buildLegacyAuditLookupStage, PRODUCT_ACTIVITY_UPDATE_ACTIONS } from '../../utils/auditLogV2Aggregation';
 import { logError } from '../../utils/logger';
 import { computeCompleteCount } from '../../utils/productLifecycle';
@@ -76,6 +76,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				...workflow,
 				products,
 				canEdit: workflow.status === 'draft' && canManageWorkflow(context, workflow),
+				canCancel: ACTIVE_WORKFLOW_STATUSES.includes(workflow.status) && canManageWorkflow(context, workflow),
 			},
 		});
 	} catch (err) {

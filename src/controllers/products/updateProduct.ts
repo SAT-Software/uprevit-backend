@@ -25,6 +25,8 @@ type Action = Exclude<typeof ACTIONS[number], 'update-status'>;
 
 const PRODUCT_FIELDS = ['product_name', 'product_description', 'target_date', 'actual_completion_date'] as const;
 
+const IN_REVIEW_MESSAGE = 'This version is in review. It stays locked until its workflow ends.';
+
 type AuditInfo = { eventKey: string; action: AuditAction; changedPaths: string[] };
 
 /**
@@ -77,6 +79,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (!isWorkspaceAdmin(context.cognitoGroups)) return ResponseWrapper.forbidden('Only workspace admins can archive or restore products');
 		} else if (!canEditProduct(context, existingProduct)) {
 			return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
+		}
+
+		if (existingProduct.status === 'in_review' && action !== 'restore') {
+			return ResponseWrapper.conflict(IN_REVIEW_MESSAGE);
 		}
 
 		let audit: AuditInfo;
@@ -162,9 +168,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		case 'archive':
-			await withTransaction((txDb, session) => txDb.collection<Product>('products').updateMany(productLineageFilter(existingProduct), {
-				$set: { is_archived: true, archived_at: new Date(), archived_by: context.userId },
-			}, { session }));
+			await withTransaction(async (txDb, session) => {
+				const lineage = txDb.collection<Product>('products');
+				if (await lineage.countDocuments({ ...productLineageFilter(existingProduct), status: 'in_review' }, { limit: 1, session })) {
+					throw new LifecycleConflictError('This product is in review. End its workflow before archiving it.');
+				}
+				await lineage.updateMany(productLineageFilter(existingProduct), {
+					$set: { is_archived: true, archived_at: new Date(), archived_by: context.userId },
+				}, { session });
+			});
 			audit = { eventKey: 'product.archived', action: 'archive', changedPaths: ['is_archived'] };
 			break;
 

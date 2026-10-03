@@ -1,5 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { Db, ObjectId } from 'mongodb';
+import { ClientSession, Db, ObjectId } from 'mongodb';
 import type { Product, ProductStatus } from '../models/product';
 import type { User } from '../models/user';
 import type { Workspace } from '../models/workspace';
@@ -130,27 +130,26 @@ export const getProductTeam = async (db: Db, workspaceId: ObjectId, product: Pic
  * and other active workflows that hold the same Products.
  * @param {Db} db Database handle
  * @param {Workflow} workflow Workflow
+ * @param {ClientSession} session Optional transaction session
  * @return {Promise<Object>} Lookups keyed by lineage id
  */
-export const loadWorkflowProductState = async (db: Db, workflow: Workflow) => {
+export const loadWorkflowProductState = async (db: Db, workflow: Workflow, session?: ClientSession) => {
 	const lineageIds = workflow.products.map((product) => product.lineageId);
 	const versionIds = workflow.products.map((product) => product.productVersionId);
 	if (lineageIds.length === 0) {
 		return { included: new Map<string, Product>(), latest: new Map<string, Product>(), activeElsewhere: new Map<string, string>() };
 	}
 
-	const [products, otherWorkflows] = await Promise.all([
-		db.collection<Product>('products').find({
-			workspace_id: workflow.workspaceId,
-			$or: [{ _id: { $in: versionIds } }, { product_lineage_id: { $in: lineageIds }, is_latest: true }],
-		}, { projection: PRODUCT_STATE_PROJECTION }).toArray(),
-		db.collection<Workflow>(WORKFLOWS_COLLECTION).find({
-			'workspaceId': workflow.workspaceId,
-			'_id': { $ne: workflow._id },
-			'status': { $in: ACTIVE_WORKFLOW_STATUSES },
-			'products.lineageId': { $in: lineageIds },
-		}, { projection: { 'numberLabel': 1, 'products.lineageId': 1 } }).toArray(),
-	]);
+	const products = await db.collection<Product>('products').find({
+		workspace_id: workflow.workspaceId,
+		$or: [{ _id: { $in: versionIds } }, { product_lineage_id: { $in: lineageIds }, is_latest: true }],
+	}, { projection: PRODUCT_STATE_PROJECTION, session }).toArray();
+	const otherWorkflows = await db.collection<Workflow>(WORKFLOWS_COLLECTION).find({
+		'workspaceId': workflow.workspaceId,
+		'_id': { $ne: workflow._id },
+		'status': { $in: ACTIVE_WORKFLOW_STATUSES },
+		'products.lineageId': { $in: lineageIds },
+	}, { projection: { 'numberLabel': 1, 'products.lineageId': 1 }, session }).toArray();
 
 	const included = new Map<string, Product>();
 	const latest = new Map<string, Product>();
@@ -181,10 +180,11 @@ const listNames = (names: string[]) => names.join(', ');
  * Runs the "ready to start?" checks for a Draft workflow.
  * @param {Db} db Database handle
  * @param {Workflow} workflow Workflow
+ * @param {ClientSession} session Optional transaction session, so Start can re-check inside its transaction
  * @return {Promise<ReadinessCheck[]>} Every check with pass or fail and a simple message
  */
-export const getWorkflowReadiness = async (db: Db, workflow: Workflow): Promise<ReadinessCheck[]> => {
-	const { included, latest, activeElsewhere } = await loadWorkflowProductState(db, workflow);
+export const getWorkflowReadiness = async (db: Db, workflow: Workflow, session?: ClientSession): Promise<ReadinessCheck[]> => {
+	const { included, latest, activeElsewhere } = await loadWorkflowProductState(db, workflow, session);
 	const hasProducts = workflow.products.length > 0;
 	const noProductsMessage = 'Add a Product first';
 
@@ -221,7 +221,7 @@ export const getWorkflowReadiness = async (db: Db, workflow: Workflow): Promise<
 
 	const assigneeIds = [...new Map(workflow.assignments.map((assignment) => [assignment.userId.toString(), assignment.userId])).values()];
 	const activeIds = new Set(assigneeIds.length === 0 ? [] : (await db.collection<User>('users')
-		.find({ _id: { $in: assigneeIds }, workspaceId: workflow.workspaceId, status: 'active' }, { projection: { _id: 1 } })
+		.find({ _id: { $in: assigneeIds }, workspaceId: workflow.workspaceId, status: 'active' }, { projection: { _id: 1 }, session })
 		.toArray()).map((user) => user._id!.toString()));
 	const inactiveNames = [...new Set(workflow.assignments
 		.filter((assignment) => !activeIds.has(assignment.userId.toString()))

@@ -16,6 +16,8 @@ export type WorkflowUserSnapshot = {
 	email: string;
 };
 
+export type WorkflowActorSnapshot = WorkflowUserSnapshot & { userId: ObjectId };
+
 export type WorkflowProduct = {
 	lineageId: ObjectId;
 	productVersionId: ObjectId;
@@ -26,6 +28,8 @@ export type WorkflowProduct = {
 
 export type WorkflowRelationship = 'product_owner' | 'product_contributor';
 
+export type WorkflowDecision = 'pending' | 'approved' | 'rejected';
+
 export type WorkflowAssignment = {
 	_id: ObjectId;
 	functionType: 'product_team' | 'function';
@@ -34,7 +38,11 @@ export type WorkflowAssignment = {
 	userId: ObjectId;
 	userSnapshot: WorkflowUserSnapshot;
 	relationship?: WorkflowRelationship;
-	decision: 'pending';
+	decision: WorkflowDecision;
+	decidedAt?: Date;
+	comment?: string;
+	reason?: string;
+	contentCheckpoint?: Record<string, number>;
 };
 
 export type Workflow = {
@@ -46,10 +54,15 @@ export type Workflow = {
 	description: string;
 	status: WorkflowStatus;
 	completionMode: WorkflowCompletionMode;
-	initiator: WorkflowUserSnapshot & { userId: ObjectId };
+	initiator: WorkflowActorSnapshot;
 	products: WorkflowProduct[];
 	assignments: WorkflowAssignment[];
 	dates: {
 		createdAt: Date;
+		startedAt?: Date;
+		rejectedAt?: Date;
+		cancelledAt?: Date;
 	};
+	endReason?: string;
+	endedBy?: WorkflowActorSnapshot;
 };

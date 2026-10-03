@@ -30,6 +30,7 @@ export type ProductData ={
 			contributor_user_ids?: ObjectId[];
 			owner?: ProductTeamMember | null;
 			contributors?: ProductTeamMember[];
+			active_workflow?: { id: ObjectId; numberLabel: string } | null;
 		}
 }
 
@@ -167,6 +168,8 @@ export type Product = {
 	released_at?: Date;
 	obsoleted_at?: Date;
 	legacy_release?: boolean;
+	active_workflow_id?: ObjectId;
+	content_revision?: number;
 	owner_user_id?: ObjectId;
 	contributor_user_ids?: ObjectId[];
 	complete_count?: number;
