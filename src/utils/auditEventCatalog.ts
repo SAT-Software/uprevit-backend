@@ -66,6 +66,12 @@ const productItemSummary = (
 	changes: AuditLogV2Change[],
 ) => `${verb} ${label}${verb === 'updated' ? listChangedFields(changes) : ''}`;
 
+const workflowLabel = (meta: Record<string, unknown> | undefined) => {
+	const number = pickText(meta, ['workflowNumber']);
+	const name = pickText(meta, ['workflowName']);
+	return `${number ? ` ${number}` : ''}${name ? ` "${name}"` : ''}`;
+};
+
 const summaryBuilders: Record<string, SummaryBuilder> = {
 	'department.created': ({ meta }) => {
 		const name = pickText(meta, ['departmentName', 'name']);
@@ -225,6 +231,9 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 		return `unlinked folder${folder ? ` "${folder}"` : ''} from product`;
 	},
 	'source_files.file.uploaded': ({ meta }) => `uploaded file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`,
+	'workflow.started': ({ meta }) => `started workflow${workflowLabel(meta)}`,
+	'workflow.rejected': ({ meta }) => `rejected workflow${workflowLabel(meta)}`,
+	'workflow.cancelled': ({ meta }) => `cancelled workflow${workflowLabel(meta)}`,
 	'workflow.deleted': ({ meta }) => {
 		const number = pickText(meta, ['workflowNumber']);
 		const name = pickText(meta, ['workflowName']);

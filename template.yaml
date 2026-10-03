@@ -873,6 +873,92 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/workflows/getWorkflowReadiness.ts]
 
+  StartWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/startWorkflow.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      Events:
+        StartWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/start
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/startWorkflow.ts]
+
+  DecideWorkflowAssignmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/decideWorkflowAssignment.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      Events:
+        DecideWorkflowAssignment:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/assignments/{assignmentId}/decision
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/decideWorkflowAssignment.ts]
+
+  CancelWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/cancelWorkflow.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      Events:
+        CancelWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/cancel
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/cancelWorkflow.ts]
+
+  GetWorkflowHistoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/getWorkflowHistory.lambdaHandler
+      Events:
+        GetWorkflowHistory:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/history
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/getWorkflowHistory.ts]
+
   UpdateProductDataFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
