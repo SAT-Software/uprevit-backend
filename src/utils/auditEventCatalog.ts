@@ -56,6 +56,7 @@ const subjectForScope = (eventKey: string) => {
 	if (eventKey.startsWith('project.')) return 'project';
 	if (eventKey.startsWith('product.')) return 'product';
 	if (eventKey.startsWith('source_files.')) return 'source item';
+	if (eventKey.startsWith('workflow.')) return 'workflow';
 	return 'record';
 };
 
@@ -224,6 +225,11 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 		return `unlinked folder${folder ? ` "${folder}"` : ''} from product`;
 	},
 	'source_files.file.uploaded': ({ meta }) => `uploaded file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`,
+	'workflow.deleted': ({ meta }) => {
+		const number = pickText(meta, ['workflowNumber']);
+		const name = pickText(meta, ['workflowName']);
+		return `deleted workflow draft${number ? ` ${number}` : ''}${name ? ` "${name}"` : ''}`;
+	},
 	'source_files.file.deleted': ({ meta }) => `deleted file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`,
 };
 

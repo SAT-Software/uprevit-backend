@@ -1,6 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { Workspace } from '../../models/workspace';
+import { WORKFLOW_COMPLETION_MODES } from '../../models/workflow';
 import { AuditLog, AuditLogAction } from '../../models/auditLog';
 import { updateAuditLog } from '../../utils/auditLog';
 import { ObjectId } from 'mongodb';
@@ -97,6 +98,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		if (typeof input.memberListIncludeInactive === 'boolean') {
 			updateFields.memberListIncludeInactive = input.memberListIncludeInactive;
+		}
+
+		if (input.defaultWorkflowCompletionMode !== undefined) {
+			if (!WORKFLOW_COMPLETION_MODES.includes(input.defaultWorkflowCompletionMode)) {
+				return ResponseWrapper.badRequest(`defaultWorkflowCompletionMode must be one of: ${WORKFLOW_COMPLETION_MODES.join(', ')}`);
+			}
+			updateFields.defaultWorkflowCompletionMode = input.defaultWorkflowCompletionMode;
 		}
 
 		const workspace = await db.collection<Workspace>('workspaces').updateOne(

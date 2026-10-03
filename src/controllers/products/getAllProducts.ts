@@ -5,7 +5,7 @@ import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
-import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
+import { buildLegacyAuditLookupStage, PRODUCT_ACTIVITY_UPDATE_ACTIONS } from '../../utils/auditLogV2Aggregation';
 import { buildProductStatusMatch } from '../../utils/productLifecycle';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 import { productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
@@ -148,7 +148,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					? { scopeType: 'product', mode: 'archive' }
 					: {
 						scopeType: 'product',
-						updateActions: ['update', 'submit', 'delete', 'move', 'link', 'unlink', 'restore'],
+						updateActions: PRODUCT_ACTIVITY_UPDATE_ACTIONS,
 					}
 			),
 			{

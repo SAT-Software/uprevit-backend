@@ -762,6 +762,117 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/notifications/markNotificationsRead.ts]
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # WORKFLOWS
+  # ──────────────────────────────────────────────────────────────────────────
+  CreateWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/createWorkflow.lambdaHandler
+      Events:
+        CreateWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/createWorkflow.ts]
+
+  GetAllWorkflowsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/getAllWorkflows.lambdaHandler
+      Events:
+        GetAllWorkflows:
+          Type: Api
+          Properties:
+            Path: /workflows
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/getAllWorkflows.ts]
+
+  GetWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/getWorkflow.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/getWorkflow.ts]
+
+  UpdateWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/updateWorkflow.lambdaHandler
+      Events:
+        UpdateWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/updateWorkflow.ts]
+
+  DeleteWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/deleteWorkflow.lambdaHandler
+      Events:
+        DeleteWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}
+            Method: delete
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/deleteWorkflow.ts]
+
+  GetWorkflowReadinessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/getWorkflowReadiness.lambdaHandler
+      Events:
+        GetWorkflowReadiness:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/readiness
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/getWorkflowReadiness.ts]
+
   UpdateProductDataFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
