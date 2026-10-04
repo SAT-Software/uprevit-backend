@@ -140,6 +140,7 @@ jobs:
           CHARGEBEE_WEBHOOK_PASSWORD: ${{ secrets.CHARGEBEE_WEBHOOK_PASSWORD }}
         run: |
           mapfile -t parameter_overrides < <(python - <<'PY'
+          import json
           import os
 
           parameters = {
@@ -171,7 +172,7 @@ jobs:
 
           for key, value in parameters.items():
               if value:
-                  print(f"{key}={value}")
+                  print(f"{key}={json.dumps(value, ensure_ascii=False)}")
           PY
           )
 
