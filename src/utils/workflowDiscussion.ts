@@ -30,7 +30,7 @@ export const workflowDiscussion = async (db: Db) => {
 };
 
 /**
- * Parses a discussion scope: the whole package, or one of the workflow's Products.
+ * Parses a discussion scope: the whole workflow, or one of the workflow's Products.
  * @param {unknown} value Raw `scope` from the request body
  * @param {Workflow} workflow Workflow the scope must belong to
  * @return {Object} The scope, or an error message
@@ -47,7 +47,7 @@ export const parseDiscussionScope = (value: unknown, workflow: Workflow): { valu
 
 export const scopeLabel = (workflow: Workflow, scope: WorkflowDiscussionScope) =>
 	scope.type === 'package'
-		? 'the whole package'
+		? 'the whole workflow'
 		: `"${workflow.products.find((product) => product.lineageId.equals(scope.lineageId))?.name ?? 'a Product'}"`;
 
 /**
@@ -72,7 +72,7 @@ export const getProductTeamIds = async (db: Db, workflow: Workflow) => {
 	return teams;
 };
 
-/** The people who can address a request in this scope: one Product's team, or every Product's team for the package. */
+/** The people who can address a request in this scope: one Product's team, or every Product's team for the whole workflow. */
 export const scopeTeamIds = (teams: Map<string, ObjectId[]>, scope: WorkflowDiscussionScope) =>
 	scope.type === 'product' ? teams.get(scope.lineageId.toString()) ?? [] : [...teams.values()].flat();
 

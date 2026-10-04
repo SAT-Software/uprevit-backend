@@ -10,7 +10,7 @@ import { WorkflowConflictError, getActorSnapshot, parseWorkflowText } from '../.
 import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
 
 /**
- * Adds a comment on one Product or the whole package. The Initiator, assigned approvers, the included Products' owners
+ * Adds a comment on one Product or the whole workflow. The Initiator, assigned approvers, the included Products' owners
  * and contributors, and admins may comment while the workflow is active. Comments do not send notifications.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format

@@ -18,7 +18,7 @@ import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
 
 /**
  * Marks an open change request as addressed with a note, then notifies the requester. Only an owner or contributor of the
- * scoped Product (any included Product for the whole package) may do this. Addressing is not an approval.
+ * scoped Product (any included Product for the whole workflow) may do this. Addressing is not an approval.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
