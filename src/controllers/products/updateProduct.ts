@@ -13,19 +13,22 @@ import {
 	computeCompleteCount,
 	CONTENT_LOCKED_MESSAGE,
 	editableStatusFilter,
+	JUST_RELEASED_MESSAGE,
 	LifecycleConflictError,
 	productLineageFilter,
 	releaseVersions,
 } from '../../utils/productLifecycle';
 import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError, productEditorFilter } from '../../utils/productAccess';
 import { getMemberName, notify } from '../../utils/notifications';
+import { saveProductContent, sendChangeNotices } from '../../utils/workflowChangeNotices';
+import { WorkflowConflictError } from '../../utils/workflowLifecycle';
 
 const ACTIONS = ['update-product', 'submit', 'return-to-draft', 'archive', 'restore', 'update-status'] as const;
 type Action = Exclude<typeof ACTIONS[number], 'update-status'>;
 
 const PRODUCT_FIELDS = ['product_name', 'product_description', 'target_date', 'actual_completion_date'] as const;
 
-const IN_REVIEW_MESSAGE = 'This version is in review. It stays locked until its workflow ends.';
+const IN_REVIEW_MESSAGE = 'This version is in review. Its status cannot change until its workflow ends.';
 
 type AuditInfo = { eventKey: string; action: AuditAction; changedPaths: string[] };
 
@@ -81,12 +84,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
 		}
 
-		if (existingProduct.status === 'in_review' && action !== 'restore') {
+		if (existingProduct.status === 'in_review' && action !== 'restore' && action !== 'update-product') {
 			return ResponseWrapper.conflict(IN_REVIEW_MESSAGE);
 		}
 
 		let audit: AuditInfo;
 		let draftOwnerId: ObjectId | undefined;
+		let changeNotice: Awaited<ReturnType<typeof saveProductContent>>['changeNotice'] = null;
 		const editorFilter = productEditorFilter(context);
 		const accessLost = async () => {
 			const current = await products.findOne(productFilter, { projection: { owner_user_id: 1, contributor_user_ids: 1 } });
@@ -107,10 +111,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				return ResponseWrapper.badRequest(`At least one product field is required: ${PRODUCT_FIELDS.join(', ')}`);
 			}
 
-			const updated = await products.updateOne({ ...productFilter, ...editableStatusFilter, ...editorFilter }, { $set: updateData });
-			if (updated.matchedCount === 0) {
-				return await accessLost() ? ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE) : ResponseWrapper.conflict(CONTENT_LOCKED_MESSAGE);
+			const saved = await saveProductContent({
+				productFilter,
+				writeFilter: { ...productFilter, ...editableStatusFilter, ...editorFilter },
+				update: { $set: updateData },
+				actorId: context.userId,
+			});
+			if (saved.result.matchedCount === 0) {
+				if (await accessLost()) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
+				return ResponseWrapper.conflict(existingProduct.status === 'in_review' ? JUST_RELEASED_MESSAGE : CONTENT_LOCKED_MESSAGE);
 			}
+			changeNotice = saved.changeNotice;
 			audit = { eventKey: 'product.updated', action: 'update', changedPaths: Object.keys(updateData) };
 			break;
 		}
@@ -208,6 +219,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			},
 		});
 
+		await sendChangeNotices(changeNotice);
+
 		if (draftOwnerId && !draftOwnerId.equals(context.userId)) {
 			const actorName = await getMemberName(context.userId);
 			await notify({
@@ -227,7 +240,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product: updatedProduct,
 		});
 	} catch (err) {
-		if (err instanceof LifecycleConflictError) return ResponseWrapper.conflict(err.message);
+		if (err instanceof LifecycleConflictError || err instanceof WorkflowConflictError) return ResponseWrapper.conflict(err.message);
 		if (err instanceof ProductAccessError) return ResponseWrapper.forbidden(err.message);
 		logError('Update product handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to update product');

@@ -120,7 +120,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				recipients: owners.filter((id) => !approverKeys.has(id.toString())),
 				type: 'workflow.product_in_review',
 				title: `${actor.name} started ${started.numberLabel}`,
-				body: `Your Products in "${started.name}" are now In Review and can't be edited until it ends.`,
+				body: `Your Products in "${started.name}" are now In Review. Approvers are notified of any change you save.`,
 			}),
 		]);
 

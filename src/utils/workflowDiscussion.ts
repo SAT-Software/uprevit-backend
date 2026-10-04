@@ -136,7 +136,12 @@ export const requestChanges = async ({ db, workflow, assignment, actor, scope, r
 				assignments: { $elemMatch: { _id: assignment._id, userId: actor.userId, decision: { $ne: 'rejected' } } },
 			},
 			{
-				$set: { 'status': 'in_review', 'assignments.$.decision': 'changes_requested', 'assignments.$.decidedAt': now },
+				$set: {
+					'status': 'in_review',
+					'assignments.$.decision': 'changes_requested',
+					'assignments.$.decidedAt': now,
+					'assignments.$.changeNoticeSent': false,
+				},
 				$unset: { 'dates.readyToCompleteAt': '', 'assignments.$.comment': '', 'assignments.$.contentCheckpoint': '' },
 			},
 			{ returnDocument: 'before', session },

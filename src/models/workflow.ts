@@ -43,6 +43,7 @@ export type WorkflowAssignment = {
 	comment?: string;
 	reason?: string;
 	contentCheckpoint?: Record<string, number>;
+	changeNoticeSent?: boolean;
 };
 
 export type Workflow = {
@@ -67,5 +68,6 @@ export type Workflow = {
 	};
 	endReason?: string;
 	discussionUpdatedAt?: Date;
+	contentUpdatedAt?: Date;
 	endedBy?: WorkflowActorSnapshot;
 };

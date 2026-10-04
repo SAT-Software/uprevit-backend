@@ -5,6 +5,7 @@ import { ACTIVE_WORKFLOW_STATUSES, type Workflow } from '../../models/workflow';
 import { WORKFLOW_DISCUSSION_COLLECTION, type WorkflowDiscussionItem } from '../../models/workflowDiscussion';
 import { buildLegacyAuditLookupStage, PRODUCT_ACTIVITY_UPDATE_ACTIONS } from '../../utils/auditLogV2Aggregation';
 import { logError } from '../../utils/logger';
+import { withContentChangeFlags } from '../../utils/workflowLifecycle';
 import { computeCompleteCount } from '../../utils/productLifecycle';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
@@ -38,7 +39,7 @@ const loadOpenChangeRequestCounts = async (db: Db, workflow: Workflow) => {
 
 /**
  * Gets a workflow with the current state of its Products, each Product's eligible Product Team, and each assignment's
- * open change requests.
+ * open change requests and whether content changed since its approval.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
@@ -51,10 +52,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const workflow = await findWorkflow(db, context.workspaceId, event.pathParameters?.workflowId);
 		if (!workflow) return ResponseWrapper.notFound('Workflow not found');
 
-		const [{ included, latest }, audits, openChangeRequests] = await Promise.all([
+		const [{ included, latest }, audits, openChangeRequests, assignments] = await Promise.all([
 			loadWorkflowProductState(db, workflow),
 			loadProductAudits(db, workflow),
 			loadOpenChangeRequestCounts(db, workflow),
+			withContentChangeFlags(db, workflow),
 		]);
 		const signingOptions = { workspaceId: context.workspaceId, pendingOwnerId: context.cognitoSub };
 
@@ -86,7 +88,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			workflow: {
 				...workflow,
 				products,
-				assignments: workflow.assignments.map((assignment) => ({
+				assignments: assignments.map((assignment) => ({
 					...assignment,
 					openChangeRequestCount: openChangeRequests.get(assignment._id.toString()) ?? 0,
 				})),
