@@ -30,6 +30,11 @@ export type WorkflowRelationship = 'product_owner' | 'product_contributor';
 
 export type WorkflowDecision = 'pending' | 'approved' | 'rejected' | 'changes_requested';
 
+/** Decisions that still need the approver to act; only these assignments can be replaced. */
+export const UNDECIDED_DECISIONS: WorkflowDecision[] = ['pending', 'changes_requested'];
+
+export type WorkflowUnavailableCause = 'removed_from_workspace' | 'left_product_team';
+
 export type WorkflowAssignment = {
 	_id: ObjectId;
 	functionType: 'product_team' | 'function';
@@ -44,6 +49,14 @@ export type WorkflowAssignment = {
 	reason?: string;
 	contentCheckpoint?: Record<string, number>;
 	changeNoticeSent?: boolean;
+	needsReplacement?: WorkflowUnavailableCause;
+};
+
+export type ReplacedWorkflowAssignment = WorkflowAssignment & {
+	replacedAt: Date;
+	replacedBy: WorkflowActorSnapshot;
+	replacementReason: string;
+	replacementAssignmentId: ObjectId;
 };
 
 export type Workflow = {
@@ -58,6 +71,7 @@ export type Workflow = {
 	initiator: WorkflowActorSnapshot;
 	products: WorkflowProduct[];
 	assignments: WorkflowAssignment[];
+	replacedAssignments?: ReplacedWorkflowAssignment[];
 	dates: {
 		createdAt: Date;
 		startedAt?: Date;
@@ -69,5 +83,7 @@ export type Workflow = {
 	endReason?: string;
 	discussionUpdatedAt?: Date;
 	contentUpdatedAt?: Date;
+	remindedAt?: Date;
+	assignmentsCheckedAt?: Date;
 	endedBy?: WorkflowActorSnapshot;
 };

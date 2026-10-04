@@ -23,6 +23,7 @@ import {
 import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from './billing/enforcement';
 import { recordAuditEvent } from './auditLogV2';
 import { notify } from './notifications';
+import { flagUnavailableAssignments } from './workflowAssignments';
 
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
@@ -241,6 +242,7 @@ export const deactivateWorkspaceUser = async ({
 			},
 		},
 	);
+	await flagUnavailableAssignments({ db, workspaceId, actorId: actorUserId, userId: targetUserId });
 
 	const updatedUser = await db.collection<User>('users').findOne({ _id: targetUserId });
 	if (!updatedUser) {

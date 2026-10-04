@@ -133,7 +133,7 @@ export const requestChanges = async ({ db, workflow, assignment, actor, scope, r
 				_id: workflowId,
 				workspaceId: workflow.workspaceId,
 				status: { $in: ACTIVE_WORKFLOW_STATUSES },
-				assignments: { $elemMatch: { _id: assignment._id, userId: actor.userId, decision: { $ne: 'rejected' } } },
+				assignments: { $elemMatch: { _id: assignment._id, userId: actor.userId, decision: { $ne: 'rejected' }, needsReplacement: { $exists: false } } },
 			},
 			{
 				$set: {
