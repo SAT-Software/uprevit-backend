@@ -121,6 +121,11 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 		const name = pickText(meta, ['productName', 'name']);
 		return `submitted and released product${name ? ` "${name}"` : ''}`;
 	},
+	'product.released_by_workflow': ({ meta }) => {
+		const name = pickText(meta, ['productName', 'name']);
+		const number = pickText(meta, ['workflowNumber']);
+		return `released product${name ? ` "${name}"` : ''}${number ? ` through workflow ${number}` : ''}`;
+	},
 	'product.returned_to_draft': ({ meta }) => {
 		const name = pickText(meta, ['productName', 'name']);
 		return `returned product${name ? ` "${name}"` : ''} to draft`;
@@ -232,6 +237,7 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 	},
 	'source_files.file.uploaded': ({ meta }) => `uploaded file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`,
 	'workflow.started': ({ meta }) => `started workflow${workflowLabel(meta)}`,
+	'workflow.completed': ({ meta }) => `completed workflow${workflowLabel(meta)}`,
 	'workflow.rejected': ({ meta }) => `rejected workflow${workflowLabel(meta)}`,
 	'workflow.cancelled': ({ meta }) => `cancelled workflow${workflowLabel(meta)}`,
 	'workflow.deleted': ({ meta }) => {

@@ -942,6 +942,29 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/workflows/cancelWorkflow.ts]
 
+  CompleteWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/completeWorkflow.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      Events:
+        CompleteWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/complete
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/completeWorkflow.ts]
+
   GetWorkflowHistoryFunction:
     Type: AWS::Serverless::Function
     Properties:

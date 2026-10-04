@@ -168,6 +168,7 @@ export type Product = {
 	released_at?: Date;
 	obsoleted_at?: Date;
 	legacy_release?: boolean;
+	released_by_workflow_id?: ObjectId;
 	active_workflow_id?: ObjectId;
 	content_revision?: number;
 	owner_user_id?: ObjectId;

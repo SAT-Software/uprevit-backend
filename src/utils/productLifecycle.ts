@@ -57,12 +57,13 @@ export const productLineageFilter = (product: Pick<Product, '_id' | 'workspace_i
  * Throws `LifecycleConflictError` if a version is already released or obsolete. Pass a session to keep it atomic.
  * @param {Db} db Database handle
  * @param {Product[]} versions Versions to release
- * @param {Object} options `legacy` marks releases made without a workflow; `session` joins a transaction
+ * @param {Object} options `legacy` marks releases made without a workflow; `workflowId` records the releasing workflow
+ * and clears its lock; `session` joins a transaction
  */
 export const releaseVersions = async (
 	db: Db,
-	versions: Product[],
-	{ legacy = false, session }: { legacy?: boolean; session?: ClientSession } = {},
+	versions: Pick<Product, '_id' | 'workspace_id' | 'product_lineage_id'>[],
+	{ legacy = false, workflowId, session }: { legacy?: boolean; workflowId?: ObjectId; session?: ClientSession } = {},
 ) => {
 	const products = db.collection<Product>('products');
 	const now = new Date();
@@ -70,7 +71,10 @@ export const releaseVersions = async (
 	for (const version of versions) {
 		const released = await products.updateOne(
 			{ _id: version._id, status: { $nin: ['released', 'obsolete'] } },
-			{ $set: { status: 'released', released_at: now, legacy_release: legacy } },
+			{
+				$set: { status: 'released', released_at: now, legacy_release: legacy, ...(workflowId && { released_by_workflow_id: workflowId }) },
+				...(workflowId && { $unset: { active_workflow_id: '' } }),
+			},
 			{ session },
 		);
 		if (released.matchedCount === 0) throw new LifecycleConflictError('This version is already released');

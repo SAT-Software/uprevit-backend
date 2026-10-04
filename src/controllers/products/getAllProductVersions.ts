@@ -67,7 +67,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}),
 			{ $sort: { version: -1 } },
 			{ $skip: skip },
-			{ $limit: limit }
+			{ $limit: limit },
+			{ $lookup: { from: 'workflows', localField: 'released_by_workflow_id', foreignField: '_id', as: 'released_by_workflow', pipeline: [{ $project: { _id: 0, id: '$_id', numberLabel: 1 } }] } },
+			{ $addFields: { released_by_workflow: { $ifNull: [{ $first: '$released_by_workflow' }, null] } } },
 		];
 
 		const countPipeline = [{ $match: matchFilter }, { $count: 'total' }];

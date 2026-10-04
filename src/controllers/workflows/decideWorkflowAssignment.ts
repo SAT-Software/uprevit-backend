@@ -3,13 +3,16 @@ import { ObjectId } from 'mongodb';
 import { WORKFLOWS_COLLECTION, type Workflow } from '../../models/workflow';
 import { withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
+import { LifecycleConflictError } from '../../utils/productLifecycle';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { parseJsonObject } from '../../utils/workflowInput';
 import {
 	WorkflowConflictError,
 	endWorkflowWithoutRelease,
+	evaluateCompletion,
 	getActorSnapshot,
 	getContentCheckpoint,
+	notifyApproval,
 	parseWorkflowText,
 	workflowEvents,
 } from '../../utils/workflowLifecycle';
@@ -19,7 +22,8 @@ const DECISIONS = ['approve', 'reject'] as const;
 type Decision = typeof DECISIONS[number];
 
 /**
- * Records the assigned approver's decision. Approve takes an optional comment; Reject needs a reason and ends the workflow.
+ * Records the assigned approver's decision. Approve takes an optional comment and, once everyone has approved, completes
+ * the workflow or makes it ready to complete; Reject needs a reason and ends the workflow.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
@@ -98,13 +102,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				createdAt: now,
 			}, { session });
 
-			return approved;
+			return evaluateCompletion({ db: txDb, session, workflow: approved, actor, auth: auth.payload });
 		});
 
+		await notifyApproval(db, updated, actor, assignment.functionLabel);
 		return ResponseWrapper.success({ message: 'Approval recorded', workflow: updated });
 	} catch (err) {
 		if (err instanceof SyntaxError) return ResponseWrapper.badRequest('Invalid JSON in request body');
-		if (err instanceof WorkflowConflictError) return ResponseWrapper.conflict(err.message);
+		if (err instanceof WorkflowConflictError || err instanceof LifecycleConflictError) return ResponseWrapper.conflict(err.message);
 		logError('Decide workflow assignment handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to record decision');
 	}

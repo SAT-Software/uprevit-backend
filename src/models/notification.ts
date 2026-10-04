@@ -9,6 +9,9 @@ export type NotificationType =
 	| 'product.ownership_transferred'
 	| 'workflow.approval_requested'
 	| 'workflow.product_in_review'
+	| 'workflow.approved'
+	| 'workflow.ready_to_complete'
+	| 'workflow.completed'
 	| 'workflow.rejected'
 	| 'workflow.cancelled';
 

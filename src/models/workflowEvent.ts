@@ -3,7 +3,7 @@ import type { WorkflowActorSnapshot } from './workflow';
 
 export const WORKFLOW_EVENTS_COLLECTION = 'workflowEvents';
 
-export type WorkflowEventType = 'started' | 'approved' | 'rejected' | 'cancelled';
+export type WorkflowEventType = 'started' | 'approved' | 'ready_to_complete' | 'completed' | 'rejected' | 'cancelled';
 
 /** Append-only workflow history record. Never updated or deleted. */
 export type WorkflowEvent = {
