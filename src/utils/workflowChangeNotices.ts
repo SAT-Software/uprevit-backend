@@ -74,7 +74,8 @@ const recordContentChange = async ({ db, session, product, actorId, now }: Recor
 };
 
 /**
- * Builds the Change Notices: approvers whose approval still counts get different copy from those yet to decide.
+ * Builds the Change Notices: anyone with a decision still to make is told to review first; the rest are told their
+ * approval still counts.
  * @param {Workflow} workflow Workflow
  * @param {WorkflowActorSnapshot} actor Editor
  * @param {string} productName Changed Product
@@ -82,9 +83,9 @@ const recordContentChange = async ({ db, session, product, actorId, now }: Recor
  * @return {Array} Notification inputs
  */
 const changeNotices = (workflow: Workflow, actor: WorkflowActorSnapshot, productName: string, recipients: WorkflowAssignment[]) => {
-	const approved = recipients.filter((assignment) => assignment.decision === 'approved').map((assignment) => assignment.userId);
-	const approvedKeys = new Set(approved.map((id) => id.toString()));
-	const undecided = recipients.map((assignment) => assignment.userId).filter((id) => !approvedKeys.has(id.toString()));
+	const undecided = recipients.filter((assignment) => assignment.decision !== 'approved').map((assignment) => assignment.userId);
+	const undecidedKeys = new Set(undecided.map((id) => id.toString()));
+	const approved = recipients.map((assignment) => assignment.userId).filter((id) => !undecidedKeys.has(id.toString()));
 	const title = `${productName} changed in ${workflow.numberLabel}`;
 	const notice = { workflow, actorId: actor.userId, type: 'workflow.content_changed' as const, tab: 'approvals' as const };
 
