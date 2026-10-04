@@ -60,6 +60,8 @@ export type Workflow = {
 	dates: {
 		createdAt: Date;
 		startedAt?: Date;
+		readyToCompleteAt?: Date;
+		completedAt?: Date;
 		rejectedAt?: Date;
 		cancelledAt?: Date;
 	};
