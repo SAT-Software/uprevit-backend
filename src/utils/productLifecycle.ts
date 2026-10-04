@@ -1,9 +1,11 @@
 import { ClientSession, Db, ObjectId } from 'mongodb';
 import type { Product, ProductStatus } from '../models/product';
 
-const CONTENT_LOCKED_STATUSES: ProductStatus[] = ['in_review', 'released', 'obsolete'];
+const CONTENT_LOCKED_STATUSES: ProductStatus[] = ['released', 'obsolete'];
 
-export const CONTENT_LOCKED_MESSAGE = 'In review, released, and obsolete versions cannot be edited';
+export const CONTENT_LOCKED_MESSAGE = 'Released and obsolete versions cannot be edited';
+
+export const JUST_RELEASED_MESSAGE = 'This version was just released and can no longer be edited';
 
 export const isContentLocked = (status: ProductStatus) => CONTENT_LOCKED_STATUSES.includes(status);
 
@@ -23,6 +25,8 @@ const COMPLETION_TABS = [
 ] as const;
 
 export const TAB_INCOMPLETE_WHILE_SUBMITTED_MESSAGE = 'Return the version to Draft before marking a tab incomplete';
+
+export const TAB_INCOMPLETE_WHILE_IN_REVIEW_MESSAGE = 'Tabs cannot be marked incomplete while the version is in review';
 
 /**
  * Completion percentage derived from the tab flags, never from client input.

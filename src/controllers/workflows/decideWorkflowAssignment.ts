@@ -9,6 +9,7 @@ import { parseDiscussionScope, requestChanges } from '../../utils/workflowDiscus
 import { parseJsonObject } from '../../utils/workflowInput';
 import {
 	WorkflowConflictError,
+	contentChangedSince,
 	countOpenChangeRequests,
 	endWorkflowWithoutRelease,
 	evaluateCompletion,
@@ -16,6 +17,7 @@ import {
 	getContentCheckpoint,
 	notifyApproval,
 	parseWorkflowText,
+	withContentChangeFlags,
 	workflowEvents,
 } from '../../utils/workflowLifecycle';
 import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
@@ -26,8 +28,9 @@ type Decision = typeof DECISIONS[number];
 
 /**
  * Records the assigned approver's decision. Approve takes an optional comment and, once everyone has approved, completes
- * the workflow or makes it ready to complete; Reject needs a reason and ends the workflow; Request Changes needs a reason
- * and a scope, and blocks completion until the request is addressed and the approver decides again.
+ * the workflow or makes it ready to complete; on an approval older than the latest content it records an Approve again
+ * instead. Reject needs a reason and ends the workflow; Request Changes needs a reason and a scope, and blocks completion
+ * until the request is addressed and the approver decides again. Every decision re-enables the approver's Change Notice.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
@@ -58,7 +61,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (!assignment) return ResponseWrapper.notFound('Assignment not found');
 		if (!assignment.userId.equals(context.userId)) return ResponseWrapper.forbidden('Only the assigned approver can decide');
 
-		if (decision === 'request_changes') {
+		const isReconfirm = decision === 'approve' && assignment.decision === 'approved';
+		if (decision === 'request_changes' || isReconfirm) {
 			if (!ACTIVE_WORKFLOW_STATUSES.includes(workflow.status)) return ResponseWrapper.conflict('This workflow has already ended');
 			if (assignment.decision === 'rejected') return ResponseWrapper.conflict('You have already rejected this workflow');
 		} else {
@@ -86,6 +90,55 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const now = new Date();
 		const comment = text.value;
 		const events = await workflowEvents(db);
+
+		if (isReconfirm) {
+			const reconfirmed = await withTransaction(async (txDb, session) => {
+				const contentCheckpoint = await getContentCheckpoint(txDb, workflow, session);
+				if (!contentChangedSince(assignment.contentCheckpoint ?? {}, contentCheckpoint)) {
+					throw new WorkflowConflictError('Your approval already covers the latest content');
+				}
+				const result = await txDb.collection<Workflow>(WORKFLOWS_COLLECTION).findOneAndUpdate(
+					{
+						_id: workflow._id,
+						workspaceId: context.workspaceId,
+						status: { $in: ACTIVE_WORKFLOW_STATUSES },
+						assignments: {
+							$elemMatch: { _id: assignment._id, userId: context.userId, decision: 'approved', decidedAt: assignment.decidedAt },
+						},
+					},
+					{
+						$set: {
+							'assignments.$.decidedAt': now,
+							'assignments.$.contentCheckpoint': contentCheckpoint,
+							'assignments.$.changeNoticeSent': false,
+							...(comment && { 'assignments.$.comment': comment }),
+						},
+						...(!comment && { $unset: { 'assignments.$.comment': '' } }),
+					},
+					{ returnDocument: 'after', session },
+				);
+				if (!result) throw new WorkflowConflictError('This workflow or assignment changed. Reload and try again.');
+
+				await events.insertOne({
+					workspaceId: context.workspaceId,
+					workflowId: workflow._id!,
+					type: 'approval_reconfirmed',
+					actorSnapshot: actor,
+					assignmentId: assignment._id,
+					...(assignment.lineageId && { lineageId: assignment.lineageId }),
+					...(comment && { comment }),
+					data: { functionLabel: assignment.functionLabel, contentCheckpoint, previousCheckpoint: assignment.contentCheckpoint },
+					createdAt: now,
+				}, { session });
+
+				return result;
+			});
+			return ResponseWrapper.success({
+				message: 'Approval recorded on the latest content',
+				workflow: { ...reconfirmed, assignments: await withContentChangeFlags(db, reconfirmed) },
+			});
+		}
+
 		const updated = await withTransaction(async (txDb, session) => {
 			if (await countOpenChangeRequests(txDb, workflow, { assignmentId: assignment._id, session }) > 0) {
 				throw new WorkflowConflictError('Your change request is still open. You can approve once it is addressed.');
@@ -103,6 +156,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 						'assignments.$.decision': 'approved',
 						'assignments.$.decidedAt': now,
 						'assignments.$.contentCheckpoint': contentCheckpoint,
+						'assignments.$.changeNoticeSent': false,
 						...(comment && { 'assignments.$.comment': comment }),
 					},
 				},
@@ -126,7 +180,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		});
 
 		await notifyApproval(db, updated, actor, assignment.functionLabel);
-		return ResponseWrapper.success({ message: 'Approval recorded', workflow: updated });
+		return ResponseWrapper.success({
+			message: 'Approval recorded',
+			workflow: { ...updated, assignments: await withContentChangeFlags(db, updated) },
+		});
 	} catch (err) {
 		if (err instanceof SyntaxError) return ResponseWrapper.badRequest('Invalid JSON in request body');
 		if (err instanceof WorkflowConflictError || err instanceof LifecycleConflictError) return ResponseWrapper.conflict(err.message);

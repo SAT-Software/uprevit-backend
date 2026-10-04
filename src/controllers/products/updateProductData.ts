@@ -27,9 +27,14 @@ import {
 	CONTENT_LOCKED_MESSAGE,
 	editableStatusFilter,
 	isContentLocked,
+	JUST_RELEASED_MESSAGE,
+	LifecycleConflictError,
+	TAB_INCOMPLETE_WHILE_IN_REVIEW_MESSAGE,
 	TAB_INCOMPLETE_WHILE_SUBMITTED_MESSAGE,
 } from '../../utils/productLifecycle';
-import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, productEditorFilter } from '../../utils/productAccess';
+import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError, productEditorFilter } from '../../utils/productAccess';
+import { saveProductContent, sendChangeNotices } from '../../utils/workflowChangeNotices';
+import { WorkflowConflictError } from '../../utils/workflowLifecycle';
 import {
 	assertNewUploadCommitsAllowed,
 	recordUploadCommitsFromPayload,
@@ -280,6 +285,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const marksTabIncomplete = isCompletionAction && (input.data as { tab_completed?: boolean } | undefined)?.tab_completed === false;
 		if (marksTabIncomplete && product.status === 'submitted') {
 			return ResponseWrapper.conflict(TAB_INCOMPLETE_WHILE_SUBMITTED_MESSAGE);
+		}
+		if (marksTabIncomplete && product.status === 'in_review') {
+			return ResponseWrapper.conflict(TAB_INCOMPLETE_WHILE_IN_REVIEW_MESSAGE);
 		}
 
 		let updateQuery = {};
@@ -693,13 +701,20 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const update = isCompletionAction
 			? [{ $set: (updateQuery as { $set: Record<string, unknown> }).$set }, { $set: { complete_count: completeCountExpression } }]
 			: updateQuery;
-		const updateResult = await db
-			.collection<Product>('products')
-			.updateOne(writeFilter, update, options);
+		const { result: updateResult, before, after: updatedProduct, changeNotice } = await saveProductContent({
+			productFilter: productTenantFilter,
+			writeFilter,
+			update,
+			options,
+			actorId: context.userId,
+		});
 		if (updateResult.matchedCount === 0) {
 			const current = await db.collection<Product>('products').findOne(productTenantFilter, { projection: { status: 1, owner_user_id: 1, contributor_user_ids: 1 } });
 			if (current && !canEditProduct(context, current)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
-			if (current && isContentLocked(current.status)) return ResponseWrapper.conflict(CONTENT_LOCKED_MESSAGE);
+			if (current && isContentLocked(current.status)) {
+				return ResponseWrapper.conflict(product.status === 'in_review' ? JUST_RELEASED_MESSAGE : CONTENT_LOCKED_MESSAGE);
+			}
+			if (current?.status === 'in_review' && marksTabIncomplete) return ResponseWrapper.conflict(TAB_INCOMPLETE_WHILE_IN_REVIEW_MESSAGE);
 		}
 		if (changesComplianceStandard && updateResult.matchedCount === 0) {
 			return ResponseWrapper.conflict('This standard has already been added to the product.');
@@ -710,7 +725,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			);
 		}
 
-		const updatedProduct = await db.collection<Product>('products').findOne(productTenantFilter);
 		const auditMeta = PRODUCT_DATA_ACTION_AUDIT_META[input.action];
 
 		if (updatedProduct && auditMeta) {
@@ -734,13 +748,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				visibility: 'all',
 				where: { module: 'products', tab: input.tab },
 				auth: auth.payload,
-				before: product as unknown as Record<string, unknown>,
+				before: (before ?? product) as unknown as Record<string, unknown>,
 				after: updatedProduct as unknown as Record<string, unknown>,
 				changedPaths: auditMeta.changedPaths,
 				meta: payloadMeta,
 			});
 		}
 
+		await sendChangeNotices(changeNotice);
 		await recordUploadCommitsFromPayload(context.workspaceId, input.data);
 
 		return ResponseWrapper.success({
@@ -750,6 +765,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			data: updatedData,
 		});
 	} catch (error: unknown) {
+		if (error instanceof LifecycleConflictError || error instanceof WorkflowConflictError) return ResponseWrapper.conflict(error.message);
+		if (error instanceof ProductAccessError) return ResponseWrapper.forbidden(error.message);
 		return ResponseWrapper.internalServerError(
 			`Internal server error: ${error instanceof Error ? error.message : String(error)}`,
 		);

@@ -14,7 +14,7 @@ import { WORKFLOW_EVENTS_COLLECTION, type WorkflowEvent } from '../models/workfl
 import { recordAuditEvent } from './auditLogV2';
 import { withTransaction } from './db';
 import { logError } from './logger';
-import { notify } from './notifications';
+import { notify, type NotifyInput } from './notifications';
 import { releaseVersions } from './productLifecycle';
 
 export const WORKFLOW_REASON_MAX_LENGTH = 1000;
@@ -82,6 +82,31 @@ export const getContentCheckpoint = async (db: Db, workflow: Workflow, session?:
 };
 
 /**
+ * Whether any Product's content changed after the given Content Checkpoint.
+ * @param {Record<string, number>} checkpoint Checkpoint stored with a decision
+ * @param {Record<string, number>} current Current checkpoint from `getContentCheckpoint`
+ * @return {boolean} True when a Product's revision differs from the checkpoint
+ */
+export const contentChangedSince = (checkpoint: Record<string, number>, current: Record<string, number>) =>
+	Object.entries(current).some(([lineageId, revision]) => (checkpoint[lineageId] ?? 0) !== revision);
+
+/**
+ * Adds `contentChangedSinceDecision` to each assignment: true when an active workflow's content changed after
+ * the assignment's approval.
+ * @param {Db} db Database handle
+ * @param {Workflow} workflow Workflow
+ * @return {Promise<Array>} Assignments with the flag
+ */
+export const withContentChangeFlags = async (db: Db, workflow: Workflow) => {
+	const isActive = ACTIVE_WORKFLOW_STATUSES.includes(workflow.status);
+	const current = isActive ? await getContentCheckpoint(db, workflow) : {};
+	return workflow.assignments.map((assignment) => ({
+		...assignment,
+		contentChangedSinceDecision: isActive && !!assignment.contentCheckpoint && contentChangedSince(assignment.contentCheckpoint, current),
+	}));
+};
+
+/**
  * Counts open change requests, for the whole workflow or for one assignment.
  * @param {Db} db Database handle
  * @param {Workflow} workflow Workflow
@@ -129,12 +154,7 @@ export const workflowLink = (workflow: Workflow, tab?: WorkflowTab) =>
 
 const excluding = (ids: ObjectId[], actorId: ObjectId) => ids.filter((id) => !id.equals(actorId));
 
-/**
- * Sends one notification to every recipient except the person who acted.
- * @param {Object} input Workflow, actor, recipients and content
- * @return {Promise<void>} Resolves once notifications are attempted
- */
-export const notifyWorkflow = ({ workflow, actorId, recipients, type, title, body, tab }: {
+export type WorkflowNotificationInput = {
 	workflow: Workflow;
 	actorId: ObjectId;
 	recipients: ObjectId[];
@@ -142,7 +162,14 @@ export const notifyWorkflow = ({ workflow, actorId, recipients, type, title, bod
 	title: string;
 	body?: string;
 	tab?: WorkflowTab;
-}) => notify({
+};
+
+/**
+ * Builds a workflow notification for every recipient except the person who acted.
+ * @param {WorkflowNotificationInput} input Workflow, actor, recipients and content
+ * @return {NotifyInput} Notification input linking to the workflow
+ */
+export const workflowNotification = ({ workflow, actorId, recipients, type, title, body, tab }: WorkflowNotificationInput): NotifyInput => ({
 	workspaceId: workflow.workspaceId,
 	recipients: excluding(recipients, actorId),
 	type,
@@ -151,6 +178,13 @@ export const notifyWorkflow = ({ workflow, actorId, recipients, type, title, bod
 	link: workflowLink(workflow, tab),
 	meta: { workflowId: workflow._id!.toString(), workflowNumber: workflow.numberLabel, actorUserId: actorId.toString() },
 });
+
+/**
+ * Sends one notification to every recipient except the person who acted.
+ * @param {WorkflowNotificationInput} input Workflow, actor, recipients and content
+ * @return {Promise<void>} Resolves once notifications are attempted
+ */
+export const notifyWorkflow = (input: WorkflowNotificationInput) => notify(workflowNotification(input));
 
 type EndWorkflowInput = {
 	db: Db;

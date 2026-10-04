@@ -12,6 +12,7 @@ export type NotificationType =
 	| 'workflow.approved'
 	| 'workflow.changes_requested'
 	| 'workflow.change_request_addressed'
+	| 'workflow.content_changed'
 	| 'workflow.ready_to_complete'
 	| 'workflow.completed'
 	| 'workflow.rejected'

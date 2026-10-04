@@ -6,6 +6,8 @@ export const WORKFLOW_EVENTS_COLLECTION = 'workflowEvents';
 export type WorkflowEventType =
 	| 'started'
 	| 'approved'
+	| 'approval_reconfirmed'
+	| 'content_changed'
 	| 'changes_requested'
 	| 'change_request_addressed'
 	| 'ready_to_complete'
