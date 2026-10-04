@@ -1,13 +1,15 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
-import { WORKFLOWS_COLLECTION, type Workflow } from '../../models/workflow';
+import { ACTIVE_WORKFLOW_STATUSES, WORKFLOWS_COLLECTION, type Workflow } from '../../models/workflow';
 import { withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
 import { LifecycleConflictError } from '../../utils/productLifecycle';
 import { ResponseWrapper } from '../../utils/responseWrapper';
+import { parseDiscussionScope, requestChanges } from '../../utils/workflowDiscussion';
 import { parseJsonObject } from '../../utils/workflowInput';
 import {
 	WorkflowConflictError,
+	countOpenChangeRequests,
 	endWorkflowWithoutRelease,
 	evaluateCompletion,
 	getActorSnapshot,
@@ -18,12 +20,14 @@ import {
 } from '../../utils/workflowLifecycle';
 import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
 
-const DECISIONS = ['approve', 'reject'] as const;
+const DECISIONS = ['approve', 'reject', 'request_changes'] as const;
+const UNDECIDED = ['pending', 'changes_requested'];
 type Decision = typeof DECISIONS[number];
 
 /**
  * Records the assigned approver's decision. Approve takes an optional comment and, once everyone has approved, completes
- * the workflow or makes it ready to complete; Reject needs a reason and ends the workflow.
+ * the workflow or makes it ready to complete; Reject needs a reason and ends the workflow; Request Changes needs a reason
+ * and a scope, and blocks completion until the request is addressed and the approver decides again.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
@@ -53,11 +57,24 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			: undefined;
 		if (!assignment) return ResponseWrapper.notFound('Assignment not found');
 		if (!assignment.userId.equals(context.userId)) return ResponseWrapper.forbidden('Only the assigned approver can decide');
-		if (workflow.status !== 'in_review') return ResponseWrapper.conflict('Decisions can only be made while the workflow is In Review');
-		if (assignment.decision !== 'pending') return ResponseWrapper.conflict('You have already decided on this assignment');
+
+		if (decision === 'request_changes') {
+			if (!ACTIVE_WORKFLOW_STATUSES.includes(workflow.status)) return ResponseWrapper.conflict('This workflow has already ended');
+			if (assignment.decision === 'rejected') return ResponseWrapper.conflict('You have already rejected this workflow');
+		} else {
+			if (workflow.status !== 'in_review') return ResponseWrapper.conflict('Decisions can only be made while the workflow is In Review');
+			if (!UNDECIDED.includes(assignment.decision)) return ResponseWrapper.conflict('You have already decided on this assignment');
+		}
+		const scope = decision === 'request_changes' ? parseDiscussionScope(input.scope, workflow) : undefined;
+		if (scope && 'error' in scope) return ResponseWrapper.badRequest(scope.error);
 
 		const actor = await getActorSnapshot(db, context.workspaceId, context.userId);
 		if (!actor) return ResponseWrapper.forbidden('Only active members can decide');
+
+		if (scope) {
+			const updated = await requestChanges({ db, workflow, assignment, actor, scope: scope.value, reason: text.value! });
+			return ResponseWrapper.success({ message: 'Change request recorded', workflow: updated });
+		}
 
 		if (decision === 'reject') {
 			const ended = await endWorkflowWithoutRelease({
@@ -70,13 +87,16 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const comment = text.value;
 		const events = await workflowEvents(db);
 		const updated = await withTransaction(async (txDb, session) => {
+			if (await countOpenChangeRequests(txDb, workflow, { assignmentId: assignment._id, session }) > 0) {
+				throw new WorkflowConflictError('Your change request is still open. You can approve once it is addressed.');
+			}
 			const contentCheckpoint = await getContentCheckpoint(txDb, workflow, session);
 			const approved = await txDb.collection<Workflow>(WORKFLOWS_COLLECTION).findOneAndUpdate(
 				{
 					_id: workflow._id,
 					workspaceId: context.workspaceId,
 					status: 'in_review',
-					assignments: { $elemMatch: { _id: assignment._id, userId: context.userId, decision: 'pending' } },
+					assignments: { $elemMatch: { _id: assignment._id, userId: context.userId, decision: { $in: UNDECIDED } } },
 				},
 				{
 					$set: {
