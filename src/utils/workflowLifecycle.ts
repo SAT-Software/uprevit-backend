@@ -9,6 +9,7 @@ import {
 	type Workflow,
 	type WorkflowActorSnapshot,
 } from '../models/workflow';
+import { WORKFLOW_DISCUSSION_COLLECTION, type WorkflowDiscussionItem } from '../models/workflowDiscussion';
 import { WORKFLOW_EVENTS_COLLECTION, type WorkflowEvent } from '../models/workflowEvent';
 import { recordAuditEvent } from './auditLogV2';
 import { withTransaction } from './db';
@@ -81,6 +82,25 @@ export const getContentCheckpoint = async (db: Db, workflow: Workflow, session?:
 };
 
 /**
+ * Counts open change requests, for the whole workflow or for one assignment.
+ * @param {Db} db Database handle
+ * @param {Workflow} workflow Workflow
+ * @param {Object} options Optional assignment and transaction session
+ * @return {Promise<number>} Number of open change requests
+ */
+export const countOpenChangeRequests = (
+	db: Db,
+	workflow: Pick<Workflow, '_id' | 'workspaceId'>,
+	{ assignmentId, session }: { assignmentId?: ObjectId; session?: ClientSession } = {},
+) => db.collection<WorkflowDiscussionItem>(WORKFLOW_DISCUSSION_COLLECTION).countDocuments({
+	workspaceId: workflow.workspaceId,
+	workflowId: workflow._id!,
+	kind: 'change_request',
+	status: 'open',
+	...(assignmentId && { assignmentId }),
+}, { session });
+
+/**
  * Finds everyone involved in a workflow: the Initiator, every approver, and each Product's owner.
  * Runs after the lifecycle change has committed, so a failed owner lookup is logged and only skips the owners.
  * @param {Db} db Database handle
@@ -102,7 +122,9 @@ export const getWorkflowParticipants = async (db: Db, workflow: Workflow) => {
 	return { approvers, owners, all: [workflow.initiator.userId, ...approvers, ...owners] };
 };
 
-export const workflowLink = (workflow: Workflow, tab?: 'approvals' | 'history') =>
+type WorkflowTab = 'approvals' | 'discussion' | 'history';
+
+export const workflowLink = (workflow: Workflow, tab?: WorkflowTab) =>
 	`/workflows/${workflow._id!.toString()}${tab ? `?tab=${tab}` : ''}`;
 
 const excluding = (ids: ObjectId[], actorId: ObjectId) => ids.filter((id) => !id.equals(actorId));
@@ -119,7 +141,7 @@ export const notifyWorkflow = ({ workflow, actorId, recipients, type, title, bod
 	type: NotificationType;
 	title: string;
 	body?: string;
-	tab?: 'approvals' | 'history';
+	tab?: WorkflowTab;
 }) => notify({
 	workspaceId: workflow.workspaceId,
 	recipients: excluding(recipients, actorId),
@@ -162,7 +184,9 @@ export const endWorkflowWithoutRelease = async ({ db, workflow, outcome, actor, 
 				_id: workflowId,
 				workspaceId: workflow.workspaceId,
 				status: { $in: outcome === 'rejected' ? ['in_review'] : ACTIVE_WORKFLOW_STATUSES },
-				...(assignment && { assignments: { $elemMatch: { _id: assignment._id, userId: actor.userId, decision: 'pending' } } }),
+				...(assignment && {
+					assignments: { $elemMatch: { _id: assignment._id, userId: actor.userId, decision: { $in: ['pending', 'changes_requested'] } } },
+				}),
 			},
 			{
 				$set: {
@@ -319,8 +343,8 @@ export const completeWorkflow = async ({ db, session, workflow, actor, auth }: C
 };
 
 /**
- * Runs after every approval inside the same transaction. Once every assignment has approved, an Automatic workflow
- * completes right away and an Initiator-controlled one moves to Ready to Complete.
+ * Runs after every approval inside the same transaction. Once every assignment has approved and no change request is
+ * open, an Automatic workflow completes right away and an Initiator-controlled one moves to Ready to Complete.
  * @param {CompletionInput} input Workflow (as just approved), actor and the transaction to join
  * @return {Promise<Workflow>} The workflow, unchanged while approvals are still pending
  */
@@ -329,6 +353,7 @@ export const evaluateCompletion = async (input: CompletionInput) => {
 	if (workflow.status !== 'in_review' || workflow.assignments.some((assignment) => assignment.decision !== 'approved')) {
 		return workflow;
 	}
+	if (await countOpenChangeRequests(db, workflow, { session }) > 0) return workflow;
 	if (workflow.completionMode === 'automatic') return completeWorkflow(input);
 
 	const now = new Date();

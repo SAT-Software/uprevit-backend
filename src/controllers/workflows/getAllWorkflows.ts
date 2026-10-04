@@ -13,7 +13,7 @@ const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$
 
 /**
  * Lists workflows, newest first. Supports `view`, `search` (number or name), `status` and `productLineageId`.
- * `my-tasks` lists started workflows assigned to the caller, with their pending decisions first.
+ * `my-tasks` lists started workflows assigned to the caller, with the ones awaiting their decision first.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
@@ -73,7 +73,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 							hasMyPendingDecision: {
 								$and: [
 									{ $eq: ['$status', 'in_review'] },
-									{ $anyElementTrue: [{ $map: { input: '$assignments', as: 'a', in: { $and: [{ $eq: ['$$a.userId', context.userId] }, { $eq: ['$$a.decision', 'pending'] }] } } }] },
+									{ $anyElementTrue: [{ $map: { input: '$assignments', as: 'a', in: { $and: [{ $eq: ['$$a.userId', context.userId] }, { $in: ['$$a.decision', ['pending', 'changes_requested']] }] } } }] },
 								],
 							},
 						},

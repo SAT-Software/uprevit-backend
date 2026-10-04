@@ -28,7 +28,7 @@ export type WorkflowProduct = {
 
 export type WorkflowRelationship = 'product_owner' | 'product_contributor';
 
-export type WorkflowDecision = 'pending' | 'approved' | 'rejected';
+export type WorkflowDecision = 'pending' | 'approved' | 'rejected' | 'changes_requested';
 
 export type WorkflowAssignment = {
 	_id: ObjectId;
@@ -66,5 +66,6 @@ export type Workflow = {
 		cancelledAt?: Date;
 	};
 	endReason?: string;
+	discussionUpdatedAt?: Date;
 	endedBy?: WorkflowActorSnapshot;
 };
