@@ -6,7 +6,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 import { buildLegacyAuditLookupStage, PRODUCT_ACTIVITY_UPDATE_ACTIONS } from '../../utils/auditLogV2Aggregation';
-import { buildProductStatusMatch } from '../../utils/productLifecycle';
+import { addProductReleaseInfo, buildProductStatusMatch } from '../../utils/productLifecycle';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 import { productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
 
@@ -233,10 +233,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			db.collection<Product>('products').aggregate(countPipeline).toArray(),
 		]);
 
-		const productsWithTeam = await signProductTeamAvatars(products, {
+		const productsWithTeam = await addProductReleaseInfo(db, context.workspaceId, await signProductTeamAvatars(products, {
 			workspaceId: context.workspaceId,
 			pendingOwnerId: context.cognitoSub,
-		});
+		}));
 		const totalCount = countResult.length > 0 ? countResult[0].total : 0;
 		const totalPages = Math.ceil(totalCount / limit);
 

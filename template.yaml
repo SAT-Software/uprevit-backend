@@ -799,6 +799,23 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/workflows/getAllWorkflows.ts]
 
+  QueryWorkflowsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/queryWorkflows.lambdaHandler
+      Events:
+        QueryWorkflows:
+          Type: Api
+          Properties:
+            Path: /workflows/query
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/queryWorkflows.ts]
+
   GetWorkflowFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -2225,23 +2242,6 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/platformAdmin/updateFreezes.ts]
-
-  PlatformAdminUpdateWorkspaceFeaturesFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/
-      Handler: controllers/platformAdmin/updateWorkspaceFeatures.lambdaHandler
-      Events:
-        PlatformAdminUpdateWorkspaceFeatures:
-          Type: Api
-          Properties:
-            Path: /platform-admin/workspaces/{workspaceId}/features
-            Method: post
-    Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/updateWorkspaceFeatures.ts]
 
   PlatformAdminListUsageEventsFunction:
     Type: AWS::Serverless::Function

@@ -16,7 +16,6 @@ import { allTabsCompletedFilter, computeCompleteCount } from './productLifecycle
 import { ResponseWrapper } from './responseWrapper';
 import { isWorkspaceAdmin, requireTenantContext, type TenantContext } from './tenantContext';
 
-export const WORKFLOWS_DISABLED_MESSAGE = 'Approval workflows are not enabled for this workspace';
 export const WORKFLOW_EDIT_FORBIDDEN_MESSAGE = 'Only the Initiator or an admin can change this workflow';
 export const WORKFLOW_NOT_DRAFT_MESSAGE = 'Only Draft workflows can be changed';
 
@@ -55,7 +54,7 @@ const ensureWorkflowIndexes = async (db: Db) => {
 };
 
 /**
- * Authenticates the request and refuses it with 403 unless approval workflows are enabled for the workspace.
+ * Authenticates the request and loads the workspace's workflow settings.
  * @param {APIGatewayProxyEvent} event API Gateway event
  * @return {Promise<WorkflowContextResult>} Tenant context, database and workspace
  */
@@ -66,11 +65,9 @@ export const requireWorkflowContext = async (event: APIGatewayProxyEvent): Promi
 	const db = await getDb();
 	const workspace = await db.collection<Workspace>('workspaces').findOne(
 		{ _id: tenantResult.context.workspaceId },
-		{ projection: { workspaceName: 1, workflowPrefix: 1, defaultWorkflowCompletionMode: 1, approvalWorkflowsEnabled: 1 } },
+		{ projection: { workspaceName: 1, workflowPrefix: 1, defaultWorkflowCompletionMode: 1 } },
 	);
-	if (workspace?.approvalWorkflowsEnabled !== true) {
-		return { ok: false, response: ResponseWrapper.forbidden(WORKFLOWS_DISABLED_MESSAGE) };
-	}
+	if (!workspace) return { ok: false, response: ResponseWrapper.notFound('Workspace not found') };
 
 	await ensureWorkflowIndexes(db);
 	return { ok: true, context: tenantResult.context, auth: tenantResult.auth, db, workspace };
