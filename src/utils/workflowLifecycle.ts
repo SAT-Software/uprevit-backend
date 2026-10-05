@@ -5,6 +5,7 @@ import type { Product } from '../models/product';
 import type { User } from '../models/user';
 import {
 	ACTIVE_WORKFLOW_STATUSES,
+	UNDECIDED_DECISIONS,
 	WORKFLOWS_COLLECTION,
 	type Workflow,
 	type WorkflowActorSnapshot,
@@ -219,7 +220,7 @@ export const endWorkflowWithoutRelease = async ({ db, workflow, outcome, actor, 
 				workspaceId: workflow.workspaceId,
 				status: { $in: outcome === 'rejected' ? ['in_review'] : ACTIVE_WORKFLOW_STATUSES },
 				...(assignment && {
-					assignments: { $elemMatch: { _id: assignment._id, userId: actor.userId, decision: { $in: ['pending', 'changes_requested'] } } },
+					assignments: { $elemMatch: { _id: assignment._id, userId: actor.userId, decision: { $in: UNDECIDED_DECISIONS }, needsReplacement: { $exists: false } } },
 				}),
 			},
 			{

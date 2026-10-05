@@ -1,11 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
-import { ACTIVE_WORKFLOW_STATUSES, WORKFLOWS_COLLECTION, type Workflow } from '../../models/workflow';
+import { ACTIVE_WORKFLOW_STATUSES, UNDECIDED_DECISIONS, WORKFLOWS_COLLECTION, type Workflow } from '../../models/workflow';
 import { withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
 import { LifecycleConflictError } from '../../utils/productLifecycle';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { parseDiscussionScope, requestChanges } from '../../utils/workflowDiscussion';
+import { isStillEligible } from '../../utils/workflowAssignments';
 import { parseJsonObject } from '../../utils/workflowInput';
 import {
 	WorkflowConflictError,
@@ -23,7 +24,6 @@ import {
 import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
 
 const DECISIONS = ['approve', 'reject', 'request_changes'] as const;
-const UNDECIDED = ['pending', 'changes_requested'];
 type Decision = typeof DECISIONS[number];
 
 /**
@@ -60,6 +60,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			: undefined;
 		if (!assignment) return ResponseWrapper.notFound('Assignment not found');
 		if (!assignment.userId.equals(context.userId)) return ResponseWrapper.forbidden('Only the assigned approver can decide');
+		if (assignment.needsReplacement) {
+			return ResponseWrapper.conflict('You can no longer approve for this assignment. The Initiator needs to replace you.');
+		}
+		if (!(await isStillEligible(db, context.workspaceId, assignment))) {
+			return ResponseWrapper.conflict('You are no longer on this Product\'s team, so you can\'t decide for it.');
+		}
 
 		const isReconfirm = decision === 'approve' && assignment.decision === 'approved';
 		if (decision === 'request_changes' || isReconfirm) {
@@ -67,7 +73,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (assignment.decision === 'rejected') return ResponseWrapper.conflict('You have already rejected this workflow');
 		} else {
 			if (workflow.status !== 'in_review') return ResponseWrapper.conflict('Decisions can only be made while the workflow is In Review');
-			if (!UNDECIDED.includes(assignment.decision)) return ResponseWrapper.conflict('You have already decided on this assignment');
+			if (!UNDECIDED_DECISIONS.includes(assignment.decision)) return ResponseWrapper.conflict('You have already decided on this assignment');
 		}
 		const scope = decision === 'request_changes' ? parseDiscussionScope(input.scope, workflow) : undefined;
 		if (scope && 'error' in scope) return ResponseWrapper.badRequest(scope.error);
@@ -103,7 +109,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 						workspaceId: context.workspaceId,
 						status: { $in: ACTIVE_WORKFLOW_STATUSES },
 						assignments: {
-							$elemMatch: { _id: assignment._id, userId: context.userId, decision: 'approved', decidedAt: assignment.decidedAt },
+							$elemMatch: { _id: assignment._id, userId: context.userId, decision: 'approved', decidedAt: assignment.decidedAt, needsReplacement: { $exists: false } },
 						},
 					},
 					{
@@ -149,7 +155,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					_id: workflow._id,
 					workspaceId: context.workspaceId,
 					status: 'in_review',
-					assignments: { $elemMatch: { _id: assignment._id, userId: context.userId, decision: { $in: UNDECIDED } } },
+					assignments: { $elemMatch: { _id: assignment._id, userId: context.userId, decision: { $in: UNDECIDED_DECISIONS }, needsReplacement: { $exists: false } } },
 				},
 				{
 					$set: {

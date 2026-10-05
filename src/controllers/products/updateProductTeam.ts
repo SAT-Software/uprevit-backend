@@ -10,6 +10,8 @@ import { recordAuditEvent } from '../../utils/auditLogV2';
 import { LifecycleConflictError, productLineageFilter } from '../../utils/productLifecycle';
 import { canManageProductTeam, findActiveWorkspaceMember } from '../../utils/productAccess';
 import { getMemberName, notify } from '../../utils/notifications';
+import { flagUnavailableAssignments } from '../../utils/workflowAssignments';
+import { lineageIdOf } from '../../utils/workflows';
 
 const ACTIONS = ['set-owner', 'add-contributor', 'remove-contributor'] as const;
 type Action = typeof ACTIONS[number];
@@ -103,6 +105,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				memberName: member?.name,
 			},
 		});
+
+		await flagUnavailableAssignments({ db, workspaceId: context.workspaceId, actorId: context.userId, lineageId: lineageIdOf(product) });
 
 		if (action !== 'remove-contributor' && !userId.equals(context.userId)) {
 			const actorName = await getMemberName(context.userId);

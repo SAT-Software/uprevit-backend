@@ -240,6 +240,11 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 	'workflow.completed': ({ meta }) => `completed workflow${workflowLabel(meta)}`,
 	'workflow.rejected': ({ meta }) => `rejected workflow${workflowLabel(meta)}`,
 	'workflow.cancelled': ({ meta }) => `cancelled workflow${workflowLabel(meta)}`,
+	'workflow.approver_replaced': ({ meta, changes }) => {
+		const from = pickChangeText(changes, ['assignments.userId'], 'from');
+		const to = pickChangeText(changes, ['assignments.userId'], 'to');
+		return `replaced approver${from ? ` ${from}` : ''}${to ? ` with ${to}` : ''} in workflow${workflowLabel(meta)}`;
+	},
 	'workflow.deleted': ({ meta }) => {
 		const number = pickText(meta, ['workflowNumber']);
 		const name = pickText(meta, ['workflowName']);

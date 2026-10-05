@@ -177,6 +177,21 @@ export type ReadinessCheck = {
 const listNames = (names: string[]) => names.join(', ');
 
 /**
+ * Checks that approval is shared: neither the Initiator nor a Product Owner may be the workflow's only approver.
+ * @param {Workflow} workflow Workflow with the assignments to check
+ * @param {Map<string, Product>} latest Each Product's latest version from `loadWorkflowProductState`
+ * @return {string | null} The problem, or null when approval is shared
+ */
+export const getSoleApproverProblem = (workflow: Pick<Workflow, 'assignments' | 'initiator'>, latest: Map<string, Product>) => {
+	const assigneeIds = new Set(workflow.assignments.map((assignment) => assignment.userId.toString()));
+	if (assigneeIds.size !== 1) return null;
+	const [soleApprover] = assigneeIds;
+	if (soleApprover === workflow.initiator.userId.toString()) return 'The Initiator is the only approver. Add someone else.';
+	const ownerIds = new Set([...latest.values()].map((product) => product.owner_user_id?.toString()));
+	return ownerIds.has(soleApprover) ? 'The Product Owner is the only approver. Add someone else.' : null;
+};
+
+/**
  * Runs the "ready to start?" checks for a Draft workflow.
  * @param {Db} db Database handle
  * @param {Workflow} workflow Workflow
@@ -228,13 +243,7 @@ export const getWorkflowReadiness = async (db: Db, workflow: Workflow, session?:
 		.map((assignment) => assignment.userSnapshot.name))];
 	const missingLabels = workflow.assignments.filter((assignment) => !assignment.functionLabel.trim()).length;
 
-	const ownerIds = new Set([...latest.values()].map((product) => product.owner_user_id?.toString()).filter(Boolean));
-	const soleApprover = assigneeIds.length === 1 ? assigneeIds[0].toString() : null;
-	const soleApproverMessage = soleApprover === workflow.initiator.userId.toString()
-		? 'The Initiator is the only approver. Add someone else.'
-		: soleApprover && ownerIds.has(soleApprover)
-			? 'The Product Owner is the only approver. Add someone else.'
-			: null;
+	const soleApproverMessage = getSoleApproverProblem(workflow, latest);
 
 	return [
 		{

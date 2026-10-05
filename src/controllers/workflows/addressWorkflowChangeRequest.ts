@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
-import { ACTIVE_WORKFLOW_STATUSES } from '../../models/workflow';
+import { ACTIVE_WORKFLOW_STATUSES, WORKFLOWS_COLLECTION, type Workflow } from '../../models/workflow';
 import { WORKFLOW_DISCUSSION_COLLECTION, type WorkflowDiscussionItem } from '../../models/workflowDiscussion';
 import { withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
@@ -58,7 +58,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const now = new Date();
 		const events = await workflowEvents(db);
-		const addressed = await withTransaction(async (txDb, session) => {
+		const result = await withTransaction(async (txDb, session) => {
 			await lockActiveWorkflow(txDb, workflow, session, now);
 			const updated = await txDb.collection<WorkflowDiscussionItem>(WORKFLOW_DISCUSSION_COLLECTION).findOneAndUpdate(
 				{ _id: item._id, workspaceId: context.workspaceId, status: 'open' },
@@ -72,23 +72,27 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				workflowId: workflow._id!,
 				type: 'change_request_addressed',
 				actorSnapshot: actor,
-				...(item.assignmentId && { assignmentId: item.assignmentId }),
+				...(updated.assignmentId && { assignmentId: updated.assignmentId }),
 				...(item.scope.type === 'product' && { lineageId: item.scope.lineageId }),
 				comment: note.value!,
 				data: { discussionItemId: item._id, requestedBy: item.authorSnapshot.name },
 				createdAt: now,
 			}, { session });
 
-			return updated;
+			const current = await txDb.collection<Workflow>(WORKFLOWS_COLLECTION).findOne({ _id: workflow._id }, { session });
+			const holder = current?.assignments.find((assignment) => updated.assignmentId?.equals(assignment._id));
+			return { updated, requesterId: holder?.userId ?? item.authorSnapshot.userId };
 		});
 
+		const { updated: addressed, requesterId } = result;
+		const isAuthor = requesterId.equals(item.authorSnapshot.userId);
 		await notifyWorkflow({
 			workflow,
 			actorId: actor.userId,
-			recipients: [item.authorSnapshot.userId],
+			recipients: [requesterId],
 			type: 'workflow.change_request_addressed',
-			title: `${actor.name} addressed your change request on ${workflow.numberLabel}`,
-			body: `Your request on ${scopeLabel(workflow, item.scope)} was addressed: "${note.value}". Your decision is still needed.`,
+			title: `${actor.name} addressed ${isAuthor ? 'your' : 'a'} change request on ${workflow.numberLabel}`,
+			body: `${isAuthor ? 'Your request' : `${item.authorSnapshot.name}'s request, now yours to decide,`} on ${scopeLabel(workflow, item.scope)} was addressed: "${note.value}". Your decision is still needed.`,
 			tab: 'discussion',
 		});
 
