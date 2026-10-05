@@ -82,7 +82,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					description: workspace.description || '',
 					logo: workspace.logo || null,
 					planName: workspace.planName || null,
-					approvalWorkflowsEnabled: workspace.approvalWorkflowsEnabled ?? false,
 				},
 				counts: {
 					members: memberCount,

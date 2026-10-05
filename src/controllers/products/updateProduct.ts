@@ -1,7 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb, withTransaction } from '../../utils/db';
 import type { Product } from '../../models/product';
-import type { Workspace } from '../../models/workspace';
 import type { AuditAction } from '../../models/auditLogV2';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
@@ -16,7 +15,6 @@ import {
 	JUST_RELEASED_MESSAGE,
 	LifecycleConflictError,
 	productLineageFilter,
-	releaseVersions,
 } from '../../utils/productLifecycle';
 import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError, productEditorFilter } from '../../utils/productAccess';
 import { getMemberName, notify } from '../../utils/notifications';
@@ -127,39 +125,22 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		case 'submit': {
-			if (existingProduct.status !== 'draft' && existingProduct.status !== 'submitted') {
-				return ResponseWrapper.conflict('Only draft or submitted versions can be submitted');
-			}
+			if (existingProduct.status === 'submitted') return ResponseWrapper.conflict('Product is already submitted');
+			if (existingProduct.status !== 'draft') return ResponseWrapper.conflict('Only draft versions can be submitted');
 			if (computeCompleteCount(existingProduct) !== 100) {
 				return ResponseWrapper.badRequest('A product can only be submitted when all tabs are marked complete');
 			}
 
-			const workspace = await db.collection<Workspace>('workspaces').findOne(
-				{ _id: context.workspaceId },
-				{ projection: { approvalWorkflowsEnabled: 1 } },
+			const submitted = await products.updateOne(
+				{ ...productFilter, ...editorFilter, ...allTabsCompletedFilter, status: 'draft' },
+				{ $set: { actual_completion_date: new Date(), complete_count: 100, status: 'submitted' } },
 			);
-
-			const workflowsEnabled = workspace?.approvalWorkflowsEnabled === true;
-			if (workflowsEnabled && existingProduct.status === 'submitted') {
-				return ResponseWrapper.conflict('Product is already submitted');
+			if (submitted.matchedCount === 0) {
+				if (await accessLost()) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
+				return ResponseWrapper.conflict('This version can no longer be submitted');
 			}
 
-			await withTransaction(async (txDb, session) => {
-				const submitted = await txDb.collection<Product>('products').updateOne(
-					{ ...productFilter, ...editorFilter, ...allTabsCompletedFilter, status: workflowsEnabled ? 'draft' : { $in: ['draft', 'submitted'] } },
-					{ $set: { actual_completion_date: new Date(), complete_count: 100, ...(workflowsEnabled ? { status: 'submitted' as const } : {}) } },
-					{ session },
-				);
-				if (submitted.matchedCount === 0) throw new LifecycleConflictError('This version can no longer be submitted');
-				if (!workflowsEnabled) await releaseVersions(txDb, [existingProduct], { legacy: true, session });
-			}).catch(async (error) => {
-				if (error instanceof LifecycleConflictError && await accessLost()) throw new ProductAccessError(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
-				throw error;
-			});
-
-			audit = workflowsEnabled
-				? { eventKey: 'product.submitted', action: 'submit', changedPaths: ['status', 'actual_completion_date'] }
-				: { eventKey: 'product.released', action: 'submit', changedPaths: ['status', 'released_at', 'actual_completion_date'] };
+			audit = { eventKey: 'product.submitted', action: 'submit', changedPaths: ['status', 'actual_completion_date'] };
 			break;
 		}
 

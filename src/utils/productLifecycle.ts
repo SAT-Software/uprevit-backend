@@ -1,5 +1,6 @@
 import { ClientSession, Db, ObjectId } from 'mongodb';
 import type { Product, ProductStatus } from '../models/product';
+import { WORKFLOWS_COLLECTION, type Workflow } from '../models/workflow';
 
 const CONTENT_LOCKED_STATUSES: ProductStatus[] = ['released', 'obsolete'];
 
@@ -61,13 +62,12 @@ export const productLineageFilter = (product: Pick<Product, '_id' | 'workspace_i
  * Throws `LifecycleConflictError` if a version is already released or obsolete. Pass a session to keep it atomic.
  * @param {Db} db Database handle
  * @param {Product[]} versions Versions to release
- * @param {Object} options `legacy` marks releases made without a workflow; `workflowId` records the releasing workflow
- * and clears its lock; `session` joins a transaction
+ * @param {Object} options `workflowId` records the releasing workflow and clears its lock; `session` joins a transaction
  */
 export const releaseVersions = async (
 	db: Db,
 	versions: Pick<Product, '_id' | 'workspace_id' | 'product_lineage_id'>[],
-	{ legacy = false, workflowId, session }: { legacy?: boolean; workflowId?: ObjectId; session?: ClientSession } = {},
+	{ workflowId, session }: { workflowId?: ObjectId; session?: ClientSession } = {},
 ) => {
 	const products = db.collection<Product>('products');
 	const now = new Date();
@@ -76,7 +76,7 @@ export const releaseVersions = async (
 		const released = await products.updateOne(
 			{ _id: version._id, status: { $nin: ['released', 'obsolete'] } },
 			{
-				$set: { status: 'released', released_at: now, legacy_release: legacy, ...(workflowId && { released_by_workflow_id: workflowId }) },
+				$set: { status: 'released', released_at: now, ...(workflowId && { released_by_workflow_id: workflowId }) },
 				...(workflowId && { $unset: { active_workflow_id: '' } }),
 			},
 			{ session },
@@ -119,4 +119,42 @@ export const buildProductStatusMatch = (statusParam?: string) => {
 			...(statuses.length > 0 ? { status: { $in: statuses } } : {}),
 		},
 	};
+};
+
+type ReleaseInfoSource = { _id?: ObjectId; product_lineage_id?: ObjectId; active_workflow_id?: ObjectId };
+
+/**
+ * Adds each product's `released_version` (its lineage's current release) and `active_workflow` (the workflow reviewing it),
+ * so a row can show both the working and the released version.
+ * @param {Db} db Database handle
+ * @param {ObjectId} workspaceId Workspace id
+ * @param {T[]} products Product versions
+ * @return {Promise<Array>} Products with `released_version` and `active_workflow`, each null when there is none
+ */
+export const addProductReleaseInfo = async <T extends ReleaseInfoSource>(db: Db, workspaceId: ObjectId, products: T[]) => {
+	const lineageIdOf = (product: T) => (product.product_lineage_id ?? product._id!).toString();
+	const lineageIds = products.map((product) => product.product_lineage_id ?? product._id!);
+	const workflowIds = products.flatMap((product) => (product.active_workflow_id ? [product.active_workflow_id] : []));
+	const [released, workflows] = await Promise.all([
+		lineageIds.length
+			? db.collection<Product>('products')
+				.find({
+					workspace_id: workspaceId,
+					status: 'released',
+					$or: [{ product_lineage_id: { $in: lineageIds } }, { _id: { $in: lineageIds }, product_lineage_id: { $exists: false } }],
+				}, { projection: { product_lineage_id: 1, version: 1 } })
+				.toArray()
+			: [],
+		workflowIds.length
+			? db.collection<Workflow>(WORKFLOWS_COLLECTION).find({ workspaceId, _id: { $in: workflowIds } }, { projection: { numberLabel: 1 } }).toArray()
+			: [],
+	]);
+
+	const releasedByLineage = new Map(released.map((version) => [(version.product_lineage_id ?? version._id!).toString(), { id: version._id!, version: version.version }]));
+	const workflowById = new Map(workflows.map((workflow) => [workflow._id!.toString(), { id: workflow._id!, numberLabel: workflow.numberLabel }]));
+	return products.map((product) => ({
+		...product,
+		released_version: releasedByLineage.get(lineageIdOf(product)) ?? null,
+		active_workflow: (product.active_workflow_id && workflowById.get(product.active_workflow_id.toString())) || null,
+	}));
 };

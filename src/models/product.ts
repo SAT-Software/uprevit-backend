@@ -20,6 +20,7 @@ export type ProductData ={
 			product_name: string;
 			product_description: string;
 			version: number;
+			product_lineage_id?: ObjectId;
 			is_latest: boolean;
 			parent_id?: ObjectId | null;
 			target_date?: Date | null;
@@ -31,6 +32,7 @@ export type ProductData ={
 			owner?: ProductTeamMember | null;
 			contributors?: ProductTeamMember[];
 			active_workflow?: { id: ObjectId; numberLabel: string } | null;
+			released_version?: { id: ObjectId; version: number } | null;
 		}
 }
 
