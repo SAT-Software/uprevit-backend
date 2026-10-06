@@ -1369,7 +1369,9 @@ Resources:
             - Effect: Allow
               Action:
                 - s3:GetObject
-              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+              Resource:
+                - !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+                - !Sub "arn:aws:s3:::${StandardSymbolsBucket}/*"
             - Effect: Allow
               Action:
                 - s3:PutObject
