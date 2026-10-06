@@ -26,7 +26,7 @@ export default function transformUniverExcelData(data: any): TransformResult {
 		return { sheets: [] };
 	}
 
-	const workbookData = data.workbook_data;
+	const workbookData = data.workbook_data ?? data;
 	if (!workbookData || typeof workbookData !== 'object') {
 		return { sheets: [] };
 	}
