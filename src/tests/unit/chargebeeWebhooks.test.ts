@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import {
 	buildChargebeeMirrorUpdate,
 	claimChargebeeWebhook,
@@ -376,8 +376,8 @@ describe('syncPastDueFromChargebee', () => {
 	});
 
 	it('uses open invoice balances instead of due_invoices_count', async () => {
-		const updateOne = jest.fn().mockResolvedValue({ acknowledged: true });
-		const findOne = jest.fn()
+		const updateOne = jest.fn<() => Promise<unknown>>().mockResolvedValue({ acknowledged: true });
+		const findOne = jest.fn<() => Promise<unknown>>()
 			.mockResolvedValueOnce(account)
 			.mockResolvedValueOnce({ ...account, pastDue: true, status: 'past_due' });
 
@@ -414,8 +414,8 @@ describe('syncPastDueFromChargebee', () => {
 	});
 
 	it('clears past due when invoices have no amount due despite due_invoices_count', async () => {
-		const updateOne = jest.fn().mockResolvedValue({ acknowledged: true });
-		const findOne = jest.fn()
+		const updateOne = jest.fn<() => Promise<unknown>>().mockResolvedValue({ acknowledged: true });
+		const findOne = jest.fn<() => Promise<unknown>>()
 			.mockResolvedValueOnce(account)
 			.mockResolvedValueOnce({ ...account, pastDue: false, status: 'active' });
 
@@ -456,10 +456,10 @@ describe('claimChargebeeWebhook', () => {
 	});
 
 	it('returns claimed on first insert', async () => {
-		const insertOne = jest.fn().mockResolvedValue({ acknowledged: true });
+		const insertOne = jest.fn<() => Promise<unknown>>().mockResolvedValue({ acknowledged: true });
 		mockGetDb.mockResolvedValue({
 			collection: jest.fn().mockReturnValue({
-				createIndex: jest.fn().mockResolvedValue(undefined),
+				createIndex: jest.fn<() => Promise<unknown>>().mockResolvedValue(undefined),
 				insertOne,
 			}),
 		} as never);
@@ -469,10 +469,10 @@ describe('claimChargebeeWebhook', () => {
 	});
 
 	it('returns duplicate on unique index conflict', async () => {
-		const insertOne = jest.fn().mockRejectedValue({ code: 11000 });
+		const insertOne = jest.fn<() => Promise<unknown>>().mockRejectedValue({ code: 11000 });
 		mockGetDb.mockResolvedValue({
 			collection: jest.fn().mockReturnValue({
-				createIndex: jest.fn().mockResolvedValue(undefined),
+				createIndex: jest.fn<() => Promise<unknown>>().mockResolvedValue(undefined),
 				insertOne,
 			}),
 		} as never);
