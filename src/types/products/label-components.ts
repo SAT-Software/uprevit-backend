@@ -7,6 +7,7 @@ export interface labelComponent {
 	component_number?: string;
 	component_type?: string;
 	component_description?: string;
+	print_direction?: string;
 }
 
 type BaseLabelComponentRequest<TAction extends string, TData> = {
