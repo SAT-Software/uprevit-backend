@@ -5,7 +5,7 @@ import { WORKFLOW_DISCUSSION_COLLECTION, type WorkflowDiscussionItem } from '../
 import { withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { getProductTeamIds, lockActiveWorkflow, scopeLabel, scopeTeamIds, workflowDiscussion } from '../../utils/workflowDiscussion';
+import { canAddressRequest, getProductTeamIds, lockActiveWorkflow, scopeLabel, workflowDiscussion } from '../../utils/workflowDiscussion';
 import { parseJsonObject } from '../../utils/workflowInput';
 import {
 	WorkflowConflictError,
@@ -17,8 +17,8 @@ import {
 import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
 
 /**
- * Marks an open change request as addressed with a note, then notifies the requester. Only an owner or contributor of the
- * scoped Product (any included Product for the whole workflow) may do this. Addressing is not an approval.
+ * Marks an open change request as addressed with a note, then notifies the requester. Only the Initiator, or an owner or
+ * contributor of the scoped Product (any included Product for the whole workflow), may do this. Addressing is not an approval.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
@@ -46,11 +46,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (!ACTIVE_WORKFLOW_STATUSES.includes(workflow.status)) return ResponseWrapper.conflict('This workflow has already ended');
 		if (item.status !== 'open') return ResponseWrapper.conflict('This change request is already addressed');
 
-		const team = scopeTeamIds(await getProductTeamIds(db, workflow), item.scope);
-		if (!team.some((id) => id.equals(context.userId))) {
+		if (!canAddressRequest(context.userId, workflow, await getProductTeamIds(db, workflow), item.scope)) {
 			return ResponseWrapper.forbidden(item.scope.type === 'product'
-				? 'Only the owner or a contributor of this Product can address this request'
-				: 'Only an owner or contributor of a Product in this workflow can address this request');
+				? 'Only the Initiator, or the owner or a contributor of this Product, can address this request'
+				: 'Only the Initiator, or an owner or contributor of a Product in this workflow, can address this request');
 		}
 
 		const actor = await getActorSnapshot(db, context.workspaceId, context.userId);

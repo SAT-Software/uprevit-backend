@@ -924,6 +924,10 @@ Resources:
               Action:
                 - ses:SendEmail
               Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         DecideWorkflowAssignment:
           Type: Api
@@ -1004,6 +1008,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/workflows/getWorkflowDiscussion.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetWorkflowDiscussion:
           Type: Api
@@ -1021,6 +1031,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/workflows/addWorkflowComment.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         AddWorkflowComment:
           Type: Api

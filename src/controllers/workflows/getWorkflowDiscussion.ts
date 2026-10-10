@@ -4,7 +4,7 @@ import { ACTIVE_WORKFLOW_STATUSES } from '../../models/workflow';
 import { WORKFLOW_DISCUSSION_KINDS, type WorkflowDiscussionItem, type WorkflowDiscussionKind } from '../../models/workflowDiscussion';
 import { logError } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { canComment, getProductTeamIds, scopeTeamIds, workflowDiscussion } from '../../utils/workflowDiscussion';
+import { canAddressRequest, canComment, getProductTeamIds, withAttachmentUrls, workflowDiscussion } from '../../utils/workflowDiscussion';
 import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
 
 /**
@@ -50,10 +50,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		return ResponseWrapper.success({
 			message: 'Workflow discussion fetched successfully',
-			items: items.map((item) => ({
+			items: (await withAttachmentUrls(items, context.workspaceId)).map((item) => ({
 				...item,
 				canAddress: isActive && item.kind === 'change_request' && item.status === 'open'
-					&& scopeTeamIds(teams, item.scope).some((id) => id.equals(context.userId)),
+					&& canAddressRequest(context.userId, workflow, teams, item.scope),
 			})),
 			canComment: isActive && canComment(context, workflow, teams),
 		});

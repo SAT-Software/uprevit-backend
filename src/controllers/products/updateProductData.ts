@@ -719,7 +719,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (changesComplianceStandard && updateResult.matchedCount === 0) {
 			return ResponseWrapper.conflict('This standard has already been added to the product.');
 		}
-		if (updateResult.modifiedCount === 0) {
+		if (updateResult.matchedCount === 0) {
 			return ResponseWrapper.notFound(
 				'Product data not modified successfully, please check the data and try again.',
 			);
@@ -727,7 +727,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const auditMeta = PRODUCT_DATA_ACTION_AUDIT_META[input.action];
 
-		if (updatedProduct && auditMeta) {
+		if (updatedProduct && auditMeta && updateResult.modifiedCount > 0) {
 			const payloadMeta: Record<string, unknown> = {
 				productName: updatedProduct.product_name,
 				tab: input.tab,

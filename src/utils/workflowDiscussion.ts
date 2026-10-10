@@ -8,12 +8,18 @@ import {
 	type WorkflowAssignment,
 } from '../models/workflow';
 import {
+	WORKFLOW_ATTACHMENT_CONTENT_TYPES,
+	WORKFLOW_ATTACHMENT_LIMIT,
+	WORKFLOW_ATTACHMENT_MAX_BYTES,
 	WORKFLOW_DISCUSSION_COLLECTION,
+	type WorkflowDiscussionAttachment,
 	type WorkflowDiscussionItem,
 	type WorkflowDiscussionScope,
 } from '../models/workflowDiscussion';
+import { recordCommittedUploadBytes } from './billing/uploadCommit';
 import { withTransaction } from './db';
 import { logError } from './logger';
+import { createPresignedGetUrlMap, headUploadObject, workflowAttachmentKeyPrefix } from './s3-storage';
 import type { TenantContext } from './tenantContext';
 import { WorkflowConflictError, notifyWorkflow, workflowEvents } from './workflowLifecycle';
 import { canManageWorkflow, lineageIdOf } from './workflows';
@@ -43,6 +49,62 @@ export const parseDiscussionScope = (value: unknown, workflow: Workflow): { valu
 	const product = lineageId && workflow.products.find((item) => item.lineageId.equals(lineageId));
 	if (!product) return { error: 'scope.lineageId must be a Product in this workflow' };
 	return { value: { type: 'product', lineageId: product.lineageId } };
+};
+
+/**
+ * Checks attachment keys against images the caller uploaded to this workflow, reading each stored object's real type
+ * and size.
+ * @param {unknown} value Raw `attachments` from the request body: an array of upload keys
+ * @param {Workflow} workflow Workflow the images were uploaded to
+ * @param {ObjectId} userId Caller, who must have uploaded every image
+ * @return {Promise<Object>} The attachments, or an error message
+ */
+export const parseDiscussionAttachments = async (
+	value: unknown,
+	workflow: Workflow,
+	userId: ObjectId,
+): Promise<{ value: WorkflowDiscussionAttachment[] } | { error: string }> => {
+	if (value === undefined || value === null) return { value: [] };
+	if (!Array.isArray(value) || value.some((key) => typeof key !== 'string')) return { error: 'attachments must be a list of upload keys' };
+	const keys = [...new Set(value as string[])];
+	if (keys.length > WORKFLOW_ATTACHMENT_LIMIT) return { error: `You can attach up to ${WORKFLOW_ATTACHMENT_LIMIT} images` };
+	const prefix = workflowAttachmentKeyPrefix(workflow.workspaceId.toString(), workflow._id!.toString(), userId.toString());
+	if (keys.some((key) => !key.startsWith(prefix) || key.slice(prefix.length).includes('/'))) {
+		return { error: 'Attachments must be images you uploaded to this workflow' };
+	}
+	const objects = await Promise.all(keys.map(headUploadObject));
+	const attachments: WorkflowDiscussionAttachment[] = [];
+	for (const [index, key] of keys.entries()) {
+		const object = objects[index];
+		if (!object) return { error: 'An attached image was not uploaded. Remove it and try again.' };
+		if (!WORKFLOW_ATTACHMENT_CONTENT_TYPES.includes(object.contentType)) return { error: 'Attachments must be PNG, JPEG, WebP or GIF images' };
+		if (object.sizeBytes > WORKFLOW_ATTACHMENT_MAX_BYTES) return { error: 'Each image must be 10 MB or smaller' };
+		attachments.push({ key, fileName: key.slice(prefix.length + 37), contentType: object.contentType, sizeBytes: object.sizeBytes });
+	}
+	return { value: attachments };
+};
+
+/**
+ * Records the upload volume of attachments that were just saved. Failures are logged, not thrown.
+ * @param {ObjectId} workspaceId Workspace
+ * @param {WorkflowDiscussionAttachment[]} attachments Saved attachments
+ * @return {Promise<void>} Resolves when recorded
+ */
+export const recordAttachmentUploads = (workspaceId: ObjectId, attachments: WorkflowDiscussionAttachment[]) =>
+	Promise.all(attachments.map(({ key, sizeBytes }) => recordCommittedUploadBytes({ workspaceId, uploadKey: key, sizeBytes })))
+		.catch((err) => logError('Workflow attachment usage recording failed', err, { workspaceId: workspaceId.toString() }));
+
+/**
+ * Adds a short-lived view `url` to every attachment.
+ * @param {WorkflowDiscussionItem[]} items Discussion items
+ * @param {ObjectId} workspaceId Workspace the attachments belong to
+ * @return {Promise<WorkflowDiscussionItem[]>} Items with signed attachment URLs
+ */
+export const withAttachmentUrls = async (items: WorkflowDiscussionItem[], workspaceId: ObjectId) => {
+	const urls = await createPresignedGetUrlMap(items.flatMap((item) => item.attachments?.map(({ key }) => key) ?? []), { workspaceId });
+	return items.map((item) => item.attachments?.length
+		? { ...item, attachments: item.attachments.map((attachment) => ({ ...attachment, url: urls.get(attachment.key) })) }
+		: item);
 };
 
 export const scopeLabel = (workflow: Workflow, scope: WorkflowDiscussionScope) =>
@@ -75,6 +137,10 @@ export const getProductTeamIds = async (db: Db, workflow: Workflow) => {
 /** The people who can address a request in this scope: one Product's team, or every Product's team for the whole workflow. */
 export const scopeTeamIds = (teams: Map<string, ObjectId[]>, scope: WorkflowDiscussionScope) =>
 	scope.type === 'product' ? teams.get(scope.lineageId.toString()) ?? [] : [...teams.values()].flat();
+
+/** Whether the caller may mark a request addressed: the Initiator, or an owner or contributor of a Product in its scope. */
+export const canAddressRequest = (userId: ObjectId, workflow: Workflow, teams: Map<string, ObjectId[]>, scope: WorkflowDiscussionScope) =>
+	workflow.initiator.userId.equals(userId) || scopeTeamIds(teams, scope).some((id) => id.equals(userId));
 
 /**
  * Whether the caller may comment: the Initiator, an admin, an assigned approver, or a member of an included Product's team.
@@ -113,6 +179,7 @@ type RequestChangesInput = {
 	actor: WorkflowActorSnapshot;
 	scope: WorkflowDiscussionScope;
 	reason: string;
+	attachments: WorkflowDiscussionAttachment[];
 };
 
 /**
@@ -122,7 +189,7 @@ type RequestChangesInput = {
  * @param {RequestChangesInput} input Workflow, the requester's assignment, scope and reason
  * @return {Promise<Workflow>} The updated workflow
  */
-export const requestChanges = async ({ db, workflow, assignment, actor, scope, reason }: RequestChangesInput) => {
+export const requestChanges = async ({ db, workflow, assignment, actor, scope, reason, attachments }: RequestChangesInput) => {
 	const now = new Date();
 	const workflowId = workflow._id!;
 	const [discussion, events] = await Promise.all([workflowDiscussion(db), workflowEvents(db)]);
@@ -156,6 +223,7 @@ export const requestChanges = async ({ db, workflow, assignment, actor, scope, r
 			scope,
 			authorSnapshot: actor,
 			body: reason,
+			...(attachments.length > 0 && { attachments }),
 			createdAt: now,
 			assignmentId: assignment._id,
 			status: 'open',
@@ -181,6 +249,7 @@ export const requestChanges = async ({ db, workflow, assignment, actor, scope, r
 		return txDb.collection<Workflow>(WORKFLOWS_COLLECTION).findOne({ _id: workflowId }, { session });
 	});
 
+	await recordAttachmentUploads(workflow.workspaceId, attachments);
 	const team = await getProductTeamIds(db, workflow).then((teams) => scopeTeamIds(teams, scope)).catch((err) => {
 		logError('Change request team lookup failed', err, { workflowId: workflowId.toString() });
 		return [];
