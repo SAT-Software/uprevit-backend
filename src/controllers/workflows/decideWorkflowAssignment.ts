@@ -5,7 +5,7 @@ import { withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
 import { LifecycleConflictError } from '../../utils/productLifecycle';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { parseDiscussionScope, requestChanges } from '../../utils/workflowDiscussion';
+import { parseDiscussionAttachments, parseDiscussionScope, requestChanges } from '../../utils/workflowDiscussion';
 import { isStillEligible } from '../../utils/workflowAssignments';
 import { parseJsonObject } from '../../utils/workflowInput';
 import {
@@ -29,7 +29,7 @@ type Decision = typeof DECISIONS[number];
 /**
  * Records the assigned approver's decision. Approve takes an optional comment and, once everyone has approved, completes
  * the workflow or makes it ready to complete; on an approval older than the latest content it records an Approve again
- * instead. Reject needs a reason and ends the workflow; Request Changes needs a reason and a scope, and blocks completion
+ * instead. Reject needs a reason and ends the workflow; Request Changes needs a reason and a scope, optionally with images, and blocks completion
  * until the request is addressed and the approver decides again. Every decision re-enables the approver's Change Notice.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
@@ -82,7 +82,11 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (!actor) return ResponseWrapper.forbidden('Only active members can decide');
 
 		if (scope) {
-			const updated = await requestChanges({ db, workflow, assignment, actor, scope: scope.value, reason: text.value! });
+			const attachments = await parseDiscussionAttachments(input.attachments, workflow, context.userId);
+			if ('error' in attachments) return ResponseWrapper.badRequest(attachments.error);
+			const updated = await requestChanges({
+				db, workflow, assignment, actor, scope: scope.value, reason: text.value!, attachments: attachments.value,
+			});
 			return ResponseWrapper.success({ message: 'Change request recorded', workflow: updated });
 		}
 

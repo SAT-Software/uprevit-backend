@@ -4,14 +4,24 @@ import type { WorkflowDiscussionItem } from '../../models/workflowDiscussion';
 import { withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { canComment, getProductTeamIds, lockActiveWorkflow, parseDiscussionScope, workflowDiscussion } from '../../utils/workflowDiscussion';
+import {
+	canComment,
+	getProductTeamIds,
+	lockActiveWorkflow,
+	parseDiscussionAttachments,
+	parseDiscussionScope,
+	recordAttachmentUploads,
+	withAttachmentUrls,
+	workflowDiscussion,
+} from '../../utils/workflowDiscussion';
 import { parseJsonObject } from '../../utils/workflowInput';
 import { WorkflowConflictError, getActorSnapshot, parseWorkflowText } from '../../utils/workflowLifecycle';
 import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
 
 /**
  * Adds a comment on one Product or the whole workflow. The Initiator, assigned approvers, the included Products' owners
- * and contributors, and admins may comment while the workflow is active. Comments do not send notifications.
+ * and contributors, and admins may comment while the workflow is active, optionally with images they uploaded to this
+ * workflow. Comments do not send notifications.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
@@ -40,6 +50,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const actor = await getActorSnapshot(db, context.workspaceId, context.userId);
 		if (!actor) return ResponseWrapper.forbidden('Only active members can comment');
+		const attachments = await parseDiscussionAttachments(input.attachments, workflow, context.userId);
+		if ('error' in attachments) return ResponseWrapper.badRequest(attachments.error);
 
 		const item: WorkflowDiscussionItem = {
 			workspaceId: context.workspaceId,
@@ -48,6 +60,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			scope: scope.value,
 			authorSnapshot: actor,
 			body: body.value!,
+			...(attachments.value.length > 0 && { attachments: attachments.value }),
 			createdAt: new Date(),
 		};
 		const discussion = await workflowDiscussion(db);
@@ -56,7 +69,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return discussion.insertOne(item, { session });
 		});
 
-		return ResponseWrapper.created({ message: 'Comment added', item: { ...item, _id: insertedId } });
+		await recordAttachmentUploads(context.workspaceId, attachments.value);
+
+		const [created] = await withAttachmentUrls([{ ...item, _id: insertedId }], context.workspaceId);
+		return ResponseWrapper.created({ message: 'Comment added', item: created });
 	} catch (err) {
 		if (err instanceof SyntaxError) return ResponseWrapper.badRequest('Invalid JSON in request body');
 		if (err instanceof WorkflowConflictError) return ResponseWrapper.conflict(err.message);
