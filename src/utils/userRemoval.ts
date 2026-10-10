@@ -6,12 +6,14 @@ import {
 	AdminUpdateUserAttributesCommand,
 	CognitoIdentityProviderClient,
 } from '@aws-sdk/client-cognito-identity-provider';
+import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { Db, ObjectId } from 'mongodb';
 import type { Department } from '../models/department';
+import type { Product } from '../models/product';
 import type { Project } from '../models/project';
 import type { User } from '../models/user';
 import type { Workspace } from '../models/workspace';
-import { getDb } from './db';
+import { getDb, withTransaction } from './db';
 import {
 	cognitoUserExists,
 	createInvitedCognitoUser,
@@ -19,6 +21,9 @@ import {
 	normalizeInviteEmail,
 } from './platformInviteUtils';
 import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from './billing/enforcement';
+import { recordAuditEvent } from './auditLogV2';
+import { notify } from './notifications';
+import { flagUnavailableAssignments, touchActiveWorkflows } from './workflowAssignments';
 
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
@@ -110,6 +115,63 @@ const cleanupMembershipReferences = async (
 	});
 };
 
+const reassignProductTeams = async (
+	db: Db,
+	workspaceId: ObjectId,
+	targetUserId: ObjectId,
+	targetName: string,
+	actorUserId: ObjectId,
+	auth: Partial<CognitoAccessTokenPayload>,
+): Promise<void> => {
+	const ownedProducts = await db.collection<Product>('products')
+		.find({ workspace_id: workspaceId, owner_user_id: targetUserId, is_latest: true }, { projection: { product_name: 1 } })
+		.toArray();
+
+	const reassigned = await withTransaction(async (txDb, session) => {
+		const products = txDb.collection<Product>('products');
+		await products.updateMany(
+			{ workspace_id: workspaceId, contributor_user_ids: targetUserId },
+			{ $pull: { contributor_user_ids: targetUserId } },
+			{ session },
+		);
+		const result = await products.updateMany(
+			{ workspace_id: workspaceId, owner_user_id: targetUserId },
+			{ $set: { owner_user_id: actorUserId }, $pull: { contributor_user_ids: actorUserId } },
+			{ session },
+		);
+		await touchActiveWorkflows(txDb, workspaceId, { 'assignments.userId': targetUserId }, session);
+		return result;
+	});
+	if (reassigned.modifiedCount === 0 || ownedProducts.length === 0) return;
+
+	const actor = await db.collection<User>('users').findOne({ _id: actorUserId }, { projection: { name: 1 } });
+	await Promise.all(ownedProducts.map((product) => recordAuditEvent({
+		workspaceId: workspaceId.toString(),
+		scope: { type: 'product', id: product._id.toString() },
+		entity: { type: 'product', id: product._id.toString() },
+		action: 'update',
+		eventKey: 'product.owner.changed',
+		visibility: 'all',
+		where: { module: 'products' },
+		auth,
+		changes: [{ path: 'owner_user_id', from: targetUserId.toString(), to: actorUserId.toString() }],
+		meta: { productName: product.product_name, memberName: actor?.name, reason: 'member_removed' },
+	})));
+
+	const [first] = ownedProducts;
+	await notify({
+		workspaceId,
+		recipients: [actorUserId],
+		type: 'product.ownership_transferred',
+		title: ownedProducts.length === 1
+			? `You are now the Product Owner of ${first.product_name}`
+			: `You are now the Product Owner of ${ownedProducts.length} products`,
+		body: `${targetName} was removed from the workspace, so their products moved to you.`,
+		link: ownedProducts.length === 1 ? `/products/${first._id.toString()}/product-information` : '/products',
+		meta: { productIds: ownedProducts.map((product) => product._id.toString()), removedUserId: targetUserId.toString() },
+	});
+};
+
 export const countActiveWorkspaceAdmins = async (
 	db: Db,
 	workspaceId: ObjectId,
@@ -124,10 +186,12 @@ export const deactivateWorkspaceUser = async ({
 	targetUserId,
 	workspaceId,
 	actorUserId,
+	auth,
 }: {
 	targetUserId: ObjectId;
 	workspaceId: ObjectId;
 	actorUserId: ObjectId;
+	auth: Partial<CognitoAccessTokenPayload>;
 }): Promise<User> => {
 	const db = await getDb();
 
@@ -170,17 +234,23 @@ export const deactivateWorkspaceUser = async ({
 	}
 
 	await cleanupMembershipReferences(db, workspaceId, targetUserId, actorUserId);
+	await reassignProductTeams(db, workspaceId, targetUserId, targetUser.name || 'A member', actorUserId, auth);
 
-	await db.collection<User>('users').updateOne(
-		{ _id: targetUserId, workspaceId },
-		{
-			$set: {
-				status: 'inactive',
-				removedAt: now,
-				removedByUserId: actorUserId,
+	await withTransaction(async (txDb, session) => {
+		await txDb.collection<User>('users').updateOne(
+			{ _id: targetUserId, workspaceId },
+			{
+				$set: {
+					status: 'inactive',
+					removedAt: now,
+					removedByUserId: actorUserId,
+				},
 			},
-		},
-	);
+			{ session },
+		);
+		await touchActiveWorkflows(txDb, workspaceId, { 'assignments.userId': targetUserId }, session);
+	});
+	await flagUnavailableAssignments({ db, workspaceId, actorId: actorUserId, userId: targetUserId });
 
 	const updatedUser = await db.collection<User>('users').findOne({ _id: targetUserId });
 	if (!updatedUser) {

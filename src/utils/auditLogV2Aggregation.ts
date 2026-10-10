@@ -14,6 +14,8 @@ type BuildLegacyAuditLookupStageInput = {
 
 const PRODUCT_CREATION_EVENT_KEYS = ['product.created', 'product.version.created'] as const;
 
+export const PRODUCT_ACTIVITY_UPDATE_ACTIONS: AuditAction[] = ['update', 'submit', 'delete', 'move', 'link', 'unlink', 'restore'];
+
 export const buildLegacyAuditLookupStage = ({
 	scopeType,
 	mode = 'activity',

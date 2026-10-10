@@ -16,7 +16,7 @@ export type TenantContextResult =
 	| { ok: true; context: TenantContext; auth: Extract<AuthResult, { isValid: true }> }
 	| { ok: false; response: APIGatewayProxyResult };
 
-const parseCognitoGroups = (groups: unknown): string[] => {
+export const parseCognitoGroups = (groups: unknown): string[] => {
 	if (Array.isArray(groups)) {
 		return groups.filter((group): group is string => typeof group === 'string');
 	}

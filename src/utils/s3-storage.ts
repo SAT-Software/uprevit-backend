@@ -1,4 +1,4 @@
-import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client, S3ServiceException } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ObjectId } from "mongodb";
 import crypto from "node:crypto";
@@ -41,14 +41,19 @@ const SIGNING_CONCURRENCY = parsePositiveInteger(process.env.S3_SIGNING_CONCURRE
 
 export const client = new S3Client({ region });
 
-export type UploadScope = "workspace-assets" | "product-assets" | "source-files";
+export type UploadScope = "workspace-assets" | "product-assets" | "source-files" | "workflow-attachments";
 
 type CreatePresignedUploadOptions = {
 	workspaceId?: string;
 	productId?: string;
+	workflowId?: string;
+	userId?: string;
 	uploadScope?: UploadScope;
 	pendingOwnerId?: string;
 };
+
+export const workflowAttachmentKeyPrefix = (workspaceId: string, workflowId: string, userId: string) =>
+	`uploads/${workspaceId}/workflow/${workflowId}/${userId}/`;
 
 const sanitizeFilename = (filename: string): string => filename.replace(/[^a-zA-Z0-9._-]/g, "_");
 
@@ -58,10 +63,16 @@ export const buildUploadKey = ({
 	filename,
 	workspaceId,
 	productId,
+	workflowId,
+	userId,
 	uploadScope = "workspace-assets",
 	pendingOwnerId,
 }: CreatePresignedUploadOptions & { filename: string }): string => {
 	const uniqueFilename = buildUniqueFilename(filename);
+
+	if (uploadScope === "workflow-attachments" && workspaceId && workflowId && userId) {
+		return `${workflowAttachmentKeyPrefix(workspaceId, workflowId, userId)}${uniqueFilename}`;
+	}
 
 	if (uploadScope === "source-files" && workspaceId) {
 		return `uploads/${workspaceId}/source-files/${uniqueFilename}`;
@@ -93,6 +104,8 @@ export const createPresignedUrl = async (
 		Bucket: uploadsBucket,
 		Key: key,
 		ContentType: contentType,
+		// Workflow attachments are part of discussion history, so the signed URL can create the object but never replace it.
+		...(options.uploadScope === "workflow-attachments" ? { IfNoneMatch: "*" } : {}),
 	});
 
 	const uploadUrl = await getSignedUrl(client, command, { expiresIn: 3600 });
@@ -161,6 +174,21 @@ export const createPresignedGetUrl = async (
 	const url = await getSignedUrl(client, command, { expiresIn: VIEW_URL_EXPIRES_IN_SECONDS });
 
 	return url;
+};
+
+/**
+ * Reads an uploaded object's stored type and size, or null when it does not exist. Without ListBucket, S3 reports a
+ * missing key as 403.
+ */
+export const headUploadObject = async (key: string) => {
+	try {
+		const head = await client.send(new HeadObjectCommand({ Bucket: uploadsBucket, Key: key }));
+		return { contentType: head.ContentType ?? "", sizeBytes: head.ContentLength ?? 0 };
+	} catch (error) {
+		const status = error instanceof S3ServiceException ? error.$metadata.httpStatusCode : undefined;
+		if (status === 403 || status === 404) return null;
+		throw error;
+	}
 };
 
 export const deleteObjectByKey = async (key: string) => {

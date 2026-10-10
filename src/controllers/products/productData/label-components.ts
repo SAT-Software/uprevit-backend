@@ -31,6 +31,9 @@ export function addLabelComponent(
 		}
 
 		for (const component of newLabelComponentsData) {
+			if (component.print_direction !== undefined && typeof component.print_direction !== 'string') {
+				throw new Error('Print direction must be text.');
+			}
 			const missingFieldsValidation = validateMissingFields({
 				component_number: component.component_number as string,
 				component_type: component.component_type as string,
@@ -89,6 +92,9 @@ export function updateLabelComponent(
 			id: updatedLabelComponent.id,
 		});
 		if (objectIdValidation) throw new Error(objectIdValidation.body);
+		if (updatedLabelComponent.print_direction !== undefined && typeof updatedLabelComponent.print_direction !== 'string') {
+			throw new Error('Print direction must be text.');
+		}
 
 		const updateQuery = {
 			$set: {
@@ -99,6 +105,9 @@ export function updateLabelComponent(
 				'label_components.data.$[elem].component_type': updatedLabelComponent.component_type,
 				...(updatedLabelComponent.component_description !== undefined && {
 					'label_components.data.$[elem].component_description': updatedLabelComponent.component_description,
+				}),
+				...(updatedLabelComponent.print_direction !== undefined && {
+					'label_components.data.$[elem].print_direction': updatedLabelComponent.print_direction,
 				}),
 				...(updatedLabelComponent.key !== undefined && {
 					'label_components.data.$[elem].key': updatedLabelComponent.key,

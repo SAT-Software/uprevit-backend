@@ -26,9 +26,36 @@ export default function transformUniverExcelData(data: any): TransformResult {
 		return { sheets: [] };
 	}
 
-	const workbookData = data.workbook_data;
+	const workbookData = data.workbook_data ?? data;
 	if (!workbookData || typeof workbookData !== 'object') {
 		return { sheets: [] };
+	}
+
+	if (workbookData.cells && typeof workbookData.cells === 'object') {
+		const { cells, headers = {}, columnTypes = {}, columnOrder = [] } = workbookData;
+		let maxRow = -1;
+		let maxCol = -1;
+		Object.keys(cells).forEach(key => {
+			const [row, col] = key.split(',').map(Number);
+			if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row >= 5000 || col < 0 || col >= 150) return;
+			maxRow = Math.max(maxRow, row);
+			maxCol = Math.max(maxCol, col);
+		});
+		[...Object.keys(headers), ...Object.keys(columnTypes)].forEach(key => {
+			const col = Number(key);
+			if (Number.isInteger(col) && col >= 0 && col < 150) maxCol = Math.max(maxCol, col);
+		});
+		if (maxCol < 0) return { sheets: [] };
+		const allColumns = Array.from({ length: maxCol + 1 }, (_, col) => col);
+		const columns = [...new Set<number>([
+			...columnOrder.map((id: string) => Number(id.replace('col-', ''))), ...allColumns,
+		])].filter(col => Number.isInteger(col) && col >= 0 && col <= maxCol);
+		const rows: TransformedSheet['data'] = [columns.map(col => headers[col] || '')];
+		if (Object.values(columnTypes).some(type => type && type !== 'blank')) {
+			rows.push(columns.map(col => columnTypes[col] || ''));
+		}
+		for (let row = 0; row <= maxRow; row++) rows.push(columns.map(col => cells[`${row},${col}`] ?? null));
+		return { sheets: [{ name: 'Sheet1', data: rows, merges: [] }] };
 	}
 
 	const sheetsObj = workbookData.sheets;

@@ -5,8 +5,10 @@ import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
-import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
+import { buildLegacyAuditLookupStage, PRODUCT_ACTIVITY_UPDATE_ACTIONS } from '../../utils/auditLogV2Aggregation';
+import { addProductReleaseInfo, buildProductStatusMatch } from '../../utils/productLifecycle';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
+import { productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
 
 const ALLOWED_SORT_FIELDS = [
 	'product_name',
@@ -18,6 +20,7 @@ const ALLOWED_SORT_FIELDS = [
 	'status',
 	'target_date',
 	'complete_count',
+	'owner_name',
 	'createdBy',
 	'createdOn',
 	'modifiedBy',
@@ -38,6 +41,7 @@ const ACTIVE_FILTER_FIELDS: Record<string, ListFilterField> = {
 	version: { path: 'version', type: 'number' },
 	complete_count: { path: 'complete_count', type: 'number' },
 	progress: { path: 'complete_count', type: 'number' },
+	owner_name: { path: 'owner_name', type: 'text' },
 	createdBy: { path: 'createdBy', type: 'text' },
 	createdOn: { path: 'createdOn', type: 'date' },
 	modifiedBy: { path: 'modifiedBy', type: 'text' },
@@ -88,6 +92,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const requestedWorkspaceId = event.queryStringParameters?.workspaceId;
 		const projectId = event.queryStringParameters?.projectId;
 		const departmentId = event.queryStringParameters?.departmentId;
+		const ownerId = event.queryStringParameters?.ownerId;
 
 		if (requestedWorkspaceId) {
 			if (!ObjectId.isValid(requestedWorkspaceId)) {
@@ -102,7 +107,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const filter: Record<string, unknown> = {
 			workspace_id: context.workspaceId,
 		};
-		let statusValues: string[] | null = null;
 
 		if (projectId) {
 			if (!ObjectId.isValid(projectId)) return ResponseWrapper.badRequest('Invalid projectId');
@@ -113,32 +117,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (!ObjectId.isValid(departmentId)) return ResponseWrapper.badRequest('Invalid departmentId');
 			filter.department_id = new ObjectId(departmentId);
 		}
-		
 
-		if (statusFilter) {
-			try {
-				const statusArray = JSON.parse(statusFilter);
-				if (Array.isArray(statusArray) && statusArray.length > 0) {
-					const statusStrings = statusArray.filter(
-						(status): status is string => typeof status === 'string',
-					);
-					if (statusStrings.length > 0) {
-						filter.status = { $in: statusStrings };
-						statusValues = statusStrings;
-					}
-				}
-			} catch (e) {
-				// If parsing fails, treat as single status
-				filter.status = statusFilter;
-				statusValues = [statusFilter];
-			}
-		} else {
-			// Default status filter
-			filter.status = { $in: ['draft', 'submitted'] };
-			statusValues = ['draft', 'submitted'];
+		if (ownerId) {
+			if (!ObjectId.isValid(ownerId)) return ResponseWrapper.badRequest('Invalid ownerId');
+			filter.owner_user_id = new ObjectId(ownerId);
 		}
 
-		const isArchiveOnlyStatus = statusValues?.length === 1 && statusValues[0] === 'archived';
+
+		const { isArchive: isArchiveOnlyStatus, match: statusMatch } = buildProductStatusMatch(statusFilter);
+		Object.assign(filter, statusMatch);
 
 		// General filter parameter for text search
 		if (filterParam) {
@@ -161,7 +148,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					? { scopeType: 'product', mode: 'archive' }
 					: {
 						scopeType: 'product',
-						updateActions: ['update', 'submit', 'delete', 'move', 'link', 'unlink', 'restore'],
+						updateActions: PRODUCT_ACTIVITY_UPDATE_ACTIONS,
 					}
 			),
 			{
@@ -191,6 +178,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				}
 			}
 		];
+
+		pipeline.push(...productTeamLookupStages);
 
 		pipeline.push({
 			$addFields: {
@@ -244,13 +233,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			db.collection<Product>('products').aggregate(countPipeline).toArray(),
 		]);
 
+		const productsWithTeam = await addProductReleaseInfo(db, context.workspaceId, await signProductTeamAvatars(products, {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		}));
 		const totalCount = countResult.length > 0 ? countResult[0].total : 0;
 		const totalPages = Math.ceil(totalCount / limit);
 
 		return ResponseWrapper.success({
 			message: 'Products fetched successfully',
 			result: {
-				products,
+				products: productsWithTeam,
 				pagination: {
 					currentPage: page,
 					totalPages,

@@ -95,6 +95,14 @@ Parameters:
     Type: String
     Description: "Chargebee item price ID for the yearly SSO add-on"
     Default: ""
+  SesFromAddress:
+    Type: String
+    Description: "SES sender for notification emails, e.g. Uprevit <notifications@notify.uprevit.com>; empty disables emails"
+    Default: ""
+  AppBaseUrl:
+    Type: String
+    Description: "Web app base URL used for links in notification emails, e.g. https://app.uprevit.com"
+    Default: ""
 
 # ──────────────────────────────────────────────────────────────────────────
 # TOP-LEVEL METADATA  – YAML anchor for the build recipe
@@ -138,6 +146,8 @@ Globals:
         CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
         CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
         CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
+        SES_FROM_ADDRESS: !Ref SesFromAddress
+        APP_BASE_URL: !Ref AppBaseUrl
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
@@ -232,6 +242,20 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/users/deleteUser.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminDeleteUser
+                - cognito-idp:AdminDisableUser
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminRemoveUserFromGroup
+              Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
       Events:
         DeleteUser:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -637,6 +661,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/getAllProducts.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetAllProducts:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -654,6 +684,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/updateProduct.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
       Events:
         UpdateProduct:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -666,11 +702,433 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/updateProduct.ts]
 
+  UpdateProductTeamFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/updateProductTeam.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      Events:
+        UpdateProductTeam:
+          Type: Api
+          Properties:
+            Path: /products/{productId}/team
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/updateProductTeam.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # NOTIFICATIONS
+  # ──────────────────────────────────────────────────────────────────────────
+  GetNotificationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/notifications/getNotifications.lambdaHandler
+      Events:
+        GetNotifications:
+          Type: Api
+          Properties:
+            Path: /notifications
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/notifications/getNotifications.ts]
+
+  MarkNotificationsReadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/notifications/markNotificationsRead.lambdaHandler
+      Events:
+        MarkNotificationsRead:
+          Type: Api
+          Properties:
+            Path: /notifications/read
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/notifications/markNotificationsRead.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # WORKFLOWS
+  # ──────────────────────────────────────────────────────────────────────────
+  CreateWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/createWorkflow.lambdaHandler
+      Events:
+        CreateWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/createWorkflow.ts]
+
+  GetAllWorkflowsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/getAllWorkflows.lambdaHandler
+      Events:
+        GetAllWorkflows:
+          Type: Api
+          Properties:
+            Path: /workflows
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/getAllWorkflows.ts]
+
+  QueryWorkflowsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/queryWorkflows.lambdaHandler
+      Events:
+        QueryWorkflows:
+          Type: Api
+          Properties:
+            Path: /workflows/query
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/queryWorkflows.ts]
+
+  GetWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/getWorkflow.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/getWorkflow.ts]
+
+  UpdateWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/updateWorkflow.lambdaHandler
+      Events:
+        UpdateWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}
+            Method: patch
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/updateWorkflow.ts]
+
+  DeleteWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/deleteWorkflow.lambdaHandler
+      Events:
+        DeleteWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}
+            Method: delete
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/deleteWorkflow.ts]
+
+  GetWorkflowReadinessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/getWorkflowReadiness.lambdaHandler
+      Events:
+        GetWorkflowReadiness:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/readiness
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/getWorkflowReadiness.ts]
+
+  StartWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/startWorkflow.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      Events:
+        StartWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/start
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/startWorkflow.ts]
+
+  DecideWorkflowAssignmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/decideWorkflowAssignment.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        DecideWorkflowAssignment:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/assignments/{assignmentId}/decision
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/decideWorkflowAssignment.ts]
+
+  CancelWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/cancelWorkflow.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      Events:
+        CancelWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/cancel
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/cancelWorkflow.ts]
+
+  CompleteWorkflowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/completeWorkflow.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      Events:
+        CompleteWorkflow:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/complete
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/completeWorkflow.ts]
+
+  GetWorkflowHistoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/getWorkflowHistory.lambdaHandler
+      Events:
+        GetWorkflowHistory:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/history
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/getWorkflowHistory.ts]
+
+  GetWorkflowDiscussionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/getWorkflowDiscussion.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        GetWorkflowDiscussion:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/discussion
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/getWorkflowDiscussion.ts]
+
+  AddWorkflowCommentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/addWorkflowComment.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        AddWorkflowComment:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/discussion
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/addWorkflowComment.ts]
+
+  AddressWorkflowChangeRequestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/addressWorkflowChangeRequest.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      Events:
+        AddressWorkflowChangeRequest:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/discussion/{itemId}/address
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/addressWorkflowChangeRequest.ts]
+
+  ReplaceWorkflowAssignmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/replaceWorkflowAssignment.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      Events:
+        ReplaceWorkflowAssignment:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/assignments/{assignmentId}/replace
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/replaceWorkflowAssignment.ts]
+
+  SendWorkflowReminderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/workflows/sendWorkflowReminder.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+      Events:
+        SendWorkflowReminder:
+          Type: Api
+          Properties:
+            Path: /workflows/{workflowId}/reminders
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/workflows/sendWorkflowReminder.ts]
+
   UpdateProductDataFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       CodeUri: src/
       Handler: controllers/products/updateProductData.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
       Events:
         UpdateProductData:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -933,7 +1391,9 @@ Resources:
             - Effect: Allow
               Action:
                 - s3:GetObject
-              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+              Resource:
+                - !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+                - !Sub "arn:aws:s3:::${StandardSymbolsBucket}/*"
             - Effect: Allow
               Action:
                 - s3:PutObject
@@ -1085,6 +1545,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/bookmarks/getAllBookmarkedProducts.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         GetAllBookmarkedProducts:
           Type: Api

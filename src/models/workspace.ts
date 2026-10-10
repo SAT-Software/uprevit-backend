@@ -1,4 +1,5 @@
 import { ObjectId } from "mongodb";
+import type { WorkflowCompletionMode } from './workflow';
 
 export type WorkspaceFreeze = {
 	enabled: boolean;
@@ -24,4 +25,6 @@ export type Workspace = {
 	workspaceUsageFreeze?: WorkspaceFreeze;
 	workspaceAccessFreeze?: WorkspaceFreeze;
 	memberListIncludeInactive?: boolean;
+	workflowPrefix?: string;
+	defaultWorkflowCompletionMode?: WorkflowCompletionMode;
 };

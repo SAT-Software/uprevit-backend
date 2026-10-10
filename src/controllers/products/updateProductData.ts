@@ -23,6 +23,19 @@ import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompleti
 import { SymbolsGraphics } from '../../types/products/symbols-graphics';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 import {
+	completeCountExpression,
+	CONTENT_LOCKED_MESSAGE,
+	editableStatusFilter,
+	isContentLocked,
+	JUST_RELEASED_MESSAGE,
+	LifecycleConflictError,
+	TAB_INCOMPLETE_WHILE_IN_REVIEW_MESSAGE,
+	TAB_INCOMPLETE_WHILE_SUBMITTED_MESSAGE,
+} from '../../utils/productLifecycle';
+import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError, productEditorFilter } from '../../utils/productAccess';
+import { saveProductContent, sendChangeNotices } from '../../utils/workflowChangeNotices';
+import { WorkflowConflictError } from '../../utils/workflowLifecycle';
+import {
 	assertNewUploadCommitsAllowed,
 	recordUploadCommitsFromPayload,
 } from '../../utils/billing/uploadCommit';
@@ -265,6 +278,17 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const product = await db.collection<Product>('products').findOne(productTenantFilter);
 
 		if (!product) return ResponseWrapper.notFound('Product not found, please check the provided product id.');
+		if (!canEditProduct(context, product)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
+		if (isContentLocked(product.status)) return ResponseWrapper.conflict(CONTENT_LOCKED_MESSAGE);
+
+		const isCompletionAction = input.action.endsWith('_completion');
+		const marksTabIncomplete = isCompletionAction && (input.data as { tab_completed?: boolean } | undefined)?.tab_completed === false;
+		if (marksTabIncomplete && product.status === 'submitted') {
+			return ResponseWrapper.conflict(TAB_INCOMPLETE_WHILE_SUBMITTED_MESSAGE);
+		}
+		if (marksTabIncomplete && product.status === 'in_review') {
+			return ResponseWrapper.conflict(TAB_INCOMPLETE_WHILE_IN_REVIEW_MESSAGE);
+		}
 
 		let updateQuery = {};
 		let updatedData = {};
@@ -637,7 +661,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			});
 		}
 
-		const writeFilter: Filter<Product> = { ...productTenantFilter };
+		const writeFilter: Filter<Product> = { ...productTenantFilter, ...editableStatusFilter, ...productEditorFilter(context) };
+		if (marksTabIncomplete) writeFilter.status = 'draft';
 		const changesComplianceStandard = input.action === 'add_compliance_standard' || input.action === 'update_compliance_standard';
 		if (changesComplianceStandard) {
 			const standards = input.action === 'add_compliance_standard' ? input.data : [input.data];
@@ -673,22 +698,36 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			delete (updateQuery as any).arrayFilters; 
 		}
 
-		const updateResult = await db
-			.collection<Product>('products')
-			.updateOne(writeFilter, updateQuery, options);
+		const update = isCompletionAction
+			? [{ $set: (updateQuery as { $set: Record<string, unknown> }).$set }, { $set: { complete_count: completeCountExpression } }]
+			: updateQuery;
+		const { result: updateResult, before, after: updatedProduct, changeNotice } = await saveProductContent({
+			productFilter: productTenantFilter,
+			writeFilter,
+			update,
+			options,
+			actorId: context.userId,
+		});
+		if (updateResult.matchedCount === 0) {
+			const current = await db.collection<Product>('products').findOne(productTenantFilter, { projection: { status: 1, owner_user_id: 1, contributor_user_ids: 1 } });
+			if (current && !canEditProduct(context, current)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
+			if (current && isContentLocked(current.status)) {
+				return ResponseWrapper.conflict(product.status === 'in_review' ? JUST_RELEASED_MESSAGE : CONTENT_LOCKED_MESSAGE);
+			}
+			if (current?.status === 'in_review' && marksTabIncomplete) return ResponseWrapper.conflict(TAB_INCOMPLETE_WHILE_IN_REVIEW_MESSAGE);
+		}
 		if (changesComplianceStandard && updateResult.matchedCount === 0) {
 			return ResponseWrapper.conflict('This standard has already been added to the product.');
 		}
-		if (updateResult.modifiedCount === 0) {
+		if (updateResult.matchedCount === 0) {
 			return ResponseWrapper.notFound(
 				'Product data not modified successfully, please check the data and try again.',
 			);
 		}
 
-		const updatedProduct = await db.collection<Product>('products').findOne(productTenantFilter);
 		const auditMeta = PRODUCT_DATA_ACTION_AUDIT_META[input.action];
 
-		if (updatedProduct && auditMeta) {
+		if (updatedProduct && auditMeta && updateResult.modifiedCount > 0) {
 			const payloadMeta: Record<string, unknown> = {
 				productName: updatedProduct.product_name,
 				tab: input.tab,
@@ -709,13 +748,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				visibility: 'all',
 				where: { module: 'products', tab: input.tab },
 				auth: auth.payload,
-				before: product as unknown as Record<string, unknown>,
+				before: (before ?? product) as unknown as Record<string, unknown>,
 				after: updatedProduct as unknown as Record<string, unknown>,
 				changedPaths: auditMeta.changedPaths,
 				meta: payloadMeta,
 			});
 		}
 
+		await sendChangeNotices(changeNotice);
 		await recordUploadCommitsFromPayload(context.workspaceId, input.data);
 
 		return ResponseWrapper.success({
@@ -725,6 +765,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			data: updatedData,
 		});
 	} catch (error: unknown) {
+		if (error instanceof LifecycleConflictError || error instanceof WorkflowConflictError) return ResponseWrapper.conflict(error.message);
+		if (error instanceof ProductAccessError) return ResponseWrapper.forbidden(error.message);
 		return ResponseWrapper.internalServerError(
 			`Internal server error: ${error instanceof Error ? error.message : String(error)}`,
 		);
