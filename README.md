@@ -4,6 +4,12 @@ Serverless backend for Uprevit, built with AWS SAM, AWS Lambda, API Gateway, Mon
 
 The main infrastructure entrypoint is `template.yaml`, and the application code lives under `src/`.
 
+## Current Release
+
+**0.8.0** supports the Uprevit Beta app with approval workflows, product ownership, lifecycle tracking, and in-app and email notifications. Submitting a product marks it Submitted; completing an approval workflow releases its included versions together and makes earlier releases Obsolete.
+
+The release also includes workflow image attachments, advanced search, product-team permissions, and product export improvements. See [CHANGELOG.md](./CHANGELOG.md) for the full release notes. Use it with the matching `0.8.0` UI release.
+
 ## Environment Variables
 
 For local SAM development, put runtime environment variable names in `env.json` and pass that file with `--env-vars`.
@@ -90,12 +96,16 @@ To run the application locally:
 
 Recommended release flow:
 
-1. Finalize changes on `release/x.y.z` (pushes to the release branch do not deploy)
+1. Cut `release/x.y.z` from the latest `develop` and finalize release changes (pushes to the release branch do not deploy)
 2. Merge the release branch into `main`
 3. Let GitHub Actions deploy `main` to the `prod` environment
 4. Verify the deployed API and stack outputs
 5. Create the release tag
-6. Merge the release branch back into `develop`
+6. Merge `main` back into `develop`
+
+Keep release versions aligned with `../uprevit-ui`, and merge and verify the backend before the UI. For this release, use `release/0.8.0` and create the `v0.8.0` tag after production verification.
+
+Existing databases need the product lifecycle migration (`src/scripts/migrateProductLifecycle.ts`) and Product Owner backfill (`src/scripts/backfillProductOwners.ts`). Rehearse both on dev with `--dry-run` first and verify their counts. The lifecycle migration maps legacy Submitted versions to Released or Obsolete and separates archiving from status; the owner backfill preserves existing owners and fills missing ones from the creator or an active workspace admin.
 
 ## Recent Fixes
 

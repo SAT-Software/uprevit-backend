@@ -7,11 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-10
+
 ### Added
 
-- Added approval workflows for every workspace: submitting a product marks it Submitted, and a workflow releases it.
+- Added approval workflow APIs for multi-product drafts, readiness checks, approver assignments, start, decisions, automatic or Initiator-controlled completion, rejection, cancellation, and release history.
+- Added scoped change requests and discussions with image attachments, change notices, and Approve again for products edited during review.
+- Added approver replacement, unavailable-assignment handling, and manual reminders.
 - Added advanced workflow search with up to 10 AND/OR conditions.
+- Added Product Owners and Contributors, product-team management, and backend edit-permission enforcement.
+- Added in-app and email notifications for product-team and workflow activity, with notification listing and read controls.
 - Added the released version and active workflow to product list and product detail responses.
+- Added product lifecycle migration and Product Owner backfill scripts with dry-run support.
+- Added a Unit field to user profiles and Print Direction to label components and exports.
+
+### Updated
+
+- Updated the product lifecycle to Draft, Submitted, In Review, Released, and Obsolete, with archiving tracked separately. Submit now marks a version Submitted; workflows release it.
+- Updated product exports to include Print Direction and standard symbol images.
+- Updated release guidance for the matching `0.8.0` Beta app.
+- Updated package and lockfile versions to `0.8.0`.
+
+### Fixed
+
+- Fixed PDF and Excel exports of product data grids saved through the workbook update actions.
+- Fixed product ownership reassignment across versions when a workspace member is removed.
+- Fixed notification sort order and added an index for newest-first listing.
+- Fixed workflow image attachment limits across existing and newly attached images.
+- Fixed deployment parameter quoting so the email sender name is preserved.
 
 ### Removed
 

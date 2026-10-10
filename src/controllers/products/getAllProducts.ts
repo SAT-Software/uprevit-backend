@@ -122,7 +122,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (!ObjectId.isValid(ownerId)) return ResponseWrapper.badRequest('Invalid ownerId');
 			filter.owner_user_id = new ObjectId(ownerId);
 		}
-		
+
 
 		const { isArchive: isArchiveOnlyStatus, match: statusMatch } = buildProductStatusMatch(statusFilter);
 		Object.assign(filter, statusMatch);
