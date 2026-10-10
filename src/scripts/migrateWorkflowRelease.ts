@@ -21,6 +21,10 @@ const TARGETS = {
 	dev: { dbName: 'uprevit-test', uriParam: '/uprevit/dev/backend/MONGODB_URI', stack: 'uprevit-test' },
 } as const;
 
+// The package's exports map has no types condition, so it cannot be imported under bundler resolution.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { ConnectionString } = require('mongodb-connection-string-url');
+
 let mongoUri: string | undefined;
 
 const parseArgs = (args: string[]) => {
@@ -66,7 +70,13 @@ const main = async () => {
 	const { Parameter } = await ssm.send(new GetParameterCommand({ Name: target.uriParam, WithDecryption: true }));
 	mongoUri = Parameter?.Value;
 	if (!mongoUri) throw new Error(`SSM parameter ${target.uriParam} is empty`);
-	const uriDbName = decodeURIComponent(new URL(mongoUri).pathname.slice(1));
+	let uriPath: string;
+	try {
+		uriPath = new ConnectionString(mongoUri).pathname;
+	} catch {
+		throw new Error(`The SSM URI for ${target.name} is not a valid MongoDB connection string`);
+	}
+	const uriDbName = decodeURIComponent(uriPath.slice(1));
 	if (uriDbName && uriDbName !== target.dbName) throw new Error(`The SSM URI for ${target.name} names a different database`);
 
 	const client = new MongoClient(mongoUri, { serverApi: ServerApiVersion.v1 });
