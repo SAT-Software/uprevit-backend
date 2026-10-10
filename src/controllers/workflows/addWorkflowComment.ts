@@ -1,6 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ACTIVE_WORKFLOW_STATUSES } from '../../models/workflow';
 import type { WorkflowDiscussionItem } from '../../models/workflowDiscussion';
+import { assertNewUploadCommitsAllowed } from '../../utils/billing/uploadCommit';
 import { withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
@@ -52,6 +53,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (!actor) return ResponseWrapper.forbidden('Only active members can comment');
 		const attachments = await parseDiscussionAttachments(input.attachments, workflow, context.userId);
 		if ('error' in attachments) return ResponseWrapper.badRequest(attachments.error);
+		const uploadCheck = await assertNewUploadCommitsAllowed(context.workspaceId, attachments.value);
+		if (!uploadCheck.allowed) return ResponseWrapper.forbidden(uploadCheck.reason);
 
 		const item: WorkflowDiscussionItem = {
 			workspaceId: context.workspaceId,

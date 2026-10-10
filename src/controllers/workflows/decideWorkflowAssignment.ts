@@ -1,6 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
 import { ACTIVE_WORKFLOW_STATUSES, UNDECIDED_DECISIONS, WORKFLOWS_COLLECTION, type Workflow } from '../../models/workflow';
+import { assertNewUploadCommitsAllowed } from '../../utils/billing/uploadCommit';
 import { withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
 import { LifecycleConflictError } from '../../utils/productLifecycle';
@@ -84,6 +85,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (scope) {
 			const attachments = await parseDiscussionAttachments(input.attachments, workflow, context.userId);
 			if ('error' in attachments) return ResponseWrapper.badRequest(attachments.error);
+			const uploadCheck = await assertNewUploadCommitsAllowed(context.workspaceId, attachments.value);
+			if (!uploadCheck.allowed) return ResponseWrapper.forbidden(uploadCheck.reason);
 			const updated = await requestChanges({
 				db, workflow, assignment, actor, scope: scope.value, reason: text.value!, attachments: attachments.value,
 			});
