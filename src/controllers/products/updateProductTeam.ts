@@ -10,7 +10,7 @@ import { recordAuditEvent } from '../../utils/auditLogV2';
 import { LifecycleConflictError, productLineageFilter } from '../../utils/productLifecycle';
 import { canManageProductTeam, findActiveWorkspaceMember } from '../../utils/productAccess';
 import { getMemberName, notify } from '../../utils/notifications';
-import { flagUnavailableAssignments } from '../../utils/workflowAssignments';
+import { flagUnavailableAssignments, touchActiveWorkflows } from '../../utils/workflowAssignments';
 import { lineageIdOf } from '../../utils/workflows';
 
 const ACTIONS = ['set-owner', 'add-contributor', 'remove-contributor'] as const;
@@ -85,6 +85,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (unchanged.matchedCount === 0) throw new LifecycleConflictError('The product team changed. Reload and try again.');
 
 			await txProducts.updateMany({ ...productLineageFilter(product), _id: { $ne: product._id } }, update, { session });
+			await touchActiveWorkflows(txDb, context.workspaceId, { 'products.lineageId': lineageIdOf(product) }, session);
 			return txProducts.findOne({ _id: product._id }, { projection: { owner_user_id: 1, contributor_user_ids: 1 }, session });
 		});
 

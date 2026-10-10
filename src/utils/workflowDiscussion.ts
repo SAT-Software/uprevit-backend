@@ -21,7 +21,7 @@ import { withTransaction } from './db';
 import { logError } from './logger';
 import { createPresignedGetUrlMap, headUploadObject, workflowAttachmentKeyPrefix } from './s3-storage';
 import type { TenantContext } from './tenantContext';
-import { WorkflowConflictError, notifyWorkflow, workflowEvents } from './workflowLifecycle';
+import { WorkflowConflictError, assertCanDecide, notifyWorkflow, workflowEvents } from './workflowLifecycle';
 import { canManageWorkflow, lineageIdOf } from './workflows';
 
 let hasEnsuredDiscussionIndexes = false;
@@ -195,6 +195,7 @@ export const requestChanges = async ({ db, workflow, assignment, actor, scope, r
 	const [discussion, events] = await Promise.all([workflowDiscussion(db), workflowEvents(db)]);
 
 	const updated = await withTransaction(async (txDb, session) => {
+		await assertCanDecide(txDb, workflow.workspaceId, assignment, session);
 		const result = await txDb.collection<Workflow>(WORKFLOWS_COLLECTION).findOneAndUpdate(
 			{
 				_id: workflowId,

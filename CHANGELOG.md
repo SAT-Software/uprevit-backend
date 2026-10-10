@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added Product Owners and Contributors, product-team management, and backend edit-permission enforcement.
 - Added in-app and email notifications for product-team and workflow activity, with notification listing and read controls.
 - Added the released version and active workflow to product list and product detail responses.
-- Added product lifecycle migration and Product Owner backfill scripts with dry-run support.
+- Added product lifecycle migration and Product Owner backfill scripts with dry-run support, and a guarded `migrate:workflow-release` command that runs both on prod or demo.
 - Added a Unit field to user profiles and Print Direction to label components and exports.
 
 ### Updated
@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed notification sort order and added an index for newest-first listing.
 - Fixed workflow image attachment limits across existing and newly attached images.
 - Fixed deployment parameter quoting so the email sender name is preserved.
+- Fixed approvers recording a decision while being removed from the Product Team or workspace.
+- Fixed change notice emails from product tab saves being rejected for missing SES permission.
 
 ### Removed
 

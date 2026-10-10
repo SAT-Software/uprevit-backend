@@ -1,8 +1,8 @@
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
-import { ClientSession, Db, ObjectId } from 'mongodb';
-import type { Product } from '../models/product';
+import { ClientSession, Db, Filter, ObjectId } from 'mongodb';
 import type { User } from '../models/user';
 import {
+	ACTIVE_WORKFLOW_STATUSES,
 	UNDECIDED_DECISIONS,
 	WORKFLOWS_COLLECTION,
 	type ReplacedWorkflowAssignment,
@@ -17,35 +17,15 @@ import { withTransaction } from './db';
 import { logError } from './logger';
 import { notify } from './notifications';
 import { WorkflowConflictError, getActorSnapshot, notifyWorkflow, workflowEvents, workflowNotification } from './workflowLifecycle';
-import { getProductTeam, getSoleApproverProblem, loadWorkflowProductState } from './workflows';
+import { findLatestVersion, getProductTeam, getSoleApproverProblem, loadWorkflowProductState } from './workflows';
 
 /** Thrown when the chosen replacement is not allowed; maps to 400. */
 export class WorkflowReplacementError extends Error {}
-
-const findLatestVersion = (db: Db, workspaceId: ObjectId, lineageId: ObjectId, session?: ClientSession) =>
-	db.collection<Product>('products').findOne(
-		{ workspace_id: workspaceId, is_latest: true, $or: [{ product_lineage_id: lineageId }, { _id: lineageId, product_lineage_id: { $exists: false } }] },
-		{ projection: { owner_user_id: 1, contributor_user_ids: 1 }, session },
-	);
 
 const isSameGroup = (a: WorkflowAssignment, b: WorkflowAssignment) =>
 	a.functionType === b.functionType && (a.functionType === 'product_team'
 		? !!a.lineageId && !!b.lineageId && a.lineageId.equals(b.lineageId)
 		: a.functionLabel.toLowerCase() === b.functionLabel.toLowerCase());
-
-/**
- * Whether the person on an assignment may still act on it: anyone for a Function, and only a current owner or
- * contributor of the Product for Product Team.
- * @param {Db} db Database handle
- * @param {ObjectId} workspaceId Workspace id
- * @param {WorkflowAssignment} assignment Assignment to check
- * @return {Promise<boolean>} True when the assigned person is still eligible
- */
-export const isStillEligible = async (db: Db, workspaceId: ObjectId, assignment: WorkflowAssignment) => {
-	if (assignment.functionType !== 'product_team' || !assignment.lineageId) return true;
-	const latest = await findLatestVersion(db, workspaceId, assignment.lineageId);
-	return !!latest && [latest.owner_user_id, ...(latest.contributor_user_ids ?? [])].some((id) => id?.equals(assignment.userId));
-};
 
 type ReplaceAssignmentInput = {
 	db: Db;
@@ -197,6 +177,24 @@ export const replaceAssignment = async ({ db, workflowId, workspaceId, assignmen
 	return updated;
 };
 
+/**
+ * Writes every active workflow matching `filter` inside the caller's transaction, bumping `assignmentsRevision` so the
+ * document always changes. Call it in the same transaction as a change that can make an approver ineligible: a decision
+ * on those workflows then conflicts with the change, so it retries on the new team or membership instead of committing
+ * on the old one.
+ * @param {Db} db Transaction database handle
+ * @param {ObjectId} workspaceId Workspace id
+ * @param {Filter<Workflow>} filter Workflows that can be affected
+ * @param {ClientSession} session Transaction session
+ * @return {Promise<UpdateResult>} Update result
+ */
+export const touchActiveWorkflows = (db: Db, workspaceId: ObjectId, filter: Filter<Workflow>, session: ClientSession) =>
+	db.collection<Workflow>(WORKFLOWS_COLLECTION).updateMany(
+		{ ...filter, workspaceId, status: { $in: ACTIVE_WORKFLOW_STATUSES } },
+		{ $set: { assignmentsCheckedAt: new Date() }, $inc: { assignmentsRevision: 1 } },
+		{ session },
+	);
+
 type FlagUnavailableInput = { db: Db; workspaceId: ObjectId; actorId: ObjectId } & (
 	| { userId: ObjectId; lineageId?: never }
 	| { lineageId: ObjectId; userId?: never }
@@ -230,7 +228,7 @@ export const flagUnavailableAssignments = async ({ db, workspaceId, actorId, use
 				const workflows = txDb.collection<Workflow>(WORKFLOWS_COLLECTION);
 				const workflow = await workflows.findOneAndUpdate(
 					{ _id: workflowId, workspaceId, status: 'in_review' },
-					{ $set: { assignmentsCheckedAt: new Date() } },
+					{ $set: { assignmentsCheckedAt: new Date() }, $inc: { assignmentsRevision: 1 } },
 					{ returnDocument: 'after', session },
 				);
 				if (!workflow) return null;

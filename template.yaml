@@ -1123,6 +1123,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/updateProductData.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
       Events:
         UpdateProductData:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api

@@ -107,6 +107,24 @@ Keep release versions aligned with `../uprevit-ui`, and merge and verify the bac
 
 Existing databases need the product lifecycle migration (`src/scripts/migrateProductLifecycle.ts`) and Product Owner backfill (`src/scripts/backfillProductOwners.ts`). Rehearse both on dev with `--dry-run` first and verify their counts. The lifecycle migration maps legacy Submitted versions to Released or Obsolete and separates archiving from status; the owner backfill preserves existing owners and fills missing ones from the creator or an active workspace admin.
 
+### 0.8.0 data migrations
+
+`migrate:workflow-release` runs the lifecycle migration and then the owner backfill on one deployed environment. It reads the MongoDB URI from that environment's SSM parameter, never prints it, and plans only unless `--apply` repeats the database name. It stops if `MONGODB_URI` is set, if `DB_NAME` names another database, or if the SSM URI names another database. When the target database has no products, it checks with the AWS CLI that the deployed stack's Lambda uses the same URI and database and that the cluster has no database differing only by case, then reports zero updates; otherwise it stops. Both steps only change versions that still need them, so a second run reports zero lifecycle updates and only the owner backfills still pending, such as products it could not resolve.
+
+| Target | Branch | Stack | Database | SSM parameter |
+|---|---|---|---|---|
+| `prod` | `main` | `uprevit-prod` | `Uprevit-prod` | `/uprevit/prod/backend/MONGODB_URI` |
+| `demo` | `demo` | `uprevit-stage` | `uprevit-stage` | `/uprevit/stage/backend/MONGODB_URI` |
+
+For each environment, in this order:
+
+1. Let GitHub Actions deploy the `0.8.0` backend to the environment.
+2. Plan: `AWS_PROFILE=uprevit-amit npm --prefix src run migrate:workflow-release -- --target prod`
+3. Apply straight away, before people edit products: `AWS_PROFILE=uprevit-amit npm --prefix src run migrate:workflow-release -- --target prod --apply Uprevit-prod`
+4. Plan again and confirm the lifecycle step reports zero updates and any owner backfills still pending are expected, then release the UI.
+
+For demo, use `--target demo` and `--apply uprevit-stage`. A plan does not write the lifecycle changes, so its owner backfill reads versions before they get a lineage and its owner counts are provisional; `--apply` runs the backfill after the lifecycle migration. Dev already ran the individual scripts (`migrate:product-lifecycle`, `backfill:product-owners`), which still work with `MONGODB_URI` and `DB_NAME`.
+
 ## Recent Fixes
 
 - Fixed MongoDB connection issue by removing dotenv dependency and using environment variables directly in Lambda

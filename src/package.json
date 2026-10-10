@@ -13,7 +13,8 @@
 		"backfill:billing-accounts": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/backfillBillingAccounts.ts",
 		"fix:billing-period-anchors": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/fixBillingPeriodAnchors.ts",
 		"migrate:product-lifecycle": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateProductLifecycle.ts",
-		"backfill:product-owners": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/backfillProductOwners.ts"
+		"backfill:product-owners": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/backfillProductOwners.ts",
+		"migrate:workflow-release": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateWorkflowRelease.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-cognito-identity-provider": "^3.679.0",

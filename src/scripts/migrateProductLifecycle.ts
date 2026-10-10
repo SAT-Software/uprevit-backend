@@ -1,5 +1,5 @@
 /* eslint-disable require-jsdoc */
-import { AnyBulkWriteOperation, Collection, MongoClient, ObjectId, ServerApiVersion } from 'mongodb';
+import { AnyBulkWriteOperation, Collection, Db, MongoClient, ObjectId, ServerApiVersion } from 'mongodb';
 import type { Product } from '../models/product';
 import { AUDIT_LOG_V2_COLLECTION, type AuditLogV2 } from '../models/auditLogV2';
 
@@ -34,14 +34,7 @@ const latestEventsByProduct = async (
 	return byProduct;
 };
 
-const main = async () => {
-	const dryRun = process.argv.includes('--dry-run');
-	const { MONGODB_URI, DB_NAME } = process.env;
-	if (!MONGODB_URI || !DB_NAME) throw new Error('MONGODB_URI and DB_NAME are required');
-
-	const client = new MongoClient(MONGODB_URI, { serverApi: ServerApiVersion.v1 });
-	await client.connect();
-	const db = client.db(DB_NAME);
+export const migrateProductLifecycle = async (db: Db, dryRun: boolean) => {
 	const productsCollection = db.collection<ProductRow>('products');
 	const audit = db.collection<AuditLogV2>(AUDIT_LOG_V2_COLLECTION);
 
@@ -155,11 +148,25 @@ const main = async () => {
 		const result = await productsCollection.bulkWrite(operations, { ordered: false });
 		console.log(`Updated ${result.modifiedCount} product versions.`);
 	}
-
-	await client.close();
+	return operations.length;
 };
 
-main().catch((error) => {
-	console.error('Product lifecycle migration failed', error);
-	process.exit(1);
-});
+const main = async () => {
+	const { MONGODB_URI, DB_NAME } = process.env;
+	if (!MONGODB_URI || !DB_NAME) throw new Error('MONGODB_URI and DB_NAME are required');
+
+	const client = new MongoClient(MONGODB_URI, { serverApi: ServerApiVersion.v1 });
+	await client.connect();
+	try {
+		await migrateProductLifecycle(client.db(DB_NAME), process.argv.includes('--dry-run'));
+	} finally {
+		await client.close();
+	}
+};
+
+if (require.main === module) {
+	main().catch((error) => {
+		console.error('Product lifecycle migration failed', error);
+		process.exit(1);
+	});
+}

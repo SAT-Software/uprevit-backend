@@ -13,7 +13,7 @@ import type { Product } from '../models/product';
 import type { Project } from '../models/project';
 import type { User } from '../models/user';
 import type { Workspace } from '../models/workspace';
-import { getDb } from './db';
+import { getDb, withTransaction } from './db';
 import {
 	cognitoUserExists,
 	createInvitedCognitoUser,
@@ -23,7 +23,7 @@ import {
 import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from './billing/enforcement';
 import { recordAuditEvent } from './auditLogV2';
 import { notify } from './notifications';
-import { flagUnavailableAssignments } from './workflowAssignments';
+import { flagUnavailableAssignments, touchActiveWorkflows } from './workflowAssignments';
 
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
@@ -123,21 +123,25 @@ const reassignProductTeams = async (
 	actorUserId: ObjectId,
 	auth: Partial<CognitoAccessTokenPayload>,
 ): Promise<void> => {
-	const products = db.collection<Product>('products');
-
-	await products.updateMany(
-		{ workspace_id: workspaceId, contributor_user_ids: targetUserId },
-		{ $pull: { contributor_user_ids: targetUserId } },
-	);
-
-	const ownedProducts = await products
+	const ownedProducts = await db.collection<Product>('products')
 		.find({ workspace_id: workspaceId, owner_user_id: targetUserId, is_latest: true }, { projection: { product_name: 1 } })
 		.toArray();
 
-	const reassigned = await products.updateMany(
-		{ workspace_id: workspaceId, owner_user_id: targetUserId },
-		{ $set: { owner_user_id: actorUserId }, $pull: { contributor_user_ids: actorUserId } },
-	);
+	const reassigned = await withTransaction(async (txDb, session) => {
+		const products = txDb.collection<Product>('products');
+		await products.updateMany(
+			{ workspace_id: workspaceId, contributor_user_ids: targetUserId },
+			{ $pull: { contributor_user_ids: targetUserId } },
+			{ session },
+		);
+		const result = await products.updateMany(
+			{ workspace_id: workspaceId, owner_user_id: targetUserId },
+			{ $set: { owner_user_id: actorUserId }, $pull: { contributor_user_ids: actorUserId } },
+			{ session },
+		);
+		await touchActiveWorkflows(txDb, workspaceId, { 'assignments.userId': targetUserId }, session);
+		return result;
+	});
 	if (reassigned.modifiedCount === 0 || ownedProducts.length === 0) return;
 
 	const actor = await db.collection<User>('users').findOne({ _id: actorUserId }, { projection: { name: 1 } });
@@ -232,16 +236,20 @@ export const deactivateWorkspaceUser = async ({
 	await cleanupMembershipReferences(db, workspaceId, targetUserId, actorUserId);
 	await reassignProductTeams(db, workspaceId, targetUserId, targetUser.name || 'A member', actorUserId, auth);
 
-	await db.collection<User>('users').updateOne(
-		{ _id: targetUserId, workspaceId },
-		{
-			$set: {
-				status: 'inactive',
-				removedAt: now,
-				removedByUserId: actorUserId,
+	await withTransaction(async (txDb, session) => {
+		await txDb.collection<User>('users').updateOne(
+			{ _id: targetUserId, workspaceId },
+			{
+				$set: {
+					status: 'inactive',
+					removedAt: now,
+					removedByUserId: actorUserId,
+				},
 			},
-		},
-	);
+			{ session },
+		);
+		await touchActiveWorkflows(txDb, workspaceId, { 'assignments.userId': targetUserId }, session);
+	});
 	await flagUnavailableAssignments({ db, workspaceId, actorId: actorUserId, userId: targetUserId });
 
 	const updatedUser = await db.collection<User>('users').findOne({ _id: targetUserId });

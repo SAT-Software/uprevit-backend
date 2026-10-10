@@ -7,10 +7,10 @@ import { logError } from '../../utils/logger';
 import { LifecycleConflictError } from '../../utils/productLifecycle';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { parseDiscussionAttachments, parseDiscussionScope, requestChanges } from '../../utils/workflowDiscussion';
-import { isStillEligible } from '../../utils/workflowAssignments';
 import { parseJsonObject } from '../../utils/workflowInput';
 import {
 	WorkflowConflictError,
+	assertCanDecide,
 	contentChangedSince,
 	countOpenChangeRequests,
 	endWorkflowWithoutRelease,
@@ -64,9 +64,6 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (assignment.needsReplacement) {
 			return ResponseWrapper.conflict('You can no longer approve for this assignment. The Initiator needs to replace you.');
 		}
-		if (!(await isStillEligible(db, context.workspaceId, assignment))) {
-			return ResponseWrapper.conflict('You are no longer on this Product\'s team, so you can\'t decide for it.');
-		}
 
 		const isReconfirm = decision === 'approve' && assignment.decision === 'approved';
 		if (decision === 'request_changes' || isReconfirm) {
@@ -106,6 +103,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		if (isReconfirm) {
 			const reconfirmed = await withTransaction(async (txDb, session) => {
+				await assertCanDecide(txDb, context.workspaceId, assignment, session);
 				const contentCheckpoint = await getContentCheckpoint(txDb, workflow, session);
 				if (!contentChangedSince(assignment.contentCheckpoint ?? {}, contentCheckpoint)) {
 					throw new WorkflowConflictError('Your approval already covers the latest content');
@@ -153,6 +151,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const updated = await withTransaction(async (txDb, session) => {
+			await assertCanDecide(txDb, context.workspaceId, assignment, session);
 			if (await countOpenChangeRequests(txDb, workflow, { assignmentId: assignment._id, session }) > 0) {
 				throw new WorkflowConflictError('Your change request is still open. You can approve once it is addressed.');
 			}

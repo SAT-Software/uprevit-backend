@@ -7,6 +7,7 @@ import {
 	ACTIVE_WORKFLOW_STATUSES,
 	WORKFLOWS_COLLECTION,
 	type Workflow,
+	type WorkflowAssignment,
 	type WorkflowRelationship,
 } from '../models/workflow';
 import { WORKFLOW_COUNTERS_COLLECTION, type WorkflowCounter } from '../models/workflowCounter';
@@ -94,6 +95,27 @@ const PRODUCT_STATE_PROJECTION = {
 
 export const lineageIdOf = (product: Pick<Product, '_id' | 'product_lineage_id'>) =>
 	product.product_lineage_id ?? (product._id as ObjectId);
+
+export const findLatestVersion = (db: Db, workspaceId: ObjectId, lineageId: ObjectId, session?: ClientSession) =>
+	db.collection<Product>('products').findOne(
+		{ workspace_id: workspaceId, is_latest: true, $or: [{ product_lineage_id: lineageId }, { _id: lineageId, product_lineage_id: { $exists: false } }] },
+		{ projection: { owner_user_id: 1, contributor_user_ids: 1 }, session },
+	);
+
+/**
+ * Whether the person on an assignment may still act on it: anyone for a Function, and only a current owner or
+ * contributor of the Product for Product Team.
+ * @param {Db} db Database handle
+ * @param {ObjectId} workspaceId Workspace id
+ * @param {WorkflowAssignment} assignment Assignment to check
+ * @param {ClientSession} session Optional transaction session
+ * @return {Promise<boolean>} True when the assigned person is still eligible
+ */
+export const isStillEligible = async (db: Db, workspaceId: ObjectId, assignment: WorkflowAssignment, session?: ClientSession) => {
+	if (assignment.functionType !== 'product_team' || !assignment.lineageId) return true;
+	const latest = await findLatestVersion(db, workspaceId, assignment.lineageId, session);
+	return !!latest && [latest.owner_user_id, ...(latest.contributor_user_ids ?? [])].some((id) => id?.equals(assignment.userId));
+};
 
 export type TeamMember = Pick<User, 'name' | 'email' | 'profileAvatar'> & { _id: ObjectId; relationship: WorkflowRelationship };
 
