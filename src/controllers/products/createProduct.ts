@@ -3,10 +3,12 @@ import { getDb } from '../../utils/db';
 import type { Product } from '../../models/product';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { validateEnum, validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
+import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
 import { requireTenantContext } from '../../utils/tenantContext';
 import { logError } from '../../utils/logger';
 import { recordAuditEvent } from '../../utils/auditLogV2';
+import { findActiveWorkspaceMember } from '../../utils/productAccess';
+import { computeCompleteCount } from '../../utils/productLifecycle';
 
 /**
  * Create a product
@@ -35,16 +37,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			'product_plan_number': input.product_plan_number,
 			'product_name': input.product_name,
 			'product_description': input.product_description,
-			'status': input.status,
 			'version': input.version,
 		});
 
 		if(missingFieldsResult) return missingFieldsResult;
-
-
-		const enumValidation = validateEnum(['draft', 'submitted', 'archived'], input.status);
-				
-		if(enumValidation) return enumValidation;
 
 
 		const objectIdValidation = validateObjectIds({
@@ -70,7 +66,20 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.conflict('Product plan number already exists');
 		}
 
+		let ownerUserId = context.userId;
+		if (input.owner_user_id !== undefined && input.owner_user_id !== context.userId.toString()) {
+			const owner = await findActiveWorkspaceMember(db, workspaceObjectId, input.owner_user_id);
+			if (!owner?._id) return ResponseWrapper.badRequest('Product Owner must be an active member of this workspace');
+			ownerUserId = owner._id;
+		}
+
+		const productObjectId = new ObjectId();
 		const productData = {
+			_id: productObjectId,
+			product_lineage_id: productObjectId,
+			is_archived: false,
+			owner_user_id: ownerUserId,
+			contributor_user_ids: [],
 			project_id: projectObjectId,
 			workspace_id: workspaceObjectId,
 			department_id: departmentObjectId,
@@ -82,8 +91,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			parent_id: null,
 			target_date: input.target_date || null,
 			actual_completion_date: input.actual_completion_date || null,
-			status: input.status,
-			complete_count: input.complete_count || 0,
+			status: 'draft' as const,
+			content_revision: 0,
 			product_information: input.product_information || {
 				data: {
 					_id: new ObjectId(),
@@ -130,7 +139,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			},
 		};
 
-		const product = await db.collection<Product>('products').insertOne(productData);
+		const product = await db.collection<Product>('products').insertOne({ ...productData, complete_count: computeCompleteCount(productData) });
 
 		await recordAuditEvent({
 			workspaceId: workspaceObjectId.toString(),
@@ -145,7 +154,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				product_plan_number: input.product_plan_number,
 				product_name: input.product_name,
 				product_description: input.product_description,
-				status: input.status,
+				status: productData.status,
 				version: input.version,
 			},
 			changedPaths: ['product_plan_number', 'product_name', 'product_description', 'status', 'version'],

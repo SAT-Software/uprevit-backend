@@ -29,6 +29,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 
 		const input: User = JSON.parse(event.body);
+		if (input.unit !== undefined && typeof input.unit !== 'string') {
+			return ResponseWrapper.badRequest('Unit must be text');
+		}
 
 		const missingFields = validateMissingFields({
 			name: input.name,
@@ -71,6 +74,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 					profileAvatar: normalizedAvatar,
 					email: input.email,
 					designation: input.designation || '',
+					...(input.unit !== undefined && { unit: input.unit.trim() }),
 					phone: input.phone,
 					location: input.location || '',
 				},

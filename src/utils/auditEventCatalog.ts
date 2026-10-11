@@ -56,6 +56,7 @@ const subjectForScope = (eventKey: string) => {
 	if (eventKey.startsWith('project.')) return 'project';
 	if (eventKey.startsWith('product.')) return 'product';
 	if (eventKey.startsWith('source_files.')) return 'source item';
+	if (eventKey.startsWith('workflow.')) return 'workflow';
 	return 'record';
 };
 
@@ -64,6 +65,12 @@ const productItemSummary = (
 	label: string,
 	changes: AuditLogV2Change[],
 ) => `${verb} ${label}${verb === 'updated' ? listChangedFields(changes) : ''}`;
+
+const workflowLabel = (meta: Record<string, unknown> | undefined) => {
+	const number = pickText(meta, ['workflowNumber']);
+	const name = pickText(meta, ['workflowName']);
+	return `${number ? ` ${number}` : ''}${name ? ` "${name}"` : ''}`;
+};
 
 const summaryBuilders: Record<string, SummaryBuilder> = {
 	'department.created': ({ meta }) => {
@@ -110,6 +117,19 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 		const name = pickText(meta, ['productName', 'name']);
 		return `submitted product${name ? ` "${name}"` : ''}`;
 	},
+	'product.released': ({ meta }) => {
+		const name = pickText(meta, ['productName', 'name']);
+		return `submitted and released product${name ? ` "${name}"` : ''}`;
+	},
+	'product.released_by_workflow': ({ meta }) => {
+		const name = pickText(meta, ['productName', 'name']);
+		const number = pickText(meta, ['workflowNumber']);
+		return `released product${name ? ` "${name}"` : ''}${number ? ` through workflow ${number}` : ''}`;
+	},
+	'product.returned_to_draft': ({ meta }) => {
+		const name = pickText(meta, ['productName', 'name']);
+		return `returned product${name ? ` "${name}"` : ''} to draft`;
+	},
 	'product.archived': ({ meta }) => {
 		const name = pickText(meta, ['productName', 'name']);
 		return `archived product${name ? ` "${name}"` : ''}`;
@@ -117,6 +137,21 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 	'product.restored': ({ meta }) => {
 		const name = pickText(meta, ['productName', 'name']);
 		return `restored product${name ? ` "${name}"` : ''}`;
+	},
+	'product.owner.changed': ({ meta }) => {
+		const name = pickText(meta, ['productName', 'name']);
+		const member = pickText(meta, ['memberName']);
+		return `made ${member ?? 'a member'} the Product Owner${name ? ` of "${name}"` : ''}`;
+	},
+	'product.contributor.added': ({ meta }) => {
+		const name = pickText(meta, ['productName', 'name']);
+		const member = pickText(meta, ['memberName']);
+		return `added ${member ?? 'a member'} as a contributor${name ? ` to "${name}"` : ''}`;
+	},
+	'product.contributor.removed': ({ meta }) => {
+		const name = pickText(meta, ['productName', 'name']);
+		const member = pickText(meta, ['memberName']);
+		return `removed ${member ?? 'a member'} as a contributor${name ? ` from "${name}"` : ''}`;
 	},
 	'product.version.created': ({ meta }) => {
 		const name = pickText(meta, ['productName', 'name']);
@@ -201,6 +236,20 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 		return `unlinked folder${folder ? ` "${folder}"` : ''} from product`;
 	},
 	'source_files.file.uploaded': ({ meta }) => `uploaded file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`,
+	'workflow.started': ({ meta }) => `started workflow${workflowLabel(meta)}`,
+	'workflow.completed': ({ meta }) => `completed workflow${workflowLabel(meta)}`,
+	'workflow.rejected': ({ meta }) => `rejected workflow${workflowLabel(meta)}`,
+	'workflow.cancelled': ({ meta }) => `cancelled workflow${workflowLabel(meta)}`,
+	'workflow.approver_replaced': ({ meta, changes }) => {
+		const from = pickChangeText(changes, ['assignments.userId'], 'from');
+		const to = pickChangeText(changes, ['assignments.userId'], 'to');
+		return `replaced approver${from ? ` ${from}` : ''}${to ? ` with ${to}` : ''} in workflow${workflowLabel(meta)}`;
+	},
+	'workflow.deleted': ({ meta }) => {
+		const number = pickText(meta, ['workflowNumber']);
+		const name = pickText(meta, ['workflowName']);
+		return `deleted workflow draft${number ? ` ${number}` : ''}${name ? ` "${name}"` : ''}`;
+	},
 	'source_files.file.deleted': ({ meta }) => `deleted file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`,
 };
 

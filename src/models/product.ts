@@ -1,6 +1,15 @@
 import { ObjectId } from 'mongodb';
 import { AuditLog } from './auditLog';
 
+export type ProductStatus = 'draft' | 'submitted' | 'in_review' | 'released' | 'obsolete';
+
+export type ProductTeamMember = {
+	_id: ObjectId;
+	name: string;
+	email: string;
+	profileAvatar?: string;
+};
+
 export type ProductData ={
 	data: {
 			_id?: ObjectId;
@@ -11,12 +20,19 @@ export type ProductData ={
 			product_name: string;
 			product_description: string;
 			version: number;
+			product_lineage_id?: ObjectId;
 			is_latest: boolean;
 			parent_id?: ObjectId | null;
 			target_date?: Date | null;
 			actual_completion_date?: Date | null;
-			status: 'draft' | 'submitted' | 'archived';
+			status: ProductStatus;
 			complete_count?: number;
+			owner_user_id?: ObjectId;
+			contributor_user_ids?: ObjectId[];
+			owner?: ProductTeamMember | null;
+			contributors?: ProductTeamMember[];
+			active_workflow?: { id: ObjectId; numberLabel: string } | null;
+			released_version?: { id: ObjectId; version: number } | null;
 		}
 }
 
@@ -76,6 +92,7 @@ export type LabelComponents = {
 			component_number: string;
 			component_type: string;
 			component_description: string;
+			print_direction?: string;
 	}>;
 	tab_completed: boolean;
 };
@@ -146,7 +163,19 @@ export type Product = {
 	parent_id?: ObjectId | null;
 	target_date?: Date | null;
 	actual_completion_date?: Date | null;
-	status: 'draft' | 'submitted' | 'archived';
+	status: ProductStatus;
+	product_lineage_id?: ObjectId;
+	is_archived?: boolean;
+	archived_at?: Date;
+	archived_by?: ObjectId;
+	released_at?: Date;
+	obsoleted_at?: Date;
+	legacy_release?: boolean;
+	released_by_workflow_id?: ObjectId;
+	active_workflow_id?: ObjectId;
+	content_revision?: number;
+	owner_user_id?: ObjectId;
+	contributor_user_ids?: ObjectId[];
 	complete_count?: number;
 	product_information: ProductInformation;
 	compliance_information: ComplianceInformation;

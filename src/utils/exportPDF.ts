@@ -2,7 +2,7 @@ import { PDFDocument, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import { Product } from "../models/product";
 import transformUniverExcelData from "./transformUniverExcelData";
 import { logError } from "./logger";
-import { createPresignedGetUrlMap } from "./s3-storage";
+import { createPresignedGetUrlMap, createStandardSymbolPresignedGetUrlMap } from "./s3-storage";
 
 const PAGE_WIDTH = 842;
 const PAGE_HEIGHT = 595;
@@ -133,7 +133,7 @@ const resolveImageUrl = (
 	signedUrlMap: Map<string, string>,
 ): string | undefined => {
 	const directUrl = toOptionalString(imageValue);
-	const explicitKey = toS3Key(keyValue);
+	const explicitKey = toOptionalString(keyValue);
 	const keyFromImage = toS3Key(directUrl);
 	const s3Key = explicitKey || keyFromImage;
 
@@ -185,10 +185,17 @@ const collectProductImageS3Keys = (productData: Product): string[] => {
 
 const loadSignedUrlMap = async (productData: Product): Promise<Map<string, string>> => {
 	const s3Keys = collectProductImageS3Keys(productData);
-	if (!s3Keys.length) return new Map<string, string>();
+	const standardSymbolKeys = (productData.symbols_graphics?.data || [])
+		.filter((item) => item.standard_symbol_id || item.standard_ref_number)
+		.map((item) => item.key)
+		.filter((key): key is string => Boolean(key));
 
 	try {
-		return await createPresignedGetUrlMap(s3Keys, { workspaceId: productData.workspace_id });
+		const maps = await Promise.all([
+			createPresignedGetUrlMap(s3Keys, { workspaceId: productData.workspace_id }),
+			createStandardSymbolPresignedGetUrlMap(standardSymbolKeys),
+		]);
+		return new Map(maps.flatMap((map) => [...map]));
 	} catch (error) {
 		logError("Failed to sign product image URLs for PDF export", error);
 		return new Map<string, string>();
@@ -230,7 +237,7 @@ const embedImageAsset = async (
 	if (isLikelyWebpUrl(url)) return { placeholderText: "Image format not supported" };
 
 	try {
-		const response = await fetch(url);
+		const response = await fetch(url, { headers: { Connection: "close" } });
 		if (!response.ok) return { placeholderText: "Image unavailable" };
 
 		const bytes = new Uint8Array(await response.arrayBuffer());
@@ -258,6 +265,7 @@ const preloadEmbeddedAssets = async (
 		const chunkEntries = await Promise.all(
 			chunk.map(async (url) => [url, await embedImageAsset(pdfDoc, url)] as const),
 		);
+		await pdfDoc.flush();
 		entries.push(...chunkEntries);
 	}
 
@@ -330,6 +338,7 @@ export async function generateProductPDFExport(productData: Product) {
 					Array.isArray(item.label_type) ? item.label_type.join(", ") : "",
 					toCleanString(item.dimensions),
 					toCleanString(item.component_type),
+					toCleanString(item.print_direction),
 				],
 				resolveImageUrl(item.image, item.key, signedUrlMap),
 			);
@@ -337,15 +346,14 @@ export async function generateProductPDFExport(productData: Product) {
 
 		const symbolsRows: TableRow[] = [];
 		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Symbols") || []).forEach((item) => {
-			appendDataAndImageRows(
-				symbolsRows,
-				[
-					toCleanString(item.text),
-					item.text_present === undefined ? "" : item.text_present ? "Yes" : "No",
-					Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "",
+			symbolsRows.push({
+				cells: [
+					{ imageUrl: resolveImageUrl(item.image, item.key, signedUrlMap) },
+					{ text: toCleanString(item.text) },
+					{ text: item.text_present === undefined ? "" : item.text_present ? "Yes" : "No" },
+					{ text: Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "" },
 				],
-				resolveImageUrl(item.image, item.key, signedUrlMap),
-			);
+			});
 		});
 
 		const schematicsRows: TableRow[] = [];
@@ -453,7 +461,10 @@ export async function generateProductPDFExport(productData: Product) {
 			...otherComponentsRows,
 			...labelTagsRows,
 		];
-		const allImageUrls = allRows.map((row) => row.imageUrl || "").filter(Boolean);
+		const allImageUrls = allRows.flatMap((row) => [
+			row.imageUrl || "",
+			...row.cells.map((cell) => cell.imageUrl || ""),
+		]).filter(Boolean);
 		const embeddedAssetMap = await preloadEmbeddedAssets(pdfDoc, allImageUrls);
 
 		const pages: PDFPage[] = [];
@@ -516,11 +527,16 @@ export async function generateProductPDFExport(productData: Product) {
 			return Math.max(MIN_IMAGE_ROW_HEIGHT, Math.min(MAX_IMAGE_ROW_HEIGHT, fullHeight));
 		};
 
-		const drawImageInRow = (asset: EmbeddedAsset, rowTopY: number, rowHeight: number) => {
-			const rowX = MARGIN;
+		const drawImageInRow = (
+			asset: EmbeddedAsset,
+			rowTopY: number,
+			rowHeight: number,
+			rowX = MARGIN,
+			rowWidth = CONTENT_WIDTH,
+		) => {
 			const rowBottomY = rowTopY - rowHeight;
 			const contentX = rowX + IMAGE_ROW_SIDE_PADDING;
-			const contentWidth = CONTENT_WIDTH - IMAGE_ROW_SIDE_PADDING * 2;
+			const contentWidth = rowWidth - IMAGE_ROW_SIDE_PADDING * 2;
 
 			if (!asset.image) {
 				drawTextInCell(
@@ -617,7 +633,9 @@ export async function generateProductPDFExport(productData: Product) {
 			let dataRowCount = 0;
 			for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
 				const row = rows[rowIndex];
-				const rowHeight = row.isImageRow ? getImageRowHeight(row) : TABLE_ROW_HEIGHT;
+				const rowHeight = row.isImageRow
+					? getImageRowHeight(row)
+					: row.cells.some((cell) => cell.imageUrl) ? 60 : TABLE_ROW_HEIGHT;
 
 				const nextRow = rows[rowIndex + 1];
 				const isDataRowWithImageBelow = !row.isImageRow && Boolean(nextRow?.isImageRow);
@@ -667,7 +685,14 @@ export async function generateProductPDFExport(productData: Product) {
 							borderWidth: 0.5,
 						});
 
-						drawTextInCell(cell.text || "", currentX, y, cellWidth, rowHeight);
+						if (cell.imageUrl) {
+							drawImageInRow(
+								embeddedAssetMap.get(cell.imageUrl) || { placeholderText: "Image unavailable" },
+								y, rowHeight, currentX, cellWidth,
+							);
+						} else {
+							drawTextInCell(cell.text || "", currentX, y, cellWidth, rowHeight);
+						}
 						currentX += cellWidth;
 					});
 					dataRowCount += 1;
@@ -714,10 +739,11 @@ export async function generateProductPDFExport(productData: Product) {
 			"Label Components",
 			[
 				{ label: "Component #", widthPct: 0.14 },
-				{ label: "Description", widthPct: 0.38 },
+				{ label: "Description", widthPct: 0.26 },
 				{ label: "Label Type", widthPct: 0.18 },
 				{ label: "Dimensions", widthPct: 0.14 },
 				{ label: "Component Type", widthPct: 0.16 },
+				{ label: "Print Direction", widthPct: 0.12 },
 			],
 			labelComponentsRows,
 			true,
@@ -726,9 +752,10 @@ export async function generateProductPDFExport(productData: Product) {
 		drawTable(
 			"Symbols",
 			[
-				{ label: "Name", widthPct: 0.34 },
+				{ label: "Image", widthPct: 0.16 },
+				{ label: "Name", widthPct: 0.30 },
 				{ label: "Text Present", widthPct: 0.22 },
-				{ label: "Label Presence", widthPct: 0.44 },
+				{ label: "Label Presence", widthPct: 0.32 },
 			],
 			symbolsRows,
 			true,

@@ -1,13 +1,33 @@
-# AGENTS.md
-
-This guide provides instructions and conventions for agents operating in the uprevit-backend repository.
-
 - Use npm, not Bun or npx.
 - Use Git Flow for branching.
+- Frontend repo of this project is located at `../uprevit-ui`. If anything needs to be updated there, use this location and make the changes.
+- While creating files and folders, look at similar existing ones for naming and placement (e.g. handlers in `src/controllers/<domain>/`, shared helpers in `src/utils/`, one-off scripts in `src/scripts/`).
 - Keep Lambda handlers, API routes, environment variables, and IAM permissions aligned in `template.yaml`.
 - Tenant-scoped endpoints must derive workspace and user identity from `requireTenantContext`; do not trust client-supplied scope IDs.
 - Changes to Cognito-backed membership or lifecycle state must keep Cognito custom attributes and MongoDB user data in sync.
 - Return API responses with `ResponseWrapper` and log unexpected handler errors with `logError`.
-- Read `CONTEXT.md` before changing workspace membership, platform operations, or billing behavior.
 - Production deployments run through GitHub Actions; do not use `sam deploy --guided`.
 - To test the backend locally we have written two commands which are npm run dev and npm run dev:infra. To sync the changes to dev environment in AWS and then we hit that environment endpoint on frontend locally and we use this same envirnment and api endpoint for the develop branch deployed version which is dev-app.uprevit.com and dev.uprevit.com
+- Use Conventional Commit messages for commits, such as `feat: add editor toolbar` or `fix: preserve selection after insertion`.
+- Don't use phase wording inside PRs, branch names or commits, Phases and steps are part of internal emend development plan
+- PR title should be a concise, human-readable summary of the change in one line, without any reference to issue numbers or commit hashes.
+- PR description sould also be simple bullet points on what is done in it. Apart from this bullet points only more thing can be added which is which issue it closes if there is one. Don't add any bloated information.
+- Create github issue which will be closed by the PR that you are creating, and follow the same guidelines as PRs.
+- Add metadata information you can add for the PR and issue like type, labels, Develpment etc.
+- Don't write unnecessary comments in code
+- The Approval Workflow plan lives in `../uprevit-ui/workflow-plan/` (local-only; never commit or push it). Stage files by path, not `git add -A` / `git add .`.
+
+- Work on both repos in the same session (backend here, UI in `../uprevit-ui`), on the phase's branch in each repo. The backend change must stay compatible with the UI that is already merged.
+- Write clean, simple code: least code for the most functionality, reuse existing helpers in `src/utils/`, no overengineering.
+- Never commit or push until the user explicitly says so.
+- Before handing back, run all checks and fix every issue:
+  - `npm --prefix src run lint` and `npm --prefix src run type-check`
+  - The lint glob does not cover `src/scripts/`, so lint new scripts explicitly (`npm --prefix src exec -- eslint src/scripts/<file>.ts`).
+- Deploy to the dev stack (`uprevit-test`) before browser testing, because the local UI calls the dev API:
+  - `AWS_PROFILE=uprevit-amit npm run dev:infra` when `template.yaml` changes (new functions, routes, permissions); `npm run dev` for code-only changes.
+  - If the SSO token has expired, run `aws sso login --profile uprevit-amit` and let the user approve it.
+  - `sam sync` asks for a Y/n confirmation; answer yes only for the dev stack.
+- Data migration scripts go in `src/scripts/` with an npm script in `src/package.json`, must be safe to run twice, and must support `--dry-run`:
+  - Use `MONGODB_URI` / `DB_NAME` from `.sam-local-env.json` and confirm `DB_NAME` is the dev database (`uprevit-test`) before running.
+  - Always `--dry-run` first, check the counts/output, then do the real run on dev only, after the backend that understands the new data is deployed.
+- The app is pre-customer, so back-and-forth is fine, but do it properly.

@@ -18,7 +18,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
 
-		const { context } = tenantResult;
+		const { context, auth } = tenantResult;
 
 		if (!isWorkspaceAdmin(context.cognitoGroups)) {
 			return ResponseWrapper.forbidden('Insufficient permissions');
@@ -48,6 +48,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			targetUserId,
 			workspaceId: context.workspaceId,
 			actorUserId: context.userId,
+			auth: auth.payload,
 		});
 
 		const auditRecord: AuditLog = {

@@ -6,6 +6,7 @@ export type User = {
 	email: string;
 	profileAvatar?: string;
 	designation?: string;
+	unit?: string;
 	phone?: string;
 	userType?: 'user' | 'admin';
 	location?: string;

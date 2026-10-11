@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb';
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('../../utils/db', () => ({
 	getDb: jest.fn(),

@@ -147,7 +147,7 @@ async function aggregateProductActivity(
 		},
 		{
 			$addFields: {
-				isActiveProduct: { $ne: ['$product.status', 'archived'] },
+				isActiveProduct: { $ne: ['$product.is_archived', true] },
 			},
 		},
 		{

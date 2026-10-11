@@ -9,6 +9,12 @@ import { validateMissingFields } from "../../utils/validationUtils";
 import { createPresignedUrl, type UploadScope } from "../../utils/s3-storage";
 import type { Product } from "../../models/product";
 import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
+import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE } from "../../utils/productAccess";
+import { parseCognitoGroups } from "../../utils/tenantContext";
+import { ACTIVE_WORKFLOW_STATUSES } from "../../models/workflow";
+import { WORKFLOW_ATTACHMENT_MAX_BYTES } from "../../models/workflowDiscussion";
+import { canComment, getProductTeamIds } from "../../utils/workflowDiscussion";
+import { findWorkflow } from "../../utils/workflows";
 
 const PRODUCT_ASSET_CONTENT_TYPES = new Set([
 	"image/png",
@@ -40,7 +46,7 @@ const isAllowedContentType = (contentType: string, uploadScope: string): boolean
 };
 
 const resolveUploadScope = (value: unknown): UploadScope => {
-	if (value === "product-assets" || value === "source-files") return value;
+	if (value === "product-assets" || value === "source-files" || value === "workflow-attachments") return value;
 	return "workspace-assets";
 };
 
@@ -107,15 +113,33 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const product = await db.collection<Product>('products').findOne({
 				_id: new ObjectId(productId),
 				workspace_id: userContext.workspaceId,
-			}, { projection: { _id: 1 } });
+			}, { projection: { owner_user_id: 1, contributor_user_ids: 1 } });
 
 			if (!product) return ResponseWrapper.forbidden('You are not authorized to upload files for this product.');
+			const actor = { userId: userContext.userId, cognitoGroups: parseCognitoGroups(auth.payload['cognito:groups']) };
+			if (!canEditProduct(actor, product)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
+		}
+
+		let workflowId: string | undefined;
+		if (uploadScope === "workflow-attachments") {
+			if (sizeBytes && sizeBytes > WORKFLOW_ATTACHMENT_MAX_BYTES) return ResponseWrapper.badRequest('Each image must be 10 MB or smaller.');
+			const db = await getDb();
+			const workflow = await findWorkflow(db, userContext.workspaceId, typeof input.workflowId === "string" ? input.workflowId : undefined);
+			if (!workflow) return ResponseWrapper.notFound('Workflow not found.');
+			if (!ACTIVE_WORKFLOW_STATUSES.includes(workflow.status)) return ResponseWrapper.conflict('This workflow has already ended.');
+			const actor = { userId: userContext.userId, cognitoGroups: parseCognitoGroups(auth.payload['cognito:groups']) };
+			if (!canComment(actor, workflow, await getProductTeamIds(db, workflow))) {
+				return ResponseWrapper.forbidden('Only people involved in this workflow can attach images.');
+			}
+			workflowId = workflow._id!.toString();
 		}
 
 		const { uploadUrl, key } = await createPresignedUrl(input.fileName!, contentType, {
 			uploadScope,
 			workspaceId: userContext.workspaceId.toString(),
 			productId,
+			workflowId,
+			userId: userContext.userId.toString(),
 		});
 
 		return ResponseWrapper.created({ message: "Presigned URL generated successfully.", uploadUrl, key, expiresIn: 3600 });

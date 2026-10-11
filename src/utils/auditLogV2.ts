@@ -1,5 +1,5 @@
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
-import { type Db, ObjectId } from 'mongodb';
+import { type ClientSession, type Db, ObjectId } from 'mongodb';
 import {
 	AUDIT_LOG_V2_COLLECTION,
 	type AuditAction,
@@ -24,7 +24,7 @@ type ResolvedActorProfile = {
 const actorProfileCache = new Map<string, ResolvedActorProfile | null>();
 
 type AuditWhere = {
-	module: 'products' | 'projects' | 'departments' | 'source-files' | 'archive';
+	module: 'products' | 'projects' | 'departments' | 'source-files' | 'archive' | 'workflows';
 	tab?: string;
 	parentId?: string;
 };
@@ -50,6 +50,7 @@ export type RecordAuditEventInput = {
 	changes?: AuditLogV2Change[];
 	meta?: Record<string, unknown>;
 	occurredAt?: Date;
+	session?: ClientSession;
 };
 
 const parseGroups = (groups: unknown): string[] => {
@@ -266,7 +267,7 @@ export const recordAuditEvent = async (input: RecordAuditEventInput) => {
 			occurredAt: input.occurredAt ?? new Date(),
 		};
 
-		await collection.insertOne(payload);
+		await collection.insertOne(payload, { session: input.session });
 	} catch (error) {
 		const actor = getClaimString(input.auth, ['sub', 'email', 'username', 'cognito:username', 'name']) ?? 'unknown';
 		logError('Failed to record audit event', error, {
@@ -275,5 +276,6 @@ export const recordAuditEvent = async (input: RecordAuditEventInput) => {
 			action: input.action,
 			actor,
 		});
+		if (input.session) throw error;
 	}
 };

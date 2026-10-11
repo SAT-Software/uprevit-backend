@@ -54,7 +54,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const archivedProductsPromise = db.collection('products').countDocuments({
 			workspace_id: workspaceObjectId,
-			status: 'archived',
+			is_archived: true,
+			is_latest: true,
 		});
 
 		const projectAndProductStatsPromise = db.collection('projects').aggregate([
@@ -72,7 +73,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 						{
 							$match: {
 								$expr: { $eq: ['$project_id', '$$projectId'] },
-								status: { $ne: 'archived' }
+								is_archived: { $ne: true }
 							}
 						}
 					],

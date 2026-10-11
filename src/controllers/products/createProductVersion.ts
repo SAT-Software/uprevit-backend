@@ -2,10 +2,14 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
 import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
-import { getDb } from "../../utils/db";
+import { getDb, withTransaction } from "../../utils/db";
 import { Product } from "../../models/product";
 import { deepCopyWithFreshIds } from "../../utils/deepCopy";
 import { recordAuditEvent } from "../../utils/auditLogV2";
+import { canCreateVersion, LifecycleConflictError, productLineageFilter } from "../../utils/productLifecycle";
+import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError } from "../../utils/productAccess";
+
+const CREATE_VERSION_CONFLICT = 'A new version can only be created from the latest released version';
 
 
 /**
@@ -26,27 +30,38 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const db = await getDb();
 
-		const productFilter = {
-			...tenantObjectIdFilter(productId, context.workspaceId),
-			status: 'submitted' as const,
-			is_latest: true,
-		};
-
-		const currentProduct = await db.collection<Product>('products').findOne(productFilter);
-
-		if(!currentProduct) return ResponseWrapper.notFound('Product not found or not submitted to create new version');
-
-		const revisedProduct = deepCopyWithFreshIds(currentProduct);
-
-		const revisedUpdatedProduct =  {...revisedProduct, is_latest: true, parent_id: currentProduct._id, version: currentProduct.version + 1, status: 'draft' as const, complete_count: 0, target_date: null, actual_completion_date: null, product_information: {...revisedProduct.product_information, tab_completed: false}, compliance_information: {...revisedProduct.compliance_information, tab_completed: false}, languages_information: revisedProduct.languages_information || { data: [] }, label_components: {...revisedProduct.label_components, tab_completed: false}, symbols_graphics: {...revisedProduct.symbols_graphics, tab_completed: false}, product_data: {...revisedProduct.product_data, tab_completed: false}, operational_parameters: {...revisedProduct.operational_parameters, tab_completed: false}, label_tags: {...revisedProduct.label_tags, tab_completed: false}};
-
-		await db.collection<Product>('products').findOneAndUpdate(
-			tenantObjectIdFilter(currentProduct._id!, context.workspaceId),
-			{ $set: { is_latest: false } },
+		const currentProduct = await db.collection<Product>('products').findOne(
+			tenantObjectIdFilter(productId, context.workspaceId),
 		);
-       
-		const insertedProduct = await db.collection<Product>('products').insertOne(revisedUpdatedProduct);
-		
+
+		if(!currentProduct) return ResponseWrapper.notFound('Product not found');
+		if(!canEditProduct(context, currentProduct)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
+		if(!canCreateVersion(currentProduct)) {
+			return ResponseWrapper.conflict(CREATE_VERSION_CONFLICT);
+		}
+
+		// eslint-disable-next-line camelcase, no-unused-vars
+		const { released_at, obsoleted_at, legacy_release, released_by_workflow_id, active_workflow_id, content_revision, ...revisedProduct } = deepCopyWithFreshIds(currentProduct);
+
+		const revisedUpdatedProduct =  {...revisedProduct, product_lineage_id: productLineageFilter(currentProduct).product_lineage_id, is_latest: true, parent_id: currentProduct._id, version: currentProduct.version + 1, status: 'draft' as const, complete_count: 0, content_revision: 0, target_date: null, actual_completion_date: null, product_information: {...revisedProduct.product_information, tab_completed: false}, compliance_information: {...revisedProduct.compliance_information, tab_completed: false}, languages_information: revisedProduct.languages_information || { data: [] }, label_components: {...revisedProduct.label_components, tab_completed: false}, symbols_graphics: {...revisedProduct.symbols_graphics, tab_completed: false}, product_data: {...revisedProduct.product_data, tab_completed: false}, operational_parameters: {...revisedProduct.operational_parameters, tab_completed: false}, label_tags: {...revisedProduct.label_tags, tab_completed: false}};
+
+		const insertedProduct = await withTransaction(async (txDb, session) => {
+			const products = txDb.collection<Product>('products');
+			const claimed = await products.updateOne(
+				{ ...tenantObjectIdFilter(currentProduct._id!, context.workspaceId), is_latest: true, status: 'released', is_archived: { $ne: true } },
+				{ $set: { is_latest: false } },
+				{ session },
+			);
+			if (claimed.matchedCount === 0) throw new LifecycleConflictError(CREATE_VERSION_CONFLICT);
+			const source = await products.findOne(
+				{ _id: currentProduct._id },
+				{ projection: { owner_user_id: 1, contributor_user_ids: 1 }, session },
+			);
+			if (!source || !canEditProduct(context, source)) throw new ProductAccessError(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
+			revisedUpdatedProduct.owner_user_id = source.owner_user_id;
+			revisedUpdatedProduct.contributor_user_ids = source.contributor_user_ids ?? [];
+			return products.insertOne(revisedUpdatedProduct, { session });
+		});
 
 		await recordAuditEvent({
 			workspaceId: revisedUpdatedProduct.workspace_id.toString(),
@@ -80,6 +95,8 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			product: revisedUpdatedProduct,
 		});
 	} catch (error) {
+		if (error instanceof LifecycleConflictError) return ResponseWrapper.conflict(error.message);
+		if (error instanceof ProductAccessError) return ResponseWrapper.forbidden(error.message);
 		logError('Create product version handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to create product version');
 	}

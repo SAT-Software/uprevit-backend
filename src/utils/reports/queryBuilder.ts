@@ -23,6 +23,10 @@ export function validateCondition(condition: QueryCondition): APIGatewayProxyRes
 		);
 	}
 
+	if (condition.field === 'is_archived' && !['equals', 'not_equals'].includes(condition.operator)) {
+		return ResponseWrapper.badRequest(`Operator '${condition.operator}' is not supported for 'is_archived'. Use equals or not_equals`);
+	}
+
 	const isNoValueOperator = NO_VALUE_OPERATORS.includes(condition.operator);
 	const isArrayOperator = ['contains_any', 'contains_all'].includes(condition.operator);
 
@@ -113,6 +117,15 @@ function buildConditionQuery(condition: QueryCondition): Document {
 	const { tab, field, operator, value } = condition;
 	const operatorQuery = buildOperatorQuery(operator, value, field);
 
+	if (field === 'status' && value === 'archived' && (operator === 'equals' || operator === 'not_equals')) {
+		return buildConditionQuery({ ...condition, field: 'is_archived', value: 'true' });
+	}
+
+	if (field === 'is_archived') {
+		const archived = (operator === 'equals') === (value === 'true');
+		return { is_archived: archived ? true : { $ne: true } };
+	}
+
 	if (tab === 'root' || ROOT_FIELDS.includes(field)) {
 		if (operator === 'not_exists') {
 			return {
@@ -176,8 +189,19 @@ function buildConditionQuery(condition: QueryCondition): Document {
 	return { [fullPath]: operatorQuery };
 }
 
-function buildConditionsMatch(conditions: QueryCondition[], conditionLogic?: ConditionLogic): Document {
-	const conditionQueries = conditions.map(buildConditionQuery);
+/**
+ * Joins condition matches. When any condition has its own `logic`, they are chained left to right;
+ * otherwise all of them are joined with `conditionLogic`.
+ * @param {Array} conditions Conditions, each with an optional `logic`
+ * @param {Document[]} conditionQueries One match per condition
+ * @param {ConditionLogic} conditionLogic Logic used when no condition has its own
+ * @return {Document} Combined match
+ */
+export function combineConditionQueries(
+	conditions: { logic?: ConditionLogic }[],
+	conditionQueries: Document[],
+	conditionLogic?: ConditionLogic,
+): Document {
 	if (conditions.some((condition) => condition.logic)) {
 		let groupedQuery = conditionQueries[0];
 		for (let i = 1; i < conditionQueries.length; i += 1) {
@@ -194,6 +218,10 @@ function buildConditionsMatch(conditions: QueryCondition[], conditionLogic?: Con
 	return {
 		[logicOperator]: conditionQueries,
 	};
+}
+
+function buildConditionsMatch(conditions: QueryCondition[], conditionLogic?: ConditionLogic): Document {
+	return combineConditionQueries(conditions, conditions.map(buildConditionQuery), conditionLogic);
 }
 
 function buildParentLookups(conditions: QueryCondition[], workspaceId: ObjectId): Document[] {
