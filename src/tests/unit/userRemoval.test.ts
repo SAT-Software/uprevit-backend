@@ -2,9 +2,15 @@ import { ObjectId } from 'mongodb';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 
-jest.mock('../../utils/db', () => ({
-	getDb: jest.fn(),
-}));
+const mockSession = {};
+
+jest.mock('../../utils/db', () => {
+	const getDb = jest.fn();
+	return {
+		getDb,
+		withTransaction: jest.fn(async (fn: (db: unknown, session: unknown) => Promise<unknown>) => fn(await getDb(), mockSession)),
+	};
+});
 
 jest.mock('../../utils/authUtils', () => ({
 	authenticateRequest: jest.fn(),
@@ -154,6 +160,7 @@ describe('userRemoval', () => {
 			expect.objectContaining({
 				$set: expect.objectContaining({ status: 'inactive' }),
 			}),
+			{ session: mockSession },
 		);
 		expect(inviteUtils.deleteCognitoInviteUser).not.toHaveBeenCalled();
 	});
