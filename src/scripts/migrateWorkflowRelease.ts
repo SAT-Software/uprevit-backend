@@ -9,8 +9,8 @@ import { migrateProductLifecycle } from './migrateProductLifecycle';
  * Runs the 0.8.0 data migrations on a deployed environment: the product lifecycle migration, then the Product Owner
  * backfill. Targets match the GitHub deploy environments, and the MongoDB URI is read from SSM and never printed.
  * It only plans (dry run) unless `--apply` repeats the target database name. Both steps are safe to run twice.
- * A database without products is accepted as an empty environment only after the deployed backend is confirmed to use
- * the same URI and database, and no other database on the cluster differs from it only by case.
+ * Before connecting, it confirms the deployed backend uses the same URI and database. A database without products is
+ * accepted as an empty environment only if no other database on the cluster differs from it only by case.
  *
  * Usage: AWS_PROFILE=... npm run migrate:workflow-release -- --target prod|demo|dev [--apply <DB_NAME>]
  */
@@ -78,6 +78,7 @@ const main = async () => {
 	}
 	const uriDbName = decodeURIComponent(uriPath.slice(1));
 	if (uriDbName && uriDbName !== target.dbName) throw new Error(`The SSM URI for ${target.name} names a different database`);
+	assertDeployedTarget(target, region);
 
 	const client = new MongoClient(mongoUri, { serverApi: ServerApiVersion.v1 });
 	await client.connect();
@@ -86,7 +87,6 @@ const main = async () => {
 		console.log(`Target ${target.name} (database ${target.dbName}), ${dryRun ? 'dry run: nothing is written' : 'applying changes'}`);
 
 		if (await db.collection('products').countDocuments({}, { limit: 1 }) === 0) {
-			assertDeployedTarget(target, region);
 			const { databases } = await client.db().admin().listDatabases({ nameOnly: true });
 			const lookalikes = databases.map(({ name }) => name)
 				.filter((name) => name !== target.dbName && name.toLowerCase() === target.dbName.toLowerCase());
