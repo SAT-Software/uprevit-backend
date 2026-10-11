@@ -85,5 +85,6 @@ export type Workflow = {
 	contentUpdatedAt?: Date;
 	remindedAt?: Date;
 	assignmentsCheckedAt?: Date;
+	assignmentsRevision?: number;
 	endedBy?: WorkflowActorSnapshot;
 };

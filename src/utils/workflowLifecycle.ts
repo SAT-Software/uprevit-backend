@@ -9,6 +9,7 @@ import {
 	WORKFLOWS_COLLECTION,
 	type Workflow,
 	type WorkflowActorSnapshot,
+	type WorkflowAssignment,
 } from '../models/workflow';
 import { WORKFLOW_DISCUSSION_COLLECTION, type WorkflowDiscussionItem } from '../models/workflowDiscussion';
 import { WORKFLOW_EVENTS_COLLECTION, type WorkflowEvent } from '../models/workflowEvent';
@@ -17,6 +18,7 @@ import { withTransaction } from './db';
 import { logError } from './logger';
 import { notify, type NotifyInput } from './notifications';
 import { releaseVersions } from './productLifecycle';
+import { isStillEligible } from './workflows';
 
 export const WORKFLOW_REASON_MAX_LENGTH = 1000;
 
@@ -47,6 +49,27 @@ export const getActorSnapshot = async (db: Db, workspaceId: ObjectId, userId: Ob
 		{ projection: { name: 1, email: 1 } },
 	);
 	return user ? { userId, name: user.name, email: user.email } : null;
+};
+
+/**
+ * Re-checks inside a decision transaction that the approver is still an active member and, for Product Team, still on
+ * the Product's team. Team and membership changes write the affected workflows in their own transaction (see
+ * `touchActiveWorkflows`), so a decision that read the old state conflicts and retries instead of committing.
+ * @param {Db} db Transaction database handle
+ * @param {ObjectId} workspaceId Workspace id
+ * @param {WorkflowAssignment} assignment The approver's assignment
+ * @param {ClientSession} session Transaction session
+ * @return {Promise<void>} Resolves when the approver may decide; throws `WorkflowConflictError` otherwise
+ */
+export const assertCanDecide = async (db: Db, workspaceId: ObjectId, assignment: WorkflowAssignment, session: ClientSession) => {
+	const member = await db.collection<User>('users').findOne(
+		{ _id: assignment.userId, workspaceId, status: 'active' },
+		{ projection: { _id: 1 }, session },
+	);
+	if (!member) throw new WorkflowConflictError('Only active members can decide');
+	if (!(await isStillEligible(db, workspaceId, assignment, session))) {
+		throw new WorkflowConflictError('You are no longer on this Product\'s team, so you can\'t decide for it.');
+	}
 };
 
 /**
@@ -213,6 +236,7 @@ export const endWorkflowWithoutRelease = async ({ db, workflow, outcome, actor, 
 	const events = await workflowEvents(db);
 
 	const ended = await withTransaction(async (txDb, session) => {
+		if (assignment) await assertCanDecide(txDb, workflow.workspaceId, assignment, session);
 		const contentCheckpoint = assignment ? await getContentCheckpoint(txDb, workflow, session) : undefined;
 		const updated = await txDb.collection<Workflow>(WORKFLOWS_COLLECTION).findOneAndUpdate(
 			{
