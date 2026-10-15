@@ -6,9 +6,9 @@ The main infrastructure entrypoint is `template.yaml`, and the application code 
 
 ## Current Release
 
-**0.8.0** supports the Uprevit Beta app with approval workflows, product ownership, lifecycle tracking, and in-app and email notifications. Submitting a product marks it Submitted; completing an approval workflow releases its included versions together and makes earlier releases Obsolete.
+**0.9.0** adds private PostHog Support APIs with screenshot attachments and the workspace session replay setting, and includes bookmarked versions in product exports by default.
 
-The release also includes workflow image attachments, advanced search, product-team permissions, and product export improvements. See [CHANGELOG.md](./CHANGELOG.md) for the full release notes. Use it with the matching `0.8.0` UI release.
+See [CHANGELOG.md](./CHANGELOG.md) for the full release notes. Use it with the matching `0.9.0` UI release.
 
 ## Environment Variables
 
@@ -105,7 +105,7 @@ Recommended release flow:
 5. Create the release tag
 6. Merge `main` back into `develop`
 
-Keep release versions aligned with `../uprevit-ui`, and merge and verify the backend before the UI. For this release, use `release/0.8.0` and create the `v0.8.0` tag after production verification.
+Keep release versions aligned with `../uprevit-ui`, and merge and verify the backend before the UI. For this release, use `release/0.9.0` and create the `v0.9.0` tag after production verification. After `main` deploys, fast-forward `demo` to the same `main` commit so both environments run the same SHA.
 
 Existing databases need the product lifecycle migration (`src/scripts/migrateProductLifecycle.ts`) and Product Owner backfill (`src/scripts/backfillProductOwners.ts`). Rehearse both on dev with `--dry-run` first and verify their counts. The lifecycle migration maps legacy Submitted versions to Released or Obsolete and separates archiving from status; the owner backfill preserves existing owners and fills missing ones from the creator or an active workspace admin.
 

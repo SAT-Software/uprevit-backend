@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-15
+
+### Added
+
+- Added private PostHog Support APIs for conversations, replies, and screenshot attachments, with per-user upload quotas.
+- Added the workspace session replay setting.
+
+### Fixed
+
+- Fixed product exports to include bookmarked versions by default.
+
 ## [0.8.0] - 2026-10-10
 
 ### Added
