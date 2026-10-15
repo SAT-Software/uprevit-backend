@@ -35,6 +35,7 @@ export const normalizeSupportEmail = (email: string): string => email.trim().toL
 
 /**
  * Signs the Support identity with the PostHog Support secret, or returns null when the secret is not configured.
+ * @param {string} distinctId PostHog distinct ID
  */
 export const createSupportIdentityHash = async (distinctId: string): Promise<string | null> => {
 	const secret = await readSecureParameter(process.env.POSTHOG_SUPPORT_SECRET_PARAM);
@@ -49,6 +50,7 @@ const getSupportReviewerEmails = async (): Promise<Set<string>> => {
 
 /**
  * Allows only Cognito users whose verified email is on the reviewer allowlist. Workspace membership is never consulted.
+ * @param {APIGatewayProxyEvent} event API Gateway event
  */
 export const requireSupportReviewer = async (
 	event: APIGatewayProxyEvent,

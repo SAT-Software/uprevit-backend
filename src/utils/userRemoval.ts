@@ -27,7 +27,12 @@ import { flagUnavailableAssignments, touchActiveWorkflows } from './workflowAssi
 
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
+/** Raised when a user cannot be removed. */
 export class UserRemovalError extends Error {
+	/**
+	 * @param {string} message Error message
+	 * @param {string} code Failure reason
+	 */
 	constructor(
 		message: string,
 		public readonly code: 'not_found' | 'already_inactive' | 'last_admin' | 'invalid_status',
@@ -37,7 +42,11 @@ export class UserRemovalError extends Error {
 	}
 }
 
+/** Raised when a user cannot be reactivated. */
 export class UserReactivationError extends Error {
+	/**
+	 * @param {string} message Error message
+	 */
 	constructor(message: string) {
 		super(message);
 		this.name = 'UserReactivationError';

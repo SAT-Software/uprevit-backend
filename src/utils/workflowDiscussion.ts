@@ -134,11 +134,23 @@ export const getProductTeamIds = async (db: Db, workflow: Workflow) => {
 	return teams;
 };
 
-/** The people who can address a request in this scope: one Product's team, or every Product's team for the whole workflow. */
+/**
+ * The people who can address a request in this scope: one Product's team, or every Product's team for the whole workflow.
+ * @param {Map<string, ObjectId[]>} teams Product teams from `getProductTeamIds`
+ * @param {WorkflowDiscussionScope} scope Request scope
+ * @return {ObjectId[]} Team member IDs
+ */
 export const scopeTeamIds = (teams: Map<string, ObjectId[]>, scope: WorkflowDiscussionScope) =>
 	scope.type === 'product' ? teams.get(scope.lineageId.toString()) ?? [] : [...teams.values()].flat();
 
-/** Whether the caller may mark a request addressed: the Initiator, or an owner or contributor of a Product in its scope. */
+/**
+ * Whether the caller may mark a request addressed: the Initiator, or an owner or contributor of a Product in its scope.
+ * @param {ObjectId} userId Caller ID
+ * @param {Workflow} workflow Workflow
+ * @param {Map<string, ObjectId[]>} teams Product teams from `getProductTeamIds`
+ * @param {WorkflowDiscussionScope} scope Request scope
+ * @return {boolean} True when the caller may address the request
+ */
 export const canAddressRequest = (userId: ObjectId, workflow: Workflow, teams: Map<string, ObjectId[]>, scope: WorkflowDiscussionScope) =>
 	workflow.initiator.userId.equals(userId) || scopeTeamIds(teams, scope).some((id) => id.equals(userId));
 
