@@ -20,3 +20,11 @@ export type SupportAttachment = {
 	createdAt: Date;
 	readyAt?: Date;
 };
+
+export const SUPPORT_ATTACHMENT_QUOTA_COLLECTION = 'supportAttachmentQuotas';
+
+export type SupportAttachmentQuota = {
+	_id?: ObjectId;
+	userId: ObjectId;
+	uploads: number[];
+};

@@ -11,7 +11,12 @@ import {
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { requireTenantContext } from '../../utils/tenantContext';
-import { createSupportAttachmentUpload, supportAttachmentKey } from '../../utils/supportAttachments';
+import {
+	createSupportAttachmentUpload,
+	ensureSupportAttachmentIndexes,
+	reserveSupportAttachmentUpload,
+	supportAttachmentKey,
+} from '../../utils/supportAttachments';
 
 const HOURLY_UPLOAD_LIMIT = 40;
 
@@ -48,21 +53,16 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Each screenshot must be 5 MB or smaller.');
 		}
 
-		const db = await getDb();
-		const collection = db.collection<SupportAttachment>(SUPPORT_ATTACHMENT_COLLECTION);
-
-		const recentUploads = await collection.countDocuments({
-			userId: context.userId,
-			createdAt: { $gte: new Date(Date.now() - 60 * 60 * 1000) },
-		});
-		if (recentUploads >= HOURLY_UPLOAD_LIMIT) {
+		await ensureSupportAttachmentIndexes();
+		if (!(await reserveSupportAttachmentUpload(context.userId, HOURLY_UPLOAD_LIMIT))) {
 			return ResponseWrapper.custom(429, { message: 'Too many screenshots uploaded. Please try again later.' });
 		}
 
 		const attachmentId = crypto.randomUUID();
 		const key = supportAttachmentKey(attachmentId);
 
-		await collection.insertOne({
+		const db = await getDb();
+		await db.collection<SupportAttachment>(SUPPORT_ATTACHMENT_COLLECTION).insertOne({
 			attachmentId,
 			key,
 			workspaceId: context.workspaceId,

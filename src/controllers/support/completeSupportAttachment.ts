@@ -4,7 +4,11 @@ import { SUPPORT_ATTACHMENT_COLLECTION, type SupportAttachment } from '../../mod
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { requireTenantContext } from '../../utils/tenantContext';
-import { SUPPORT_ATTACHMENT_ID_PATTERN, verifySupportAttachmentObject } from '../../utils/supportAttachments';
+import {
+	SUPPORT_ATTACHMENT_ID_PATTERN,
+	ensureSupportAttachmentIndexes,
+	verifySupportAttachmentObject,
+} from '../../utils/supportAttachments';
 
 /**
  * Verifies the caller's uploaded support screenshot and marks it ready to be linked from a ticket.
@@ -22,6 +26,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.notFound('Screenshot not found');
 		}
 
+		await ensureSupportAttachmentIndexes();
 		const db = await getDb();
 		const collection = db.collection<SupportAttachment>(SUPPORT_ATTACHMENT_COLLECTION);
 		const ownerFilter = { attachmentId, userId: context.userId, workspaceId: context.workspaceId };

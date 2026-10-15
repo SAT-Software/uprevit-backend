@@ -8,6 +8,7 @@ import {
 	SUPPORT_ATTACHMENT_ID_PATTERN,
 	SUPPORT_ATTACHMENT_VIEW_EXPIRES_IN_SECONDS,
 	createSupportAttachmentViewUrl,
+	ensureSupportAttachmentIndexes,
 } from '../../utils/supportAttachments';
 
 /**
@@ -25,6 +26,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.notFound('Screenshot not found');
 		}
 
+		await ensureSupportAttachmentIndexes();
 		const db = await getDb();
 		const attachment = await db.collection<SupportAttachment>(SUPPORT_ATTACHMENT_COLLECTION).findOne(
 			{ attachmentId, ready: true },
