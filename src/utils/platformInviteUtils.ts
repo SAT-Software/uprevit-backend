@@ -14,7 +14,11 @@ const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGI
 
 export const normalizeInviteEmail = (email: string): string => email.trim().toLowerCase();
 
+/** Raised when an invite email is already in use. */
 export class InviteEmailConflictError extends Error {
+	/**
+	 * @param {string} message Error message
+	 */
 	constructor(message: string) {
 		super(message);
 		this.name = 'InviteEmailConflictError';
@@ -23,6 +27,7 @@ export class InviteEmailConflictError extends Error {
 
 /**
  * Returns true when a Cognito user already exists for the email.
+ * @param {string} email Email address
  */
 export const cognitoUserExists = async (email: string): Promise<boolean> => {
 	try {
@@ -39,6 +44,8 @@ export const cognitoUserExists = async (email: string): Promise<boolean> => {
 
 /**
  * Rejects emails already tied to any workspace or a pending provision (Cognito-only admin).
+ * @param {Db} db Database
+ * @param {string} email Email address
  */
 export const assertEmailAvailableForProvisionInvite = async (
 	db: Db,
@@ -60,6 +67,9 @@ export const assertEmailAvailableForProvisionInvite = async (
 
 /**
  * Rejects emails tied to a different workspace.
+ * @param {Db} db Database
+ * @param {string} email Email address
+ * @param {ObjectId} workspaceId Target workspace ID
  */
 export const assertEmailAvailableForWorkspaceAdminInvite = async (
 	db: Db,
@@ -98,6 +108,9 @@ export const assertEmailAvailableForWorkspaceAdminInvite = async (
 /**
  * Rejects emails tied to a different workspace for member invites.
  * Inactive members in the same workspace are allowed (reactivation path).
+ * @param {Db} db Database
+ * @param {string} email Email address
+ * @param {ObjectId} workspaceId Target workspace ID
  */
 export const assertEmailAvailableForWorkspaceMemberInvite = async (
 	db: Db,
@@ -151,6 +164,7 @@ export type CreateInvitedCognitoUserInput = {
 
 /**
  * Creates a Cognito user, sets attributes, and adds them to a group.
+ * @param {CreateInvitedCognitoUserInput} input Invited user details
  */
 export const createInvitedCognitoUser = async (
 	input: CreateInvitedCognitoUserInput,
@@ -187,6 +201,7 @@ export const createInvitedCognitoUser = async (
 
 /**
  * Removes a Cognito user created during an invite flow (best-effort rollback).
+ * @param {string} email Email address
  */
 export const deleteCognitoInviteUser = async (email: string): Promise<void> => {
 	try {
