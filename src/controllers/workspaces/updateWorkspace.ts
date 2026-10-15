@@ -41,9 +41,10 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			return ResponseWrapper.badRequest('Invalid JSON in request body');
 		}
 
-		const workflowSettingsOnly = input.defaultWorkflowCompletionMode !== undefined && input.workspaceName === undefined;
+		const settingsOnly = input.workspaceName === undefined
+			&& (input.defaultWorkflowCompletionMode !== undefined || input.supportReplayEnabled !== undefined);
 		const missingFieldsResult = validateMissingFields({
-			...(!workflowSettingsOnly && { 'workspaceName': input.workspaceName }),
+			...(!settingsOnly && { 'workspaceName': input.workspaceName }),
 			'_id': input._id!.toString(),
 		});
 		
@@ -84,7 +85,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const userObjectIds = input.userIds ? input.userIds.map((userId) => new ObjectId(userId)) : [];
 		const normalizedLogo = normalizePersistedAssetReference(input.logo, workspaceRecord.logo ?? '');
 
-		const updateFields: Partial<Workspace> = workflowSettingsOnly ? {} : {
+		const updateFields: Partial<Workspace> = settingsOnly ? {} : {
 			workspaceName: input.workspaceName,
 			companyName: input.companyName,
 			description: input.description,
@@ -106,6 +107,13 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 				return ResponseWrapper.badRequest(`defaultWorkflowCompletionMode must be one of: ${WORKFLOW_COMPLETION_MODES.join(', ')}`);
 			}
 			updateFields.defaultWorkflowCompletionMode = input.defaultWorkflowCompletionMode;
+		}
+
+		if (input.supportReplayEnabled !== undefined) {
+			if (typeof input.supportReplayEnabled !== 'boolean') {
+				return ResponseWrapper.badRequest('supportReplayEnabled must be a boolean');
+			}
+			updateFields.supportReplayEnabled = input.supportReplayEnabled;
 		}
 
 		const workspace = await db.collection<Workspace>('workspaces').updateOne(

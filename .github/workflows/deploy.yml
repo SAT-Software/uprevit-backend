@@ -81,6 +81,9 @@ jobs:
       DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM: ${{ vars.DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM }}
       SES_FROM_ADDRESS: ${{ vars.SES_FROM_ADDRESS }}
       APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      SUPPORT_REVIEWER_EMAILS_PARAM: ${{ vars.SUPPORT_REVIEWER_EMAILS_PARAM }}
+      POSTHOG_SUPPORT_SECRET_PARAM: ${{ vars.POSTHOG_SUPPORT_SECRET_PARAM }}
+      SUPPORT_ATTACHMENTS_ALLOWED_ORIGINS: ${{ vars.SUPPORT_ATTACHMENTS_ALLOWED_ORIGINS }}
     
     permissions:
       id-token: write
@@ -168,6 +171,9 @@ jobs:
               "ChargebeeSsoAddonItemPriceIdYearly": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY", ""),
               "SesFromAddress": os.environ.get("SES_FROM_ADDRESS", ""),
               "AppBaseUrl": os.environ.get("APP_BASE_URL", ""),
+              "SupportReviewerEmailsParam": os.environ.get("SUPPORT_REVIEWER_EMAILS_PARAM", ""),
+              "PosthogSupportSecretParam": os.environ.get("POSTHOG_SUPPORT_SECRET_PARAM", ""),
+              "SupportAttachmentsAllowedOrigins": os.environ.get("SUPPORT_ATTACHMENTS_ALLOWED_ORIGINS", ""),
           }
 
           for key, value in parameters.items():
