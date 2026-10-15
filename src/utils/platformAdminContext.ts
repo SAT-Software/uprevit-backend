@@ -34,6 +34,7 @@ const normalizeEmail = (email: string): string => email.trim().toLowerCase();
  * Validates Cognito platform-admin group, active platformAdmins registry row,
  * and an active workspace users row (dual-hat operators only in Phase 1).
  * Does not use tenant workspace context.
+ * @param {APIGatewayProxyEvent} event API Gateway event
  */
 export const requirePlatformOperator = async (
 	event: APIGatewayProxyEvent,

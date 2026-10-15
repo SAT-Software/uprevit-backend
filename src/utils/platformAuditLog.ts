@@ -84,6 +84,7 @@ export type RecordPlatformAuditEventInput = {
 
 /**
  * Appends a platform audit log entry.
+ * @param {RecordPlatformAuditEventInput} input Audit event details
  */
 export const recordPlatformAuditEvent = async (input: RecordPlatformAuditEventInput): Promise<void> => {
 	try {

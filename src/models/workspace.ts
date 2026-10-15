@@ -27,4 +27,5 @@ export type Workspace = {
 	memberListIncludeInactive?: boolean;
 	workflowPrefix?: string;
 	defaultWorkflowCompletionMode?: WorkflowCompletionMode;
+	supportReplayEnabled?: boolean;
 };

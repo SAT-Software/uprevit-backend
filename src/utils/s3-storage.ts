@@ -8,7 +8,11 @@ export type TenantUploadSigningOptions = {
 	pendingOwnerId?: string;
 };
 
+/** Raised when an upload key is outside the caller's workspace scope. */
 export class TenantUploadKeyError extends Error {
+	/**
+	 * @param {string} message Error message
+	 */
 	constructor(message: string) {
 		super(message);
 		this.name = "TenantUploadKeyError";
@@ -125,6 +129,9 @@ const normalizeKey = (key: unknown): string | null => {
 
 /**
  * Returns true when the uploads-bucket key is scoped to the workspace or an allowed pending path.
+ * @param {string} key Uploads-bucket object key
+ * @param {TenantUploadSigningOptions} options Workspace and pending-owner scope
+ * @return {boolean} True when the key is allowed
  */
 export const isTenantUploadKeyAllowed = (
 	key: string,
@@ -179,6 +186,7 @@ export const createPresignedGetUrl = async (
 /**
  * Reads an uploaded object's stored type and size, or null when it does not exist. Without ListBucket, S3 reports a
  * missing key as 403.
+ * @param {string} key Uploads-bucket object key
  */
 export const headUploadObject = async (key: string) => {
 	try {

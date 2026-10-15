@@ -103,6 +103,18 @@ Parameters:
     Type: String
     Description: "Web app base URL used for links in notification emails, e.g. https://app.uprevit.com"
     Default: ""
+  SupportReviewerEmailsParam:
+    Type: String
+    Description: "SSM Parameter Store path (SecureString) for comma-separated support reviewer emails, e.g. /uprevit/dev/support/reviewer-emails; empty denies all"
+    Default: ""
+  PosthogSupportSecretParam:
+    Type: String
+    Description: "SSM Parameter Store path (SecureString) for the PostHog Support secret API key, e.g. /uprevit/dev/support/identity-secret"
+    Default: ""
+  SupportAttachmentsAllowedOrigins:
+    Type: String
+    Description: "Comma-separated frontend origins (no spaces) allowed to upload support screenshots, e.g. https://app.uprevit.com; empty blocks browser uploads"
+    Default: ""
 
 # ──────────────────────────────────────────────────────────────────────────
 # TOP-LEVEL METADATA  – YAML anchor for the build recipe
@@ -158,6 +170,9 @@ Globals:
 Conditions:
   HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]
   UseDocumentationCloudFrontPrivateKey: !Not [!Equals [!Ref DocumentationCloudFrontPrivateKeyParam, ""]]
+  HasSupportReviewerEmailsParam: !Not [!Equals [!Ref SupportReviewerEmailsParam, ""]]
+  HasPosthogSupportSecretParam: !Not [!Equals [!Ref PosthogSupportSecretParam, ""]]
+  HasSupportAttachmentsAllowedOrigins: !Not [!Equals [!Ref SupportAttachmentsAllowedOrigins, ""]]
 
 Resources:
   HelloWorldFunction:
@@ -2390,6 +2405,179 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/platformAdmin/downloadBillingInvoice.ts]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # SUPPORT
+  # ──────────────────────────────────────────────────────────────────────────
+
+  SupportAttachmentsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-support-attachments-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      CorsConfiguration: !If
+        - HasSupportAttachmentsAllowedOrigins
+        - CorsRules:
+            - AllowedOrigins: !Split [",", !Ref SupportAttachmentsAllowedOrigins]
+              AllowedMethods:
+                - POST
+              MaxAge: 3000
+        - !Ref AWS::NoValue
+
+  SupportAttachmentsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SupportAttachmentsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: "s3:*"
+            Resource:
+              - !GetAtt SupportAttachmentsBucket.Arn
+              - !Sub "${SupportAttachmentsBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  GetSupportConfigFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/support/getSupportConfig.lambdaHandler
+      Environment:
+        Variables:
+          POSTHOG_SUPPORT_SECRET_PARAM: !Ref PosthogSupportSecretParam
+      Policies:
+        - !If
+          - HasPosthogSupportSecretParam
+          - Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${PosthogSupportSecretParam}"
+          - !Ref AWS::NoValue
+      Events:
+        GetSupportConfig:
+          Type: Api
+          Properties:
+            Path: /support/config
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/support/getSupportConfig.ts]
+
+  CreateSupportAttachmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/support/createSupportAttachment.lambdaHandler
+      Environment:
+        Variables:
+          SUPPORT_ATTACHMENTS_BUCKET: !Ref SupportAttachmentsBucket
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub "${SupportAttachmentsBucket.Arn}/attachments/*"
+      Events:
+        CreateSupportAttachment:
+          Type: Api
+          Properties:
+            Path: /support/attachments
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/support/createSupportAttachment.ts]
+
+  CompleteSupportAttachmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/support/completeSupportAttachment.lambdaHandler
+      Environment:
+        Variables:
+          SUPPORT_ATTACHMENTS_BUCKET: !Ref SupportAttachmentsBucket
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetObjectVersion
+              Resource: !Sub "${SupportAttachmentsBucket.Arn}/attachments/*"
+      Events:
+        CompleteSupportAttachment:
+          Type: Api
+          Properties:
+            Path: /support/attachments/{id}/complete
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/support/completeSupportAttachment.ts]
+
+  GetSupportAttachmentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/support/getSupportAttachment.lambdaHandler
+      Environment:
+        Variables:
+          SUPPORT_ATTACHMENTS_BUCKET: !Ref SupportAttachmentsBucket
+          SUPPORT_REVIEWER_EMAILS_PARAM: !Ref SupportReviewerEmailsParam
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetObjectVersion
+              Resource: !Sub "${SupportAttachmentsBucket.Arn}/attachments/*"
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+              Resource: !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+        - !If
+          - HasSupportReviewerEmailsParam
+          - Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${SupportReviewerEmailsParam}"
+          - !Ref AWS::NoValue
+      Events:
+        GetSupportAttachment:
+          Type: Api
+          Properties:
+            Path: /support/attachments/{id}
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/support/getSupportAttachment.ts]
 
   # ──────────────────────────────────────────────────────────────────────────
   # S3 STORAGE

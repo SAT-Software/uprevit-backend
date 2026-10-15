@@ -34,6 +34,8 @@ Documentation video CloudFront signing (on `GetDocumentationVideoSignedUrlFuncti
 - `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY`: PEM private key (`env.json` locally — do not commit; deployed Lambdas load the PEM from SSM at runtime using `DOCUMENTATION_CLOUDFRONT_PRIVATE_KEY_PARAM`)
 - `EXPORT_JOB_QUEUE_URL`: The SQS queue URL used by export jobs
 
+Support functions (PostHog Support, screenshots and reviewer access) use `SUPPORT_ATTACHMENTS_BUCKET`, `POSTHOG_SUPPORT_SECRET_PARAM` and `SUPPORT_REVIEWER_EMAILS_PARAM`. See [SUPPORT.md](SUPPORT.md) for setup.
+
 AWS SAM `--env-vars` expects Lambda environment variable names, not CloudFormation parameter names like `MongoDbUri` or `UserPoolId`.
 The local helper script normalizes your ignored `env.json` into `.sam-local-env.json` before startup.
 
