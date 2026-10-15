@@ -105,7 +105,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (listQueryResult.error) return listQueryResult.error;
 
 		const { limit, page, skip, sort, order, filters } = listQueryResult.value!;
-		const isLatest = event.queryStringParameters?.isLatest !== 'false';
+		const isLatest = event.queryStringParameters?.isLatest === 'true';
 		const statusFilter = event.queryStringParameters?.status;
 		const filterParam = event.queryStringParameters?.filter;
 		const requestedWorkspaceId = event.queryStringParameters?.workspaceId;
