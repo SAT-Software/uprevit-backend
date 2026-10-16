@@ -13,6 +13,7 @@ import {
 	markExportJobProcessing,
 } from '../../utils/exportJobs';
 import { logError, logInfo, logWarn } from '../../utils/logger';
+import { emitMonitoringMetric } from '../../utils/metrics';
 import { generateReportsExcelExport } from '../../utils/reports/exportReportsExcel';
 import { generateReportsPDFExport } from '../../utils/reports/exportReportsPDF';
 import { buildExportPipeline } from '../../utils/reports/queryBuilder';
@@ -272,6 +273,7 @@ export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> 
 						jobId,
 						errorMessage: 'Product not found for export job',
 					});
+					emitMonitoringMetric('ExportJobFailed');
 					continue;
 				}
 
@@ -324,6 +326,10 @@ export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> 
 					jobId: new ObjectId(parsedMessage.jobId),
 					errorMessage: toFailureMessage(error),
 				});
+			}
+
+			if (shouldStopRetry) {
+				emitMonitoringMetric('ExportJobFailed');
 			}
 
 			logError('Failed to process export queue record', error, {
