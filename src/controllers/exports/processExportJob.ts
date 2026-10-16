@@ -269,12 +269,7 @@ export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> 
 				});
 
 				if (!product) {
-					await markExportJobFailed({
-						jobId,
-						errorMessage: 'Product not found for export job',
-					});
-					emitMonitoringMetric('ExportJobFailed');
-					continue;
+					throw new NonRetryableExportJobError('Product not found for export job');
 				}
 
 				artifact = await generateProductArtifact({
@@ -321,15 +316,15 @@ export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> 
 			const isNonRetryable = isNonRetryableError(error);
 			const shouldStopRetry = isNonRetryable || receiveCount >= MAX_RECEIVE_COUNT;
 
+			if (shouldStopRetry) {
+				emitMonitoringMetric('ExportJobFailed');
+			}
+
 			if (parsedMessage?.jobId && shouldStopRetry && ObjectId.isValid(parsedMessage.jobId)) {
 				await markExportJobFailed({
 					jobId: new ObjectId(parsedMessage.jobId),
 					errorMessage: toFailureMessage(error),
 				});
-			}
-
-			if (shouldStopRetry) {
-				emitMonitoringMetric('ExportJobFailed');
 			}
 
 			logError('Failed to process export queue record', error, {
