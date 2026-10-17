@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-17
+
+### Added
+
+- Added an API health endpoint that checks database connectivity.
+- Added optional CloudWatch alarms and email alerts for API errors, export queue delays, export failures, and billing usage sync issues.
+- Added an optional Better Stack heartbeat for the scheduled billing usage retry job.
+
+### Fixed
+
+- Recorded terminal export failure metrics before saving the failed job status.
+
 ## [0.9.0] - 2026-10-15
 
 ### Added

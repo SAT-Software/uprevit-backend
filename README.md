@@ -6,9 +6,9 @@ The main infrastructure entrypoint is `template.yaml`, and the application code 
 
 ## Current Release
 
-**0.9.0** adds private PostHog Support APIs with screenshot attachments and the workspace session replay setting, and includes bookmarked versions in product exports by default.
+**0.9.1** adds an API health endpoint and monitoring for API errors, export failures, and billing usage sync, with optional email alerts and a scheduled-job heartbeat.
 
-See [CHANGELOG.md](./CHANGELOG.md) for the full release notes. Use it with the matching `0.9.0` UI release.
+See [CHANGELOG.md](./CHANGELOG.md) for the full release notes. Use it with the matching `0.9.1` UI release.
 
 ## Environment Variables
 
@@ -105,7 +105,7 @@ Recommended release flow:
 5. Create the release tag
 6. Merge `main` back into `develop`
 
-Keep release versions aligned with `../uprevit-ui`, and merge and verify the backend before the UI. For this release, use `release/0.9.0` and create the `v0.9.0` tag after production verification. After `main` deploys, fast-forward `demo` to the same `main` commit so both environments run the same SHA.
+Keep release versions aligned with `../uprevit-ui`, and merge and verify the backend before the UI. For this release, use `release/0.9.1` and create the `v0.9.1` tag after production verification. After `main` deploys, fast-forward `demo` to the same `main` commit so both environments run the same SHA.
 
 Existing databases need the product lifecycle migration (`src/scripts/migrateProductLifecycle.ts`) and Product Owner backfill (`src/scripts/backfillProductOwners.ts`). Rehearse both on dev with `--dry-run` first and verify their counts. The lifecycle migration maps legacy Submitted versions to Released or Obsolete and separates archiving from status; the owner backfill preserves existing owners and fills missing ones from the creator or an active workspace admin.
 
