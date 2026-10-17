@@ -13,6 +13,7 @@ import {
 	markExportJobProcessing,
 } from '../../utils/exportJobs';
 import { logError, logInfo, logWarn } from '../../utils/logger';
+import { emitMonitoringMetric } from '../../utils/metrics';
 import { generateReportsExcelExport } from '../../utils/reports/exportReportsExcel';
 import { generateReportsPDFExport } from '../../utils/reports/exportReportsPDF';
 import { buildExportPipeline } from '../../utils/reports/queryBuilder';
@@ -268,11 +269,7 @@ export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> 
 				});
 
 				if (!product) {
-					await markExportJobFailed({
-						jobId,
-						errorMessage: 'Product not found for export job',
-					});
-					continue;
+					throw new NonRetryableExportJobError('Product not found for export job');
 				}
 
 				artifact = await generateProductArtifact({
@@ -318,6 +315,10 @@ export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> 
 		} catch (error) {
 			const isNonRetryable = isNonRetryableError(error);
 			const shouldStopRetry = isNonRetryable || receiveCount >= MAX_RECEIVE_COUNT;
+
+			if (shouldStopRetry) {
+				emitMonitoringMetric('ExportJobFailed');
+			}
 
 			if (parsedMessage?.jobId && shouldStopRetry && ObjectId.isValid(parsedMessage.jobId)) {
 				await markExportJobFailed({

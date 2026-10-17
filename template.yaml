@@ -111,6 +111,15 @@ Parameters:
     Type: String
     Description: "SSM Parameter Store path (SecureString) for the PostHog Support secret API key, e.g. /uprevit/dev/support/identity-secret"
     Default: ""
+  MonitoringAlertEmail:
+    Type: String
+    Description: "Email that receives CloudWatch monitoring alarms; when set, the alarms are created"
+    Default: ""
+  BetterStackHeartbeatUrl:
+    Type: String
+    NoEcho: true
+    Description: "Better Stack heartbeat URL pinged by the scheduled billing usage retry job"
+    Default: ""
   SupportAttachmentsAllowedOrigins:
     Type: String
     Description: "Comma-separated frontend origins (no spaces) allowed to upload support screenshots, e.g. https://app.uprevit.com; empty blocks browser uploads"
@@ -160,6 +169,7 @@ Globals:
         CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
         SES_FROM_ADDRESS: !Ref SesFromAddress
         APP_BASE_URL: !Ref AppBaseUrl
+        MONITORING_STACK: !If [HasMonitoringAlerts, !Ref AWS::StackName, ""]
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON
@@ -173,6 +183,7 @@ Conditions:
   HasSupportReviewerEmailsParam: !Not [!Equals [!Ref SupportReviewerEmailsParam, ""]]
   HasPosthogSupportSecretParam: !Not [!Equals [!Ref PosthogSupportSecretParam, ""]]
   HasSupportAttachmentsAllowedOrigins: !Not [!Equals [!Ref SupportAttachmentsAllowedOrigins, ""]]
+  HasMonitoringAlerts: !Not [!Equals [!Ref MonitoringAlertEmail, ""]]
 
 Resources:
   HelloWorldFunction:
@@ -191,6 +202,25 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [app.ts]
+
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/health/getHealth.lambdaHandler
+      Timeout: 10
+      MemorySize: 256
+      Events:
+        GetHealth:
+          Type: Api
+          Properties:
+            Path: /health
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/health/getHealth.ts]
 
   # ──────────────────────────────────────────────────────────────────────────
   # USERS
@@ -2185,6 +2215,9 @@ Resources:
       CodeUri: src/
       Handler: controllers/billing/retryUsageEventSyncScheduled.lambdaHandler
       Timeout: 300
+      Environment:
+        Variables:
+          BETTER_STACK_HEARTBEAT_URL: !Ref BetterStackHeartbeatUrl
       Events:
         BillingRetryUsageEventSyncSchedule:
           Type: Schedule
@@ -2606,6 +2639,116 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/s3Storage/presignUpload.ts]
+  # ──────────────────────────────────────────────────────────────────────────
+  # MONITORING
+  # ──────────────────────────────────────────────────────────────────────────
+  MonitoringAlertsTopic:
+    Type: AWS::SNS::Topic
+    Condition: HasMonitoringAlerts
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-monitoring-alerts"
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref MonitoringAlertEmail
+
+  ApiServerErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasMonitoringAlerts
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-api-5xx-errors"
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
+      Dimensions:
+        - Name: ApiName
+          Value: !Ref AWS::StackName
+        - Name: Stage
+          Value: Prod
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MonitoringAlertsTopic]
+      OKActions: [!Ref MonitoringAlertsTopic]
+
+  ExportQueueDelayAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasMonitoringAlerts
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-export-queue-delay"
+      Namespace: AWS/SQS
+      MetricName: ApproximateAgeOfOldestMessage
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ProductExportJobQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 1200
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MonitoringAlertsTopic]
+      OKActions: [!Ref MonitoringAlertsTopic]
+
+  ExportJobFailedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasMonitoringAlerts
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-export-jobs-failed"
+      Namespace: Uprevit
+      MetricName: ExportJobFailed
+      Dimensions:
+        - Name: Stack
+          Value: !Ref AWS::StackName
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MonitoringAlertsTopic]
+      OKActions: [!Ref MonitoringAlertsTopic]
+
+  UsageEventSyncFailingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasMonitoringAlerts
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-usage-event-sync-failing"
+      Namespace: Uprevit
+      MetricName: UsageEventSyncFailed
+      Dimensions:
+        - Name: Stack
+          Value: !Ref AWS::StackName
+      Statistic: Sum
+      Period: 600
+      EvaluationPeriods: 3
+      DatapointsToAlarm: 3
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MonitoringAlertsTopic]
+      OKActions: [!Ref MonitoringAlertsTopic]
+
+  UsageEventManualCorrectionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasMonitoringAlerts
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-usage-event-manual-correction"
+      Namespace: Uprevit
+      MetricName: UsageEventManualCorrectionRequired
+      Dimensions:
+        - Name: Stack
+          Value: !Ref AWS::StackName
+      Statistic: Sum
+      Period: 600
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MonitoringAlertsTopic]
+      OKActions: [!Ref MonitoringAlertsTopic]
+
 Outputs:
   ApiBaseUrl:
     Description: API Gateway base URL for the deployed backend stage
