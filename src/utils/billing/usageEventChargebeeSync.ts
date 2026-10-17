@@ -10,6 +10,7 @@ import {
 } from '../../models/billing';
 import { getDb } from '../db';
 import { logError } from '../logger';
+import { emitMonitoringMetric } from '../metrics';
 import {
 	ingestExportUsageEvent,
 	ingestUploadUsageEvent,
@@ -121,6 +122,7 @@ export const trySyncUsageEventToChargebee = async ({
 				lastError: 'Chargebee usage event window expired (12 hours)',
 			},
 		});
+		emitMonitoringMetric('UsageEventManualCorrectionRequired');
 		return;
 	}
 
@@ -148,6 +150,7 @@ export const trySyncUsageEventToChargebee = async ({
 				lastError: 'Chargebee is not configured',
 			},
 		});
+		emitMonitoringMetric('UsageEventSyncFailed');
 		return;
 	}
 
@@ -181,6 +184,7 @@ export const trySyncUsageEventToChargebee = async ({
 				lastError,
 			},
 		});
+		emitMonitoringMetric('UsageEventSyncFailed');
 	}
 };
 
@@ -285,6 +289,7 @@ export const processScheduledUsageEventRetries = async (): Promise<{
 			},
 		},
 	);
+	emitMonitoringMetric('UsageEventManualCorrectionRequired', agedOut.modifiedCount);
 
 	const events = await db.collection<UsageEvent>(USAGE_EVENTS_COLLECTION).find({
 		metric: { $in: ['completed_export', 'upload_bytes'] },

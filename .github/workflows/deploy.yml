@@ -84,6 +84,7 @@ jobs:
       SUPPORT_REVIEWER_EMAILS_PARAM: ${{ vars.SUPPORT_REVIEWER_EMAILS_PARAM }}
       POSTHOG_SUPPORT_SECRET_PARAM: ${{ vars.POSTHOG_SUPPORT_SECRET_PARAM }}
       SUPPORT_ATTACHMENTS_ALLOWED_ORIGINS: ${{ vars.SUPPORT_ATTACHMENTS_ALLOWED_ORIGINS }}
+      MONITORING_ALERT_EMAIL: ${{ vars.MONITORING_ALERT_EMAIL }}
     
     permissions:
       id-token: write
@@ -141,6 +142,7 @@ jobs:
         env:
           CHARGEBEE_API_KEY: ${{ secrets.CHARGEBEE_API_KEY }}
           CHARGEBEE_WEBHOOK_PASSWORD: ${{ secrets.CHARGEBEE_WEBHOOK_PASSWORD }}
+          BETTER_STACK_HEARTBEAT_URL: ${{ secrets.BETTER_STACK_HEARTBEAT_URL }}
         run: |
           mapfile -t parameter_overrides < <(python - <<'PY'
           import json
@@ -175,10 +177,16 @@ jobs:
               "PosthogSupportSecretParam": os.environ.get("POSTHOG_SUPPORT_SECRET_PARAM", ""),
               "SupportAttachmentsAllowedOrigins": os.environ.get("SUPPORT_ATTACHMENTS_ALLOWED_ORIGINS", ""),
           }
+          always_set = {
+              "MonitoringAlertEmail": os.environ.get("MONITORING_ALERT_EMAIL", ""),
+              "BetterStackHeartbeatUrl": os.environ.get("BETTER_STACK_HEARTBEAT_URL", ""),
+          }
 
           for key, value in parameters.items():
               if value:
                   print(f"{key}={json.dumps(value, ensure_ascii=False)}")
+          for key, value in always_set.items():
+              print(f"{key}={json.dumps(value, ensure_ascii=False)}")
           PY
           )
 
