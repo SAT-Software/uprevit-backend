@@ -25,6 +25,15 @@ const COMPLETION_TABS = [
 	'label_tags',
 ] as const;
 
+/** Drops tab content but keeps the completion flags, for list and version responses. */
+export const productSummaryProjection = Object.fromEntries(
+	[...COMPLETION_TABS, 'languages_information'].flatMap((tab) => [
+		[`${tab}.data`, 0],
+		[`${tab}.product_data`, 0],
+		[`${tab}.custom_fields`, 0],
+	]),
+);
+
 export const TAB_INCOMPLETE_WHILE_SUBMITTED_MESSAGE = 'Return the version to Draft before marking a tab incomplete';
 
 export const TAB_INCOMPLETE_WHILE_IN_REVIEW_MESSAGE = 'Tabs cannot be marked incomplete while the version is in review';

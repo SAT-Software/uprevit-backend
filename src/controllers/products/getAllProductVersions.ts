@@ -5,7 +5,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { assertWorkspaceMatch, requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { validateAllObjectIds } from '../../utils/validationUtils';
-import { productLineageFilter } from '../../utils/productLifecycle';
+import { productLineageFilter, productSummaryProjection } from '../../utils/productLifecycle';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 
 /**
@@ -51,6 +51,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const product = await db.collection<Product>('products').findOne(
 			tenantObjectIdFilter(productId, context.workspaceId),
+			{ projection: { workspace_id: 1, product_lineage_id: 1, product_plan_number: 1, product_name: 1 } },
 		);
 
 		if (!product) {
@@ -61,6 +62,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const pipeline: any[] = [
 			{ $match: matchFilter },
+			{ $project: productSummaryProjection },
 			buildLegacyAuditLookupStage({
 				scopeType: 'product',
 				updateActions: ['update', 'submit', 'delete', 'move', 'link', 'unlink', 'restore'],

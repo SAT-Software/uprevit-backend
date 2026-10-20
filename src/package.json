@@ -14,7 +14,8 @@
 		"fix:billing-period-anchors": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/fixBillingPeriodAnchors.ts",
 		"migrate:product-lifecycle": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateProductLifecycle.ts",
 		"backfill:product-owners": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/backfillProductOwners.ts",
-		"migrate:workflow-release": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateWorkflowRelease.ts"
+		"migrate:workflow-release": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateWorkflowRelease.ts",
+		"ensure:core-indexes": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/ensureCoreIndexes.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-cognito-identity-provider": "^3.679.0",

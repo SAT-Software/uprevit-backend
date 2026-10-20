@@ -4,8 +4,15 @@ import { ResponseWrapper } from './responseWrapper';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { logError } from './logger';
 
-/** Cognito User Pool ID from environment variables */
-const userPoolId = process.env.USER_POOL_ID!;
+const createVerifier = () => CognitoJwtVerifier.create({
+	userPoolId: process.env.USER_POOL_ID!,
+	tokenUse: 'access',
+	clientId: process.env.CLIENT_ID!,
+});
+
+/** Reused across warm invocations so the JWKS is not refetched on every request */
+let verifier: ReturnType<typeof createVerifier> | undefined;
+const getVerifier = () => (verifier ??= createVerifier());
 
 export type TokenValidationResponse = {
 	payload?: CognitoAccessTokenPayload;
@@ -28,13 +35,7 @@ export type AuthResult = {
  */
 export async function verifyJWT(token: string): Promise<TokenValidationResponse> {
 	try {
-		const verifier = CognitoJwtVerifier.create({
-	  userPoolId,
-	  tokenUse: 'access', // or 'id' for ID tokens
-	  clientId: process.env.CLIENT_ID!, // Optional, only if you need to verify the token audience
-		});
-
-		const payload = await verifier.verify(token);
+		const payload = await getVerifier().verify(token);
 		return {payload, isValid: true};
 	} catch (err) {
 		logError('JWT verification failed', err);
@@ -50,13 +51,7 @@ export async function verifyJWT(token: string): Promise<TokenValidationResponse>
  */
 export async function validateRole(token: string, role: string): Promise<TokenValidationResponse> {
 	try {
-		const verifier = CognitoJwtVerifier.create({
-	  userPoolId,
-	  tokenUse: 'access',
-	  clientId: process.env.CLIENT_ID!,
-		});
-
-		const payload = await verifier.verify(token);
+		const payload = await getVerifier().verify(token);
 		if (payload['cognito:groups']?.includes(role)) {
 	  return {payload, isValid: true};
 		}
