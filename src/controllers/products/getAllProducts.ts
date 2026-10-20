@@ -6,7 +6,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 import { buildLegacyAuditLookupStage, PRODUCT_ACTIVITY_UPDATE_ACTIONS } from '../../utils/auditLogV2Aggregation';
-import { addProductReleaseInfo, buildProductStatusMatch } from '../../utils/productLifecycle';
+import { addProductReleaseInfo, buildProductStatusMatch, productSummaryProjection } from '../../utils/productLifecycle';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 import { productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
 
@@ -143,6 +143,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const pipeline: any[] = [
 			{ $match: filter },
+			{ $project: productSummaryProjection },
 			buildLegacyAuditLookupStage(
 				isArchiveOnlyStatus
 					? { scopeType: 'product', mode: 'archive' }

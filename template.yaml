@@ -143,6 +143,7 @@ Metadata:
 Globals:
   Function:
     Timeout: 120
+    MemorySize: 512
     Runtime: nodejs22.x
     Architectures:
       - x86_64
@@ -176,6 +177,7 @@ Globals:
 
   Api:
     TracingEnabled: true
+    MinimumCompressionSize: 1024
 
 Conditions:
   HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]

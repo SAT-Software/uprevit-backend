@@ -144,8 +144,15 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const db = await getDb();
 
+		const includeAllWorkbooks = tab === 'all-tabs' && event.queryStringParameters?.workbooks !== 'false';
+		const workbookProjection = {
+			...(!includeAllWorkbooks && tab !== 'product-specifications' && { 'product_data.data.workbook_data': 0 }),
+			...(!includeAllWorkbooks && tab !== 'operational-parameters' && { 'operational_parameters.data.workbook_data': 0 }),
+		};
+
 		const pipeline = [
 			{ $match: tenantObjectIdFilter(productId, context.workspaceId) },
+			...(Object.keys(workbookProjection).length ? [{ $project: workbookProjection }] : []),
 			buildLegacyAuditLookupStage({
 				scopeType: 'product',
 				updateActions: ['update', 'submit', 'delete', 'move', 'link', 'unlink', 'restore'],
