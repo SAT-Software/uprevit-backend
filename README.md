@@ -186,22 +186,18 @@ uprevit-backend$ sam logs -n HelloWorldFunction --stack-name uprevit-backend --t
 
 You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
 
-## Documentation videos (S3 seed)
+## Documentation videos
 
-Place `.mp4` files under `src/scripts/documentation-videos-input/` (folder layout matches the product team's export).
+Videos live in the `uprevit-documentation-files` bucket under `videos/<category>/<name>.mp4`. Every stack (test, stage, prod) reads the same bucket and CloudFront distribution, so never overwrite an existing file. Upload a changed video under a new name (`products-intro-v2.mp4`, then `-v3`), and point its key at the new path in `src/config/documentationVideos.ts`. Each stack switches when it is deployed, and the old file stays for rollback.
 
-From the repo root (or `src/`):
+Export videos as H.264 MP4 with `+faststart` so playback starts before the download finishes. Lay them out in a local folder that mirrors the bucket, then upload them. `--no-overwrite` skips any path that already exists (needs AWS CLI 2.30 or later):
 
 ```bash
-cd src && npm install   # installs @aws-sdk/client-s3 (required by the seed script)
-npm run seed:documentation-videos -- --scan-dir
-npm run seed:documentation-videos -- --dry-run
-npm run seed:documentation-videos
+aws s3 sync ./upload s3://uprevit-documentation-files --exclude "*" --include "videos/*.mp4" \
+  --no-overwrite --content-type video/mp4 --cache-control "public, max-age=31536000, immutable" --dryrun
 ```
 
-From the repo root: `npm run seed:documentation-videos -- --dry-run` (forwards flags to `src/`).
-
-Requires `AWS_REGION` and credentials with `s3:PutObject` on `DOCUMENTATION_FILES_BUCKET` (default `uprevit-documentation-files`).
+Check the dry run lists only new paths, then run it again without `--dryrun`.
 
 ### CloudFront signed video URLs
 

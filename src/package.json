@@ -8,7 +8,6 @@
 		"lint:fix": "eslint 'controllers/**/*.ts' 'utils/**/*.ts' 'models/**/*.ts' 'types/**/*.ts' 'db/**/*.ts' app.ts --no-ignore --fix",
 		"type-check": "tsc --noEmit",
 		"test": "jest",
-		"seed:documentation-videos": "node scripts/seedDocumentationVideos.mjs",
 		"bootstrap:platform-admin": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/bootstrapPlatformAdmin.ts",
 		"backfill:billing-accounts": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/backfillBillingAccounts.ts",
 		"fix:billing-period-anchors": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/fixBillingPeriodAnchors.ts",
