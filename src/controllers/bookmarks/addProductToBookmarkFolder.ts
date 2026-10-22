@@ -7,6 +7,7 @@ import { getDb } from "../../utils/db";
 import { UserBookmarks } from "../../models/bookmarks";
 import type { Product } from "../../models/product";
 import { ObjectId } from "mongodb";
+import { productLineageFilter } from "../../utils/productLifecycle";
 import { updateAuditLog } from "../../utils/auditLog";
 import { AuditLogAction } from "../../models/auditLog";
 
@@ -41,17 +42,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (objectIdValidation) return objectIdValidation;
 
 		const userId = context.userId;
-		const productId = ObjectId.createFromHexString(input.product_id);
 		const folderId = ObjectId.createFromHexString(folderIdParam);
 
 		const db = await getDb();
 
-		const productExists = await db.collection<Product>("products").findOne(
-			tenantObjectIdFilter(productId, context.workspaceId),
+		const products = db.collection<Product>("products");
+		const product = await products.findOne(
+			tenantObjectIdFilter(ObjectId.createFromHexString(input.product_id), context.workspaceId),
 		);
-		if (!productExists) {
+		if (!product) {
 			return ResponseWrapper.notFound("Product not found.");
 		}
+		const latest = product.is_latest ? product : await products.findOne({ ...productLineageFilter(product), is_latest: true }, { projection: { _id: 1 } });
+		const productId = (latest ?? product)._id!;
 
 		const updateResult = await db.collection<UserBookmarks>("bookmarks").updateOne(
 			{
