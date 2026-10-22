@@ -1,6 +1,7 @@
 export const DOCUMENTATION_VIDEOS = {
-	"department.departments-tab": "videos/department/departments-tab.mp4",
-	"getting-started.welcome-dashboard": "videos/getting-started/welcome-dashboard.mp4",
+	"department.departments-tab": "videos/department/departments-tab-v2.mp4",
+	"getting-started.welcome-dashboard": "videos/getting-started/welcome-dashboard-v2.mp4",
+	"getting-started.workspace": "videos/getting-started/workspace.mp4",
 	"product.compare-versions-redline-view":
 		"videos/product/compare-versions-redline-view.mp4",
 	"product.compliance-tab": "videos/product/compliance-tab.mp4",
@@ -9,9 +10,9 @@ export const DOCUMENTATION_VIDEOS = {
 	"product.product-information": "videos/product/product-information.mp4",
 	"product.product-plan-review-overview": "videos/product/product-plan-review-overview.mp4",
 	"product.product-specifications": "videos/product/product-specifications.mp4",
-	"product.products-intro": "videos/product/products-intro.mp4",
+	"product.products-intro": "videos/product/products-intro-v2.mp4",
 	"product.symbols-graphics": "videos/product/symbols-graphics.mp4",
-	"projects.projects-tab": "videos/projects/projects-tab.mp4",
+	"projects.projects-tab": "videos/projects/projects-tab-v2.mp4",
 	"reports-analytics.overview": "videos/reports-analytics/overview.mp4",
 	"working-with-files.source-files-archive-bookmarks":
 		"videos/working-with-files/source-files-archive-bookmarks.mp4",

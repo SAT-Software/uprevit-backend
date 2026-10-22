@@ -8,7 +8,10 @@ describe("documentationVideos allowlist", () => {
 	it("recognizes allowlisted keys", () => {
 		expect(isDocumentationVideoKey("product.products-intro")).toBe(true);
 		expect(getDocumentationVideoObjectKey("product.products-intro")).toBe(
-			"videos/product/products-intro.mp4",
+			"videos/product/products-intro-v2.mp4",
+		);
+		expect(getDocumentationVideoObjectKey("getting-started.workspace")).toBe(
+			"videos/getting-started/workspace.mp4",
 		);
 		expect(isDocumentationVideoKey("product.compare-versions-redline-view")).toBe(true);
 		expect(getDocumentationVideoObjectKey("product.compare-versions-redline-view")).toBe(
