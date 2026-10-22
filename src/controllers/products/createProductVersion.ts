@@ -8,6 +8,7 @@ import { deepCopyWithFreshIds } from "../../utils/deepCopy";
 import { recordAuditEvent } from "../../utils/auditLogV2";
 import { canCreateVersion, LifecycleConflictError, productLineageFilter } from "../../utils/productLifecycle";
 import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError } from "../../utils/productAccess";
+import { moveBookmarksToVersion } from "../../utils/bookmarks";
 
 const CREATE_VERSION_CONFLICT = 'A new version can only be created from the latest released version';
 
@@ -60,7 +61,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			if (!source || !canEditProduct(context, source)) throw new ProductAccessError(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
 			revisedUpdatedProduct.owner_user_id = source.owner_user_id;
 			revisedUpdatedProduct.contributor_user_ids = source.contributor_user_ids ?? [];
-			return products.insertOne(revisedUpdatedProduct, { session });
+			const inserted = await products.insertOne(revisedUpdatedProduct, { session });
+			await moveBookmarksToVersion(txDb, currentProduct._id!, inserted.insertedId, session);
+			return inserted;
 		});
 
 		await recordAuditEvent({
