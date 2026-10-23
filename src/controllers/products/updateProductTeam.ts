@@ -7,7 +7,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { recordAuditEvent } from '../../utils/auditLogV2';
-import { LifecycleConflictError, productLineageFilter } from '../../utils/productLifecycle';
+import { LifecycleConflictError } from '../../utils/productLifecycle';
 import { canManageProductTeam, findActiveWorkspaceMember } from '../../utils/productAccess';
 import { getMemberName, notify } from '../../utils/notifications';
 import { flagUnavailableAssignments, touchActiveWorkflows } from '../../utils/workflowAssignments';
@@ -23,7 +23,7 @@ const EVENT_KEYS: Record<Action, string> = {
 };
 
 /**
- * Changes a Product's owner or contributors on every version of the Product.
+ * Changes the owner or contributors of a Product's latest version. Earlier versions keep the team they had.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
@@ -47,6 +47,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const products = db.collection<Product>('products');
 		const product = await products.findOne(tenantObjectIdFilter(productId, context.workspaceId));
 		if (!product) return ResponseWrapper.notFound('Product not found');
+		if (!product.is_latest) return ResponseWrapper.conflict('Only the latest version of a product can change its team');
 
 		if (!canManageProductTeam(context, product)) {
 			return ResponseWrapper.forbidden('Only the Product Owner or an admin can change the product team');
@@ -79,12 +80,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			const txProducts = txDb.collection<Product>('products');
 			const unchanged = await txProducts.updateOne({
 				_id: product._id,
+				is_latest: true,
 				owner_user_id: product.owner_user_id ?? { $exists: false },
 				contributor_user_ids: product.contributor_user_ids ?? { $exists: false },
 			}, update, { session });
 			if (unchanged.matchedCount === 0) throw new LifecycleConflictError('The product team changed. Reload and try again.');
 
-			await txProducts.updateMany({ ...productLineageFilter(product), _id: { $ne: product._id } }, update, { session });
 			await touchActiveWorkflows(txDb, context.workspaceId, { 'products.lineageId': lineageIdOf(product) }, session);
 			return txProducts.findOne({ _id: product._id }, { projection: { owner_user_id: 1, contributor_user_ids: 1 }, session });
 		});

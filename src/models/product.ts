@@ -1,5 +1,6 @@
 import { ObjectId } from 'mongodb';
 import { AuditLog } from './auditLog';
+import type { User } from './user';
 
 export type ProductStatus = 'draft' | 'submitted' | 'in_review' | 'released' | 'obsolete';
 
@@ -8,6 +9,7 @@ export type ProductTeamMember = {
 	name: string;
 	email: string;
 	profileAvatar?: string;
+	status?: User['status'];
 };
 
 export type ProductData ={
