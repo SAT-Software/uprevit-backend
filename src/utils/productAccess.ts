@@ -49,7 +49,7 @@ export const findActiveWorkspaceMember = async (db: Db, workspaceId: ObjectId, u
 	return db.collection<User>('users').findOne({ _id: new ObjectId(userId), workspaceId, status: 'active' });
 };
 
-const TEAM_MEMBER_PIPELINE = [{ $project: { name: 1, email: 1, profileAvatar: 1 } }];
+const TEAM_MEMBER_PIPELINE = [{ $project: { name: 1, email: 1, profileAvatar: 1, status: 1 } }];
 
 /** Aggregation stages that add `owner`, `owner_name`, and `contributors` to products. */
 export const productTeamLookupStages = [
