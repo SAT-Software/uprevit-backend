@@ -55,7 +55,7 @@ jobs:
   # Deploy job - only runs after linting passes
   deploy:
     name: Deploy to AWS
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-8vcpu-ubuntu-2404
     needs: lint
     environment: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/demo' && 'demo' || github.ref == 'refs/heads/develop' && 'develop' || 'stage' }}
     env:
