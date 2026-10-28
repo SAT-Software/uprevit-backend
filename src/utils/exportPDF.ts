@@ -409,7 +409,7 @@ export async function generateProductPDFExport(productData: Product) {
 			);
 		});
 
-		const pData = transformUniverExcelData(productData.product_data?.data);
+		const pData = transformUniverExcelData(productData.product_data?.data, true);
 		const productSpecsHeaders: TableHeader[] = [];
 		const productSpecsRows: TableRow[] = [];
 		if (pData.sheets.length > 0 && pData.sheets[0].data.length > 0) {
@@ -431,7 +431,7 @@ export async function generateProductPDFExport(productData: Product) {
 			});
 		}
 
-		const opData = transformUniverExcelData(productData.operational_parameters?.data);
+		const opData = transformUniverExcelData(productData.operational_parameters?.data, true);
 		const operationalHeaders: TableHeader[] = [];
 		const operationalRows: TableRow[] = [];
 		if (opData.sheets.length > 0 && opData.sheets[0].data.length > 0) {

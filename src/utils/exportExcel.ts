@@ -1,6 +1,7 @@
 import { Product } from "../models/product";
 import { applyStandardStyling } from "./exportExcelStyling";
 import transformUniverExcelData from "./transformUniverExcelData";
+import { applyWorkbookCellFormats } from "./workbookCellFormat";
 import { logError } from "./logger";
 import { createPresignedGetUrlMap, createStandardSymbolPresignedGetUrlMap } from "./s3-storage";
 
@@ -692,6 +693,7 @@ export async function generateProductExcelExport(productData: Product) {
 			sheetData.merges.forEach((merge) => productDataSheet.mergeCells(merge));
 		}
 		applyStandardStyling(productDataSheet);
+		applyWorkbookCellFormats(productDataSheet, productDataTransformed.sheets[0]?.formats);
 
 		const operationalDataSheet = workbook.addWorksheet("Operational Data", {
 			pageSetup: { paperSize: 9, orientation: "landscape" },
@@ -704,6 +706,7 @@ export async function generateProductExcelExport(productData: Product) {
 			sheetData.merges.forEach((merge) => operationalDataSheet.mergeCells(merge));
 		}
 		applyStandardStyling(operationalDataSheet);
+		applyWorkbookCellFormats(operationalDataSheet, operationalDataTransformed.sheets[0]?.formats);
 
 		const labelTagsSheet = workbook.addWorksheet("Label Tags", {
 			pageSetup: { paperSize: 9, orientation: "landscape" },

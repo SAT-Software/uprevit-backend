@@ -1,3 +1,5 @@
+import { formatWorkbookExportValue, WorkbookCellFormat } from "./workbookCellFormat";
+
 interface UniverCell {
     v?: string | number | boolean;  
     t?: number;                    
@@ -9,6 +11,7 @@ interface TransformedSheet {
     name: string;
     data: (string | number | boolean | null)[][]; 
     merges: string[];                             
+    formats?: Record<string, WorkbookCellFormat>;
 }
 
 interface TransformResult {
@@ -19,9 +22,10 @@ interface TransformResult {
  * Transforms Univer spreadsheet data into a standardized format.
  * Converts cell data to a 2D array and merge ranges to Excel-style notation.
  * @param {any} data - Raw Univer workbook data with cellData and mergeData
+ * @param {boolean} displayDecimals - Render decimal precision for text exports
  * @return {TransformResult} Transformed data with sheets array containing name, data, and merges
  */
-export default function transformUniverExcelData(data: any): TransformResult {
+export default function transformUniverExcelData(data: any, displayDecimals = false): TransformResult {
 	if (!data || typeof data !== 'object') {
 		return { sheets: [] };
 	}
@@ -32,10 +36,10 @@ export default function transformUniverExcelData(data: any): TransformResult {
 	}
 
 	if (workbookData.cells && typeof workbookData.cells === 'object') {
-		const { cells, headers = {}, columnTypes = {}, columnOrder = [] } = workbookData;
+		const { cells, headers = {}, columnTypes = {}, columnOrder = [], cellFormats = {} } = workbookData;
 		let maxRow = -1;
 		let maxCol = -1;
-		Object.keys(cells).forEach(key => {
+		[...Object.keys(cells), ...Object.keys(cellFormats)].forEach(key => {
 			const [row, col] = key.split(',').map(Number);
 			if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || row >= 5000 || col < 0 || col >= 150) return;
 			maxRow = Math.max(maxRow, row);
@@ -54,8 +58,16 @@ export default function transformUniverExcelData(data: any): TransformResult {
 		if (Object.values(columnTypes).some(type => type && type !== 'blank')) {
 			rows.push(columns.map(col => columnTypes[col] || ''));
 		}
-		for (let row = 0; row <= maxRow; row++) rows.push(columns.map(col => cells[`${row},${col}`] ?? null));
-		return { sheets: [{ name: 'Sheet1', data: rows, merges: [] }] };
+		const dataOffset = rows.length;
+		const formats: Record<string, WorkbookCellFormat> = {};
+		for (let row = 0; row <= maxRow; row++) rows.push(columns.map((col, visualCol) => {
+			const key = `${row},${col}`;
+			const format = cellFormats[key];
+			if (format && typeof format === 'object') formats[`${row + dataOffset},${visualCol}`] = format;
+			const value = cells[key] ?? null;
+			return displayDecimals ? formatWorkbookExportValue(value, format) : value;
+		}));
+		return { sheets: [{ name: 'Sheet1', data: rows, merges: [], formats }] };
 	}
 
 	const sheetsObj = workbookData.sheets;
