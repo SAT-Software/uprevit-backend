@@ -35,6 +35,7 @@ const TOP_META_TEXT_COLOR = rgb(0.45, 0.45, 0.45);
 const PLACEHOLDER_TEXT_COLOR = rgb(0.5, 0.5, 0.5);
 
 type TableHeader = {
+	format?: WorkbookCellFormat;
 	label: string;
 	widthPct: number;
 };
@@ -420,14 +421,23 @@ export async function generateProductPDFExport(productData: Product) {
 			{ title: 'Product Specifications', source: productData.product_data?.data },
 			{ title: 'Operational Parameters', source: productData.operational_parameters?.data },
 		].flatMap(({ title, source }) => transformUniverExcelData(source, true).sheets.map(sheet => {
-			const headerRow = Array.from({ length: Math.max(1, ...sheet.data.map(row => row.length)) }, (_, index) => `Column ${index + 1}`);
-			const colCount = Math.max(headerRow.length, 1);
-			const headers: TableHeader[] = headerRow.map((value, index) => ({ label: toCleanString(value) || `Column ${index + 1}`, widthPct: 1 / colCount }));
-			const rows: TableRow[] = sheet.data.map((row, index) => ({
-				height: sheet.rowHeights?.[index] === undefined ? undefined : sheet.rowHeights[index] * 0.75,
-				cells: Array.from({ length: colCount }, (_, col) => ({ text: toCleanString(row[col]), format: sheet.formats?.[`${index},${col}`] })),
+			const colCount = Math.max(1, ...sheet.data.map(row => row.length));
+			const hasHeaders = (sheet.headerOffset ?? 1) > 0;
+			const widths = Array.from({ length: colCount }, (_, col) => sheet.columnWidths?.[col] ?? 150);
+			const totalWidth = widths.reduce((total, width) => total + width, 0);
+			const headers: TableHeader[] = Array.from({ length: colCount }, (_, col) => ({
+				label: hasHeaders ? toCleanString(sheet.data[0]?.[col]) || `Column ${col + 1}` : `Column ${col + 1}`,
+				widthPct: widths[col] / totalWidth,
+				format: hasHeaders ? sheet.formats?.[`0,${col}`] : undefined,
 			}));
-			return { title: `${title} — ${sheet.name}`, headers, rows };
+			const rows: TableRow[] = sheet.data.slice(hasHeaders ? 1 : 0).map((row, index) => {
+				const sourceRow = index + (hasHeaders ? 1 : 0);
+				return {
+					height: sheet.rowHeights?.[sourceRow] === undefined ? undefined : sheet.rowHeights[sourceRow] * 0.75,
+					cells: Array.from({ length: colCount }, (_, col) => ({ text: toCleanString(row[col]), format: sheet.formats?.[`${sourceRow},${col}`] })),
+				};
+			});
+			return { title: `${title} — ${sheet.name}`, headers, rows, headerHeight: hasHeaders && sheet.rowHeights?.[0] !== undefined ? sheet.rowHeights[0] * 0.75 : TABLE_HEADER_HEIGHT };
 		}));
 
 		const allRows = [
@@ -462,12 +472,10 @@ export async function generateProductPDFExport(productData: Product) {
 
 			if (font.widthOfTextAtSize(baseText, fontSize) <= maxWidth) return baseText;
 
+			const suffix = font.widthOfTextAtSize("...", fontSize) <= maxWidth ? "..." : "";
 			let trimmed = baseText;
-			while (trimmed.length > 3 && font.widthOfTextAtSize(`${trimmed}...`, fontSize) > maxWidth) {
-				trimmed = trimmed.slice(0, -1);
-			}
-
-			return trimmed.length <= 3 ? "" : `${trimmed}...`;
+			while (trimmed && font.widthOfTextAtSize(trimmed + suffix, fontSize) > maxWidth) trimmed = trimmed.slice(0, -1);
+			return trimmed + suffix;
 		};
 
 		const drawTextInCell = (
@@ -557,6 +565,7 @@ export async function generateProductPDFExport(productData: Product) {
 			headers: TableHeader[],
 			rows: TableRow[],
 			startNewPage = false,
+			headerHeight = TABLE_HEADER_HEIGHT,
 		) => {
 			if (startNewPage && pages.length > 0) addNewPage();
 
@@ -576,9 +585,9 @@ export async function generateProductPDFExport(productData: Product) {
 			const drawHeader = () => {
 				page.drawRectangle({
 					x: MARGIN,
-					y: y - TABLE_HEADER_HEIGHT,
+					y: y - headerHeight,
 					width: CONTENT_WIDTH,
-					height: TABLE_HEADER_HEIGHT,
+					height: headerHeight,
 					color: HEADER_BG_COLOR,
 					borderColor: BORDER_COLOR,
 					borderWidth: 1,
@@ -588,9 +597,10 @@ export async function generateProductPDFExport(productData: Product) {
 				headers.forEach((header, index) => {
 					page.drawRectangle({
 						x: currentX,
-						y: y - TABLE_HEADER_HEIGHT,
+						y: y - headerHeight,
 						width: colWidths[index],
-						height: TABLE_HEADER_HEIGHT,
+						color: workbookColor(header.format?.bgColor),
+						height: headerHeight,
 						borderColor: BORDER_COLOR,
 						borderWidth: 0.5,
 					});
@@ -600,15 +610,16 @@ export async function generateProductPDFExport(productData: Product) {
 						currentX,
 						y,
 						colWidths[index],
-						TABLE_HEADER_HEIGHT,
+						headerHeight,
 						true,
 						HEADER_TEXT_COLOR,
+						header.format,
 					);
 
 					currentX += colWidths[index];
 				});
 
-				y -= TABLE_HEADER_HEIGHT;
+				y -= headerHeight;
 			};
 
 			drawHeader();
@@ -779,7 +790,7 @@ export async function generateProductPDFExport(productData: Product) {
 			true,
 		);
 
-		workbookSections.forEach(section => drawTable(section.title, section.headers, section.rows, true));
+		workbookSections.forEach(section => drawTable(section.title, section.headers, section.rows, true, section.headerHeight));
 		drawTable(
 			"Label Tags",
 			[

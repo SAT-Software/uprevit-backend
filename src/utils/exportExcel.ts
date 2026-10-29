@@ -692,12 +692,12 @@ export async function generateProductExcelExport(productData: Product) {
 			const transformed = transformUniverExcelData(source);
 			const sheets = transformed.sheets.length ? transformed.sheets : [{ name: 'Sheet1', data: [], merges: [] }];
 			for (const sheetData of sheets) {
-				const base = (sheets.length === 1 && sheetData.name === "Sheet1" ? title : `${title} - ${sheetData.name}`).replace(/[\\/?:*\[\]]/g, ' ').slice(0, 31);
+				const base = (sheets.length === 1 && sheetData.name === "Sheet1" ? title : `${title} - ${sheetData.name}`).replace(/[\\/?:*\[\]]/g, ' ').slice(0, 31).replace(/^'+|'+$/g, '') || 'Sheet';
 				let name = base;
 				let suffix = 2;
 				while (workbook.worksheets.some((sheet: Worksheet) => sheet.name.toLowerCase() === name.toLowerCase())) {
 					const tail = ` (${suffix++})`;
-					name = base.slice(0, 31 - tail.length) + tail;
+					name = base.slice(0, 31 - tail.length).replace(/^'+|'+$/g, '') + tail;
 				}
 				const sheet = workbook.addWorksheet(name, { pageSetup: { paperSize: 9, orientation: 'landscape' } });
 				sheetData.data.forEach(row => sheet.addRow(row));

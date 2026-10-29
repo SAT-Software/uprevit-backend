@@ -81,7 +81,10 @@ export default function transformUniverExcelData(data: any, displayDecimals = fa
 		Object.entries(workbookData.headerRows?.formats ?? {}).forEach(([key, format]) => {
 			const [row, col] = key.split(",").map(Number);
 			const visualCol = columnPositions.get(col);
-			if (visualCol !== undefined && row < dataOffset) formats[`${row},${visualCol}`] = format as WorkbookCellFormat;
+			if (visualCol !== undefined && row >= 0 && row < dataOffset) {
+				formats[`${row},${visualCol}`] = format as WorkbookCellFormat;
+				if (displayDecimals) rows[row][visualCol] = formatWorkbookExportValue(rows[row][visualCol], format as WorkbookCellFormat);
+			}
 		});
 		const resolveFormat = createWorkbookFormatResolver(conditionalRules);
 		for (let visualRow = 0; visualRow <= maxRow; visualRow++) {
