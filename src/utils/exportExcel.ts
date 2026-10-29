@@ -1,6 +1,8 @@
+import type { Worksheet } from "exceljs";
 import { Product } from "../models/product";
 import { applyStandardStyling } from "./exportExcelStyling";
 import transformUniverExcelData from "./transformUniverExcelData";
+import { applyWorkbookCellFormats } from "./workbookCellFormat";
 import { logError } from "./logger";
 import { createPresignedGetUrlMap, createStandardSymbolPresignedGetUrlMap } from "./s3-storage";
 
@@ -15,6 +17,11 @@ require("regenerator-runtime/runtime");
 const ExcelJS = require("exceljs/dist/es5");
 
 const IMAGE_FETCH_CONCURRENCY = 5;
+const applyWorkbookSizing = (sheet: Worksheet, data?: { rowHeights?: Record<number, number>; columnWidths?: Record<number, number> }): void => {
+	Object.entries(data?.rowHeights ?? {}).forEach(([row, height]) => { sheet.getRow(Number(row) + 1).height = height * 0.75; });
+	Object.entries(data?.columnWidths ?? {}).forEach(([col, width]) => { sheet.getColumn(Number(col) + 1).width = (width - 5) / 7; });
+};
+
 const IMAGE_PLACEHOLDER_TEXT = "Image format not supported";
 const IMAGE_ROW_HORIZONTAL_PADDING_PX = 16;
 const IMAGE_ROW_VERTICAL_PADDING_PX = 10;
@@ -681,29 +688,31 @@ export async function generateProductExcelExport(productData: Product) {
 		mergeSheetImageRows(otherComponentsSheet, otherComponentsImageRows);
 		otherComponentsSheet.getRow(1).font = { bold: true };
 
-		const productDataSheet = workbook.addWorksheet("Product Specifications", {
-			pageSetup: { paperSize: 9, orientation: "landscape" },
-		});
-
-		const productDataTransformed = transformUniverExcelData(productData.product_data?.data);
-		if (productDataTransformed.sheets.length > 0) {
-			const sheetData = productDataTransformed.sheets[0];
-			sheetData.data.forEach((row) => productDataSheet.addRow(row));
-			sheetData.merges.forEach((merge) => productDataSheet.mergeCells(merge));
-		}
-		applyStandardStyling(productDataSheet);
-
-		const operationalDataSheet = workbook.addWorksheet("Operational Data", {
-			pageSetup: { paperSize: 9, orientation: "landscape" },
-		});
-
-		const operationalDataTransformed = transformUniverExcelData(productData.operational_parameters?.data);
-		if (operationalDataTransformed.sheets.length > 0) {
-			const sheetData = operationalDataTransformed.sheets[0];
-			sheetData.data.forEach((row) => operationalDataSheet.addRow(row));
-			sheetData.merges.forEach((merge) => operationalDataSheet.mergeCells(merge));
-		}
-		applyStandardStyling(operationalDataSheet);
+		const appendWorkbook = (title: string, source: unknown) => {
+			const transformed = transformUniverExcelData(source);
+			const sheets = transformed.sheets.length ? transformed.sheets : [{ name: 'Sheet1', data: [], merges: [] }];
+			for (const sheetData of sheets) {
+				const base = (sheets.length === 1 && sheetData.name === "Sheet1" ? title : `${title} - ${sheetData.name}`).replace(/[\\/?:*\[\]]/g, ' ').slice(0, 31).replace(/^'+|'+$/g, '') || 'Sheet';
+				let name = base;
+				let suffix = 2;
+				while (workbook.worksheets.some((sheet: Worksheet) => sheet.name.toLowerCase() === name.toLowerCase())) {
+					const tail = ` (${suffix++})`;
+					name = base.slice(0, 31 - tail.length).replace(/^'+|'+$/g, '') + tail;
+				}
+				const sheet = workbook.addWorksheet(name, { pageSetup: { paperSize: 9, orientation: 'landscape' } });
+				sheetData.data.forEach(row => sheet.addRow(row));
+				sheetData.merges.forEach(merge => sheet.mergeCells(merge));
+				applyStandardStyling(sheet);
+				applyWorkbookCellFormats(sheet, sheetData.formats);
+				applyWorkbookSizing(sheet, sheetData);
+				const firstCell = sheet.getCell('A1');
+				const existingNote = firstCell.note;
+				const noteTexts = typeof existingNote === 'string' ? [{ text: existingNote }] : existingNote?.texts ?? [];
+				firstCell.note = { texts: [...noteTexts, { text: '\nuprevit:layout:v1:' + ('headerOffset' in sheetData ? sheetData.headerOffset ?? 0 : 0) }] };
+			}
+		};
+		appendWorkbook('Product Specifications', productData.product_data?.data);
+		appendWorkbook('Operational Data', productData.operational_parameters?.data);
 
 		const labelTagsSheet = workbook.addWorksheet("Label Tags", {
 			pageSetup: { paperSize: 9, orientation: "landscape" },
