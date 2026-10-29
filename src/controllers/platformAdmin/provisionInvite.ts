@@ -49,6 +49,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			email: normalizedEmail,
 			name: input.name.trim(),
 			groupName: 'admin',
+			customAttributes: [{ Name: 'email_verified', Value: 'true' }],
 		});
 
 		const { auth, operator } = operatorResult.context;
