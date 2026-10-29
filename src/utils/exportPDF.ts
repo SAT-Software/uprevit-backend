@@ -1,4 +1,5 @@
-import { PDFDocument, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib";
+import type { WorkbookCellFormat } from "./workbookCellFormat";
 import { Product } from "../models/product";
 import transformUniverExcelData from "./transformUniverExcelData";
 import { logError } from "./logger";
@@ -26,6 +27,8 @@ const MAX_IMAGE_ROW_HEIGHT = Math.floor(AVAILABLE_PAGE_CONTENT_HEIGHT * 0.65);
 
 const HEADER_BG_COLOR = rgb(0.788, 0.855, 0.973);
 const HEADER_TEXT_COLOR = rgb(0, 0, 0);
+const workbookColor = (value?: string) => typeof value === "string" && /^#[a-f\d]{6}$/i.test(value)
+	? rgb(parseInt(value.slice(1, 3), 16) / 255, parseInt(value.slice(3, 5), 16) / 255, parseInt(value.slice(5, 7), 16) / 255) : undefined;
 const BORDER_COLOR = rgb(0, 0, 0);
 const BODY_TEXT_COLOR = rgb(0, 0, 0);
 const TOP_META_TEXT_COLOR = rgb(0.45, 0.45, 0.45);
@@ -38,10 +41,12 @@ type TableHeader = {
 
 type TableCell = {
 	text?: string;
+	format?: WorkbookCellFormat;
 	imageUrl?: string;
 };
 
 type TableRow = {
+	height?: number;
 	cells: TableCell[];
 	isImageRow?: boolean;
 	imageUrl?: string;
@@ -284,6 +289,8 @@ export async function generateProductPDFExport(productData: Product) {
 		const pdfDoc = await PDFDocument.create();
 		const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
 		const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+		const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+		const fontBoldItalic = await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique);
 		const productName = productData.product_name || "Product Export";
 
 		const signedUrlMap = await loadSignedUrlMap(productData);
@@ -409,49 +416,19 @@ export async function generateProductPDFExport(productData: Product) {
 			);
 		});
 
-		const pData = transformUniverExcelData(productData.product_data?.data, true);
-		const productSpecsHeaders: TableHeader[] = [];
-		const productSpecsRows: TableRow[] = [];
-		if (pData.sheets.length > 0 && pData.sheets[0].data.length > 0) {
-			const headerRow = pData.sheets[0].data[0];
-			const dataRows = pData.sheets[0].data.slice(1);
+		const workbookSections = [
+			{ title: 'Product Specifications', source: productData.product_data?.data },
+			{ title: 'Operational Parameters', source: productData.operational_parameters?.data },
+		].flatMap(({ title, source }) => transformUniverExcelData(source, true).sheets.map(sheet => {
+			const headerRow = Array.from({ length: Math.max(1, ...sheet.data.map(row => row.length)) }, (_, index) => `Column ${index + 1}`);
 			const colCount = Math.max(headerRow.length, 1);
-
-			headerRow.forEach((headerText: unknown, index: number) => {
-				productSpecsHeaders.push({
-					label: toCleanString(headerText) || `Column ${index + 1}`,
-					widthPct: 1 / colCount,
-				});
-			});
-
-			dataRows.forEach((row) => {
-				productSpecsRows.push({
-					cells: [...Array(colCount)].map((_, idx) => ({ text: toCleanString(row[idx]) })),
-				});
-			});
-		}
-
-		const opData = transformUniverExcelData(productData.operational_parameters?.data, true);
-		const operationalHeaders: TableHeader[] = [];
-		const operationalRows: TableRow[] = [];
-		if (opData.sheets.length > 0 && opData.sheets[0].data.length > 0) {
-			const headerRow = opData.sheets[0].data[0];
-			const dataRows = opData.sheets[0].data.slice(1);
-			const colCount = Math.max(headerRow.length, 1);
-
-			headerRow.forEach((headerText: unknown, index: number) => {
-				operationalHeaders.push({
-					label: toCleanString(headerText) || `Column ${index + 1}`,
-					widthPct: 1 / colCount,
-				});
-			});
-
-			dataRows.forEach((row) => {
-				operationalRows.push({
-					cells: [...Array(colCount)].map((_, idx) => ({ text: toCleanString(row[idx]) })),
-				});
-			});
-		}
+			const headers: TableHeader[] = headerRow.map((value, index) => ({ label: toCleanString(value) || `Column ${index + 1}`, widthPct: 1 / colCount }));
+			const rows: TableRow[] = sheet.data.map((row, index) => ({
+				height: sheet.rowHeights?.[index] === undefined ? undefined : sheet.rowHeights[index] * 0.75,
+				cells: Array.from({ length: colCount }, (_, col) => ({ text: toCleanString(row[col]), format: sheet.formats?.[`${index},${col}`] })),
+			}));
+			return { title: `${title} — ${sheet.name}`, headers, rows };
+		}));
 
 		const allRows = [
 			...labelComponentsRows,
@@ -479,19 +456,18 @@ export async function generateProductPDFExport(productData: Product) {
 			return page;
 		};
 
-		const trimTextToWidth = (text: string, maxWidth: number, isBold = false): string => {
+		const trimTextToWidth = (text: string, maxWidth: number, font: PDFFont, fontSize: number): string => {
 			const baseText = toCleanString(text);
 			if (!baseText) return "";
 
-			const font = isBold ? fontBold : fontRegular;
-			if (font.widthOfTextAtSize(baseText, 9) <= maxWidth) return baseText;
+			if (font.widthOfTextAtSize(baseText, fontSize) <= maxWidth) return baseText;
 
 			let trimmed = baseText;
-			while (trimmed.length > 3 && font.widthOfTextAtSize(`${trimmed}...`, 9) > maxWidth) {
+			while (trimmed.length > 3 && font.widthOfTextAtSize(`${trimmed}...`, fontSize) > maxWidth) {
 				trimmed = trimmed.slice(0, -1);
 			}
 
-			return trimmed.length <= 3 ? baseText.slice(0, 3) : `${trimmed}...`;
+			return trimmed.length <= 3 ? "" : `${trimmed}...`;
 		};
 
 		const drawTextInCell = (
@@ -502,18 +478,25 @@ export async function generateProductPDFExport(productData: Product) {
 			rowHeight: number,
 			isBold = false,
 			color = BODY_TEXT_COLOR,
+			format?: WorkbookCellFormat,
 		) => {
-			const fontSize = 9;
-			const safeText = trimTextToWidth(text, Math.max(1, cellWidth - 8), isBold);
-			const textY = rowTopY - rowHeight + (rowHeight - fontSize) / 2;
+			const bold = format?.bold ?? isBold;
+			const font = format?.italic ? (bold ? fontBoldItalic : fontItalic) : (bold ? fontBold : fontRegular);
+			const fontSize = [10, 12, 14, 16, 18, 20, 24].includes(format?.fontSize ?? 0) ? format!.fontSize! * 0.75 : 9;
+			const safeText = trimTextToWidth(text, Math.max(1, cellWidth - 8), font, fontSize);
+			const textWidth = font.widthOfTextAtSize(safeText, fontSize);
+			const textX = format?.alignment === "right" ? x + cellWidth - 4 - textWidth : format?.alignment === "center" ? x + (cellWidth - textWidth) / 2 : x + 4;
+			const textY = format?.verticalAlignment === "top" ? rowTopY - fontSize - 3 : format?.verticalAlignment === "bottom" ? rowTopY - rowHeight + 3 : rowTopY - rowHeight + (rowHeight - fontSize) / 2;
+			const textColor = workbookColor(format?.textColor) ?? color;
 
 			page.drawText(safeText, {
-				x: x + 4,
+				x: textX,
 				y: textY,
 				size: fontSize,
-				font: isBold ? fontBold : fontRegular,
-				color,
+				font,
+				color: textColor,
 			});
+			if (format?.underline && safeText) page.drawLine({ start: { x: textX, y: textY - 1 }, end: { x: textX + textWidth, y: textY - 1 }, thickness: 0.5, color: textColor });
 		};
 
 		const getImageRowHeight = (row: TableRow): number => {
@@ -635,7 +618,7 @@ export async function generateProductPDFExport(productData: Product) {
 				const row = rows[rowIndex];
 				const rowHeight = row.isImageRow
 					? getImageRowHeight(row)
-					: row.cells.some((cell) => cell.imageUrl) ? 60 : TABLE_ROW_HEIGHT;
+					: row.cells.some((cell) => cell.imageUrl) ? 60 : row.height ?? TABLE_ROW_HEIGHT;
 
 				const nextRow = rows[rowIndex + 1];
 				const isDataRowWithImageBelow = !row.isImageRow && Boolean(nextRow?.isImageRow);
@@ -681,6 +664,7 @@ export async function generateProductPDFExport(productData: Product) {
 							y: y - rowHeight,
 							width: cellWidth,
 							height: rowHeight,
+							color: workbookColor(cell.format?.bgColor),
 							borderColor: BORDER_COLOR,
 							borderWidth: 0.5,
 						});
@@ -691,7 +675,7 @@ export async function generateProductPDFExport(productData: Product) {
 								y, rowHeight, currentX, cellWidth,
 							);
 						} else {
-							drawTextInCell(cell.text || "", currentX, y, cellWidth, rowHeight);
+							drawTextInCell(cell.text || "", currentX, y, cellWidth, rowHeight, false, BODY_TEXT_COLOR, cell.format);
 						}
 						currentX += cellWidth;
 					});
@@ -795,14 +779,7 @@ export async function generateProductPDFExport(productData: Product) {
 			true,
 		);
 
-		if (productSpecsHeaders.length > 0) {
-			drawTable("Product Specifications", productSpecsHeaders, productSpecsRows, true);
-		}
-
-		if (operationalHeaders.length > 0) {
-			drawTable("Operational Parameters", operationalHeaders, operationalRows, true);
-		}
-
+		workbookSections.forEach(section => drawTable(section.title, section.headers, section.rows, true));
 		drawTable(
 			"Label Tags",
 			[
