@@ -227,13 +227,18 @@ export const movePendingWorkspaceAssetToWorkspace = async (
 
 	const targetKey = `uploads/${workspaceId}/workspace/${fileName}`;
 
-	await client.send(
-		new CopyObjectCommand({
-			Bucket: uploadsBucket,
-			CopySource: buildCopySource(uploadsBucket, normalizedKey),
-			Key: targetKey,
-		}),
-	);
+	try {
+		await client.send(
+			new CopyObjectCommand({
+				Bucket: uploadsBucket,
+				CopySource: buildCopySource(uploadsBucket, normalizedKey),
+				Key: targetKey,
+			}),
+		);
+	} catch (error) {
+		const status = error instanceof S3ServiceException ? error.$metadata.httpStatusCode : undefined;
+		if ((status !== 403 && status !== 404) || !(await headUploadObject(targetKey))) throw error;
+	}
 
 	await deleteObjectByKey(normalizedKey);
 

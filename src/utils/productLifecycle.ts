@@ -15,7 +15,7 @@ export const editableStatusFilter = { status: { $nin: CONTENT_LOCKED_STATUSES } 
 /** Thrown inside a transaction when the product changed after it was read; maps to 409. */
 export class LifecycleConflictError extends Error {}
 
-const COMPLETION_TABS = [
+export const COMPLETION_TABS = [
 	'product_information',
 	'compliance_information',
 	'label_components',
@@ -24,6 +24,15 @@ const COMPLETION_TABS = [
 	'operational_parameters',
 	'label_tags',
 ] as const;
+
+/** Drops tab content but keeps the completion flags, for list and version responses. */
+export const productSummaryProjection = Object.fromEntries(
+	[...COMPLETION_TABS, 'languages_information'].flatMap((tab) => [
+		[`${tab}.data`, 0],
+		[`${tab}.product_data`, 0],
+		[`${tab}.custom_fields`, 0],
+	]),
+);
 
 export const TAB_INCOMPLETE_WHILE_SUBMITTED_MESSAGE = 'Return the version to Draft before marking a tab incomplete';
 

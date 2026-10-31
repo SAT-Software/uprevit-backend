@@ -143,6 +143,7 @@ Metadata:
 Globals:
   Function:
     Timeout: 120
+    MemorySize: 512
     Runtime: nodejs22.x
     Architectures:
       - x86_64
@@ -176,6 +177,7 @@ Globals:
 
   Api:
     TracingEnabled: true
+    MinimumCompressionSize: 1024
 
 Conditions:
   HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]
@@ -1696,6 +1698,40 @@ Resources:
       BuildProperties:
         <<: *EsbuildProps
         EntryPoints: [controllers/dashboard/getDashboardActivityStats.ts]
+
+  GetAnalyticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/analytics/getAnalytics.lambdaHandler
+      Events:
+        GetAnalytics:
+          Type: Api
+          Properties:
+            Path: /analytics
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/analytics/getAnalytics.ts]
+
+  GetAnalyticsProductsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/analytics/getAnalyticsProducts.lambdaHandler
+      Events:
+        GetAnalyticsProducts:
+          Type: Api
+          Properties:
+            Path: /analytics/products
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/analytics/getAnalyticsProducts.ts]
 
   # ──────────────────────────────────────────────────────────────────────────
   # SOURCE FILES

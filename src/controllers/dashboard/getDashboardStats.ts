@@ -58,43 +58,19 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			is_latest: true,
 		});
 
-		const projectAndProductStatsPromise = db.collection('projects').aggregate([
-			{
-				$match: {
-					workspace_id: workspaceObjectId,
-					isArchived: false
-				}
-			},
-			{
-				$lookup: {
-					from: 'products',
-					let: { projectId: '$_id' },
-					pipeline: [
-						{
-							$match: {
-								$expr: { $eq: ['$project_id', '$$projectId'] },
-								is_archived: { $ne: true }
-							}
-						}
-					],
-					as: 'projectProducts'
-				}
-			},
-			{
-				$group: {
-					_id: null,
-					totalProjects: { $sum: 1 },
-					totalProducts: { $sum: { $size: '$projectProducts' } }
-				}
-			},
-			{
-				$project: {
-					_id: 0,
-					totalProjects: 1,
-					totalProducts: 1
-				}
-			}
-		]).toArray();
+		const projectsPromise = db.collection('projects').countDocuments({
+			workspace_id: workspaceObjectId,
+			isArchived: false,
+		});
+
+		const productsPromise = db.collection('projects')
+			.distinct('_id', { workspace_id: workspaceObjectId, isArchived: true })
+			.then((archivedProjectIds) => db.collection('products').countDocuments({
+				workspace_id: workspaceObjectId,
+				project_id: { $nin: archivedProjectIds },
+				is_archived: { $ne: true },
+				is_latest: true,
+			}));
 
 		const [
 			totalDepartments,
@@ -102,24 +78,24 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			archivedDepartments,
 			archivedProjects,
 			archivedProducts,
-			projectAndProductStats,
+			totalProjects,
+			totalProducts,
 		] = await Promise.all([
 			departmentsPromise,
 			sourceFilesPromise,
 			archivedDepartmentsPromise,
 			archivedProjectsPromise,
 			archivedProductsPromise,
-			projectAndProductStatsPromise,
+			projectsPromise,
+			productsPromise,
 		]);
-
-		const stats = projectAndProductStats[0] || { totalProjects: 0, totalProducts: 0 };
 
 		return ResponseWrapper.success({
 			message: 'Dashboard statistics retrieved successfully',
 			data: {
 				total_departments: totalDepartments,
-				total_projects: stats.totalProjects,
-				total_products: stats.totalProducts,
+				total_projects: totalProjects,
+				total_products: totalProducts,
 				total_source_files: totalSourceFiles,
 				total_archives: archivedDepartments + archivedProjects + archivedProducts,
 			},

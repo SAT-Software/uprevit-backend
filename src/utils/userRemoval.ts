@@ -139,12 +139,12 @@ const reassignProductTeams = async (
 	const reassigned = await withTransaction(async (txDb, session) => {
 		const products = txDb.collection<Product>('products');
 		await products.updateMany(
-			{ workspace_id: workspaceId, contributor_user_ids: targetUserId },
+			{ workspace_id: workspaceId, is_latest: true, contributor_user_ids: targetUserId },
 			{ $pull: { contributor_user_ids: targetUserId } },
 			{ session },
 		);
 		const result = await products.updateMany(
-			{ workspace_id: workspaceId, owner_user_id: targetUserId },
+			{ workspace_id: workspaceId, is_latest: true, owner_user_id: targetUserId },
 			{ $set: { owner_user_id: actorUserId }, $pull: { contributor_user_ids: actorUserId } },
 			{ session },
 		);

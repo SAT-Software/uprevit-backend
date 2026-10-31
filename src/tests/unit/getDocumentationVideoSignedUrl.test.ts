@@ -67,7 +67,7 @@ describe("getDocumentationVideoSignedUrl", () => {
 
 		expect(response.statusCode).toBe(200);
 		expect(documentationVideoUrl.createDocumentationVideoSignedUrl).toHaveBeenCalledWith(
-			"videos/product/products-intro.mp4",
+			"videos/product/products-intro-v2.mp4",
 		);
 
 		const body = JSON.parse(response.body);

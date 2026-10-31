@@ -6,9 +6,9 @@ The main infrastructure entrypoint is `template.yaml`, and the application code 
 
 ## Current Release
 
-**0.9.1** adds an API health endpoint and monitoring for API errors, export failures, and billing usage sync, with optional email alerts and a scheduled-job heartbeat.
+**0.10.0** adds analytics and drill-down APIs, multi-sheet workbook exports, and faster product and dashboard responses, and keeps bookmarks and team changes on the latest product version.
 
-See [CHANGELOG.md](./CHANGELOG.md) for the full release notes. Use it with the matching `0.9.1` UI release.
+See [CHANGELOG.md](./CHANGELOG.md) for the full release notes. Use it with the matching `0.10.0` UI release.
 
 ## Environment Variables
 
@@ -105,9 +105,17 @@ Recommended release flow:
 5. Create the release tag
 6. Merge `main` back into `develop`
 
-Keep release versions aligned with `../uprevit-ui`, and merge and verify the backend before the UI. For this release, use `release/0.9.1` and create the `v0.9.1` tag after production verification. After `main` deploys, fast-forward `demo` to the same `main` commit so both environments run the same SHA.
+Keep release versions aligned with `../uprevit-ui`, and merge and verify the backend before the UI. For this release, use `release/0.10.0` and create the `v0.10.0` tag after production verification. After `main` deploys, fast-forward `demo` to the same `main` commit so both environments run the same SHA.
 
 Existing databases need the product lifecycle migration (`src/scripts/migrateProductLifecycle.ts`) and Product Owner backfill (`src/scripts/backfillProductOwners.ts`). Rehearse both on dev with `--dry-run` first and verify their counts. The lifecycle migration maps legacy Submitted versions to Released or Obsolete and separates archiving from status; the owner backfill preserves existing owners and fills missing ones from the creator or an active workspace admin.
+
+### 0.10.0 release steps
+
+After the `0.10.0` backend deploys to an environment, run each script against its database with `--dry-run` first, check the output, then run it again without `--dry-run`. Both are safe to rerun.
+
+1. `MONGODB_URI=... DB_NAME=... npm --prefix src run ensure:core-indexes -- --dry-run`
+2. `MONGODB_URI=... DB_NAME=... npm --prefix src run migrate:bookmarks-latest-version -- --dry-run`
+3. Create a new API Gateway deployment of the `Prod` stage once so response compression takes effect.
 
 ### 0.8.0 data migrations
 
@@ -186,22 +194,18 @@ uprevit-backend$ sam logs -n HelloWorldFunction --stack-name uprevit-backend --t
 
 You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
 
-## Documentation videos (S3 seed)
+## Documentation videos
 
-Place `.mp4` files under `src/scripts/documentation-videos-input/` (folder layout matches the product team's export).
+Videos live in the `uprevit-documentation-files` bucket under `videos/<category>/<name>.mp4`. Every stack (test, stage, prod) reads the same bucket and CloudFront distribution, so never overwrite an existing file. Upload a changed video under a new name (`products-intro-v2.mp4`, then `-v3`), and point its key at the new path in `src/config/documentationVideos.ts`. Each stack switches when it is deployed, and the old file stays for rollback.
 
-From the repo root (or `src/`):
+Export videos as H.264 MP4 with `+faststart` so playback starts before the download finishes. Lay them out in a local folder that mirrors the bucket, then upload them. `--no-overwrite` skips any path that already exists (needs AWS CLI 2.30 or later):
 
 ```bash
-cd src && npm install   # installs @aws-sdk/client-s3 (required by the seed script)
-npm run seed:documentation-videos -- --scan-dir
-npm run seed:documentation-videos -- --dry-run
-npm run seed:documentation-videos
+aws s3 sync ./upload s3://uprevit-documentation-files --exclude "*" --include "videos/*.mp4" \
+  --no-overwrite --content-type video/mp4 --cache-control "public, max-age=31536000, immutable" --dryrun
 ```
 
-From the repo root: `npm run seed:documentation-videos -- --dry-run` (forwards flags to `src/`).
-
-Requires `AWS_REGION` and credentials with `s3:PutObject` on `DOCUMENTATION_FILES_BUCKET` (default `uprevit-documentation-files`).
+Check the dry run lists only new paths, then run it again without `--dryrun`.
 
 ### CloudFront signed video URLs
 
