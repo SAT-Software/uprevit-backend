@@ -26,7 +26,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 
 		const listQuery = parseListQuery({ query, allowedSortFields: ['product_name'], defaultSort: 'product_name' });
 		if (listQuery.error) return listQuery.error;
-		const { page, limit, skip } = listQuery.value!;
+		const { page, limit, skip, order } = listQuery.value!;
 
 		const db = await getDb();
 		const match = await buildDrillDownMatch(db, parsed.filters, metric, query?.value);
@@ -37,7 +37,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const [products, totalCount] = await Promise.all([
 			collection.aggregate([
 				{ $match: productMatch },
-				{ $sort: { product_name: 1, _id: 1 } },
+				{ $sort: { product_name: order === 'desc' ? -1 : 1, _id: 1 } },
 				{ $skip: skip },
 				{ $limit: limit },
 				{ $lookup: { from: 'departments', localField: 'department_id', foreignField: '_id', as: 'department' } },
