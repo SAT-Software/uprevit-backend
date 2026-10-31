@@ -3,7 +3,7 @@ export const DOCUMENTATION_VIDEOS = {
 	"getting-started.welcome-dashboard": "videos/getting-started/welcome-dashboard-v2.mp4",
 	"getting-started.workspace": "videos/getting-started/workspace.mp4",
 	"product.compare-versions-redline-view":
-		"videos/product/compare-versions-redline-view.mp4",
+		"videos/product/compare-versions-redline-view-v2.mp4",
 	"product.compliance-tab": "videos/product/compliance-information-v2.mp4",
 	"product.label-components": "videos/product/label-components-v2.mp4",
 	"product.label-tags": "videos/product/label-tags-v2.mp4",
@@ -15,8 +15,14 @@ export const DOCUMENTATION_VIDEOS = {
 	"product.symbols-graphics": "videos/product/symbols-graphics-v2.mp4",
 	"projects.projects-tab": "videos/projects/projects-tab-v2.mp4",
 	"reports-analytics.overview": "videos/reports-analytics/overview.mp4",
+	"reports-analytics.reports": "videos/reports-analytics/reports.mp4",
+	"review-outputs.archives": "videos/review-outputs/archives.mp4",
+	"review-outputs.exports": "videos/review-outputs/exports.mp4",
+	"review-outputs.notifications": "videos/review-outputs/notifications.mp4",
 	"working-with-files.source-files-archive-bookmarks":
 		"videos/working-with-files/source-files-archive-bookmarks.mp4",
+	"working-with-files.bookmarks": "videos/working-with-files/bookmarks-v2.mp4",
+	"working-with-files.source-files": "videos/working-with-files/source-files-v2.mp4",
 } as const;
 
 export type DocumentationVideoKey = keyof typeof DOCUMENTATION_VIDEOS;

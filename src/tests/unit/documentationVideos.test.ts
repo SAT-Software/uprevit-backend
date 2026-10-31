@@ -15,7 +15,10 @@ describe("documentationVideos allowlist", () => {
 		);
 		expect(isDocumentationVideoKey("product.compare-versions-redline-view")).toBe(true);
 		expect(getDocumentationVideoObjectKey("product.compare-versions-redline-view")).toBe(
-			"videos/product/compare-versions-redline-view.mp4",
+			"videos/product/compare-versions-redline-view-v2.mp4",
+		);
+		expect(getDocumentationVideoObjectKey("review-outputs.exports")).toBe(
+			"videos/review-outputs/exports.mp4",
 		);
 	});
 
