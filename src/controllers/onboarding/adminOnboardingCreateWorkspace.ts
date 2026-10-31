@@ -8,7 +8,7 @@ import { validateMissingFields } from "../../utils/validationUtils";
 import { authenticateWithRole } from "../../utils/authUtils";
 import { User } from "../../models/user";
 import { AdminGetUserCommand, AdminUpdateUserAttributesCommand, CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
-import { headUploadObject, isTenantUploadKeyAllowed, movePendingWorkspaceAssetToWorkspace, normalizePersistedAssetReference } from '../../utils/s3-storage';
+import { headUploadObject, isTenantUploadKeyAllowed, isWorkspaceAssetAvailable, movePendingWorkspaceAssetToWorkspace, normalizePersistedAssetReference } from '../../utils/s3-storage';
 import { createBillingAccountForWorkspace } from '../../utils/billing/billingAccounts';
 import { assertSeatActivationAllowed } from '../../utils/billing/enforcement';
 import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
@@ -95,6 +95,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		if (normalizedLogo && !isTenantUploadKeyAllowed(normalizedLogo, { workspaceId, pendingOwnerId: cognitoSub })) {
 			return ResponseWrapper.badRequest('Workspace logo must belong to the signed-in account');
 		}
+		if (!pending && normalizedLogo && !(await headUploadObject(normalizedLogo))) {
+			return ResponseWrapper.badRequest('Workspace logo is unavailable. Upload it again or remove it.');
+		}
 
 		if (!pending) {
 			await withTransaction(async (txDb, session) => {
@@ -131,8 +134,12 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const storedWorkspace = await db.collection<Workspace>('workspaces').findOne({ _id: workspaceId });
 		if (!storedWorkspace) throw new Error('Incomplete onboarding records');
 		const previousLogo = storedWorkspace.logo || '';
-		const workspaceLogo = previousLogo
-			? await movePendingWorkspaceAssetToWorkspace(previousLogo, workspaceId.toString())
+		const requestedLogo = input.logo !== undefined ? normalizedLogo : previousLogo;
+		if (pending && requestedLogo && !(await isWorkspaceAssetAvailable(requestedLogo, workspaceId.toString()))) {
+			return ResponseWrapper.badRequest('Workspace logo is unavailable. Upload it again or remove it.');
+		}
+		const workspaceLogo = requestedLogo
+			? await movePendingWorkspaceAssetToWorkspace(requestedLogo, workspaceId.toString())
 			: '';
 
 		if (workspaceLogo !== previousLogo) {

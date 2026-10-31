@@ -215,17 +215,30 @@ const buildCopySource = (bucket: string, key: string): string => {
 	return `${bucket}/${encodedKey}`;
 };
 
+const toWorkspaceAssetKey = (key: string, workspaceId: string): string => {
+	const normalizedKey = normalizeKey(key);
+	const fileName = normalizedKey?.startsWith("uploads/pending/") ? normalizedKey.split('/').pop() : undefined;
+	return fileName ? `uploads/${workspaceId}/workspace/${fileName}` : key;
+};
+
+/**
+ * Returns true when a workspace asset exists at its pending key or at the workspace key it moves to.
+ * @param {string} key Uploads-bucket object key
+ * @param {string} workspaceId Workspace the asset belongs to
+ */
+export const isWorkspaceAssetAvailable = async (key: string, workspaceId: string): Promise<boolean> => {
+	if (await headUploadObject(key)) return true;
+	const targetKey = toWorkspaceAssetKey(key, workspaceId);
+	return targetKey !== key && Boolean(await headUploadObject(targetKey));
+};
+
 export const movePendingWorkspaceAssetToWorkspace = async (
 	key: string,
 	workspaceId: string,
 ): Promise<string> => {
 	const normalizedKey = normalizeKey(key);
-	if (!normalizedKey || !normalizedKey.startsWith("uploads/pending/")) return key;
-
-	const fileName = normalizedKey.split('/').pop();
-	if (!fileName) return key;
-
-	const targetKey = `uploads/${workspaceId}/workspace/${fileName}`;
+	const targetKey = toWorkspaceAssetKey(key, workspaceId);
+	if (!normalizedKey || targetKey === key) return key;
 
 	try {
 		await client.send(

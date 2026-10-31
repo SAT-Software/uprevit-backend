@@ -1,17 +1,16 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ANALYTICS_METRICS, AnalyticsMetric, buildDrillDownMatch, parseAnalyticsFilters } from '../../utils/analytics';
 import { getDb } from '../../utils/db';
+import { parseListQuery } from '../../utils/listQuery';
 import { logError } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { requireTenantContext } from '../../utils/tenantContext';
-
-const MAX_PRODUCTS = 500;
 
 /**
  * API endpoint to list the products behind an analytics chart segment.
  *
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
- * @return {Promise<APIGatewayProxyResult>} Product summaries matching the requested metric and value
+ * @return {Promise<APIGatewayProxyResult>} A page of product summaries matching the requested metric and value
  */
 export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
@@ -25,16 +24,22 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		const metric = query?.metric as AnalyticsMetric;
 		if (!ANALYTICS_METRICS.includes(metric)) return ResponseWrapper.badRequest('Invalid metric');
 
+		const listQuery = parseListQuery({ query, allowedSortFields: ['product_name'], defaultSort: 'product_name' });
+		if (listQuery.error) return listQuery.error;
+		const { page, limit, skip } = listQuery.value!;
+
 		const db = await getDb();
 		const match = await buildDrillDownMatch(db, parsed.filters, metric, query?.value);
 		if (!match) return ResponseWrapper.badRequest('Invalid value');
 
-		const products = await db
-			.collection('products')
-			.aggregate([
-				{ $match: { ...match, workspace_id: parsed.filters.workspaceId } },
-				{ $sort: { product_name: 1 } },
-				{ $limit: MAX_PRODUCTS },
+		const productMatch = { ...match, workspace_id: parsed.filters.workspaceId };
+		const collection = db.collection('products');
+		const [products, totalCount] = await Promise.all([
+			collection.aggregate([
+				{ $match: productMatch },
+				{ $sort: { product_name: 1, _id: 1 } },
+				{ $skip: skip },
+				{ $limit: limit },
 				{ $lookup: { from: 'departments', localField: 'department_id', foreignField: '_id', as: 'department' } },
 				{ $lookup: { from: 'projects', localField: 'project_id', foreignField: '_id', as: 'project' } },
 				{
@@ -53,10 +58,23 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 						project_name: { $arrayElemAt: ['$project.project_name', 0] },
 					},
 				},
-			])
-			.toArray();
+			]).toArray(),
+			collection.countDocuments(productMatch),
+		]);
+		const totalPages = Math.ceil(totalCount / limit);
 
-		return ResponseWrapper.success({ message: 'Analytics products retrieved successfully', data: products });
+		return ResponseWrapper.success({
+			message: 'Analytics products retrieved successfully',
+			data: products,
+			pagination: {
+				currentPage: page,
+				totalPages,
+				totalCount,
+				limit,
+				hasNextPage: page < totalPages,
+				hasPrevPage: page > 1,
+			},
+		});
 	} catch (err) {
 		logError('Get analytics products handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get analytics products');
