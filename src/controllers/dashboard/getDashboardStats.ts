@@ -63,11 +63,14 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			isArchived: false,
 		});
 
-		const productsPromise = db.collection('products').countDocuments({
-			workspace_id: workspaceObjectId,
-			is_archived: { $ne: true },
-			is_latest: true,
-		});
+		const productsPromise = db.collection('projects')
+			.distinct('_id', { workspace_id: workspaceObjectId, isArchived: true })
+			.then((archivedProjectIds) => db.collection('products').countDocuments({
+				workspace_id: workspaceObjectId,
+				project_id: { $nin: archivedProjectIds },
+				is_archived: { $ne: true },
+				is_latest: true,
+			}));
 
 		const [
 			totalDepartments,

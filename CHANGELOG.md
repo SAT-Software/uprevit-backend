@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-31
+
+### Added
+
+- Added analytics APIs for the product pipeline, due-date calendar, created vs released, pending approvals, incomplete tabs, departments, and summary tiles, with date range, department, and project filters.
+- Added an analytics drill-down API that lists the products behind each chart segment.
+- Added multi-sheet workbook exports that keep sheet names, order, formatting, and sizing in Excel and PDF.
+- Added the `ensure:core-indexes` script for common workspace query indexes.
+- Added the `migrate:bookmarks-latest-version` script that moves existing bookmarks to the latest product version.
+- Added documentation video keys for Workspace, Operational Parameters, Notifications, Exports, Archives, Reports, Source Files, and Bookmarks.
+
+### Updated
+
+- Sped up product, product list, version, and dashboard responses by leaving out content they do not use and reusing the token verifier across calls.
+- Gzipped API responses over 1 KB and raised Lambda memory to 512 MB.
+- Moved product bookmarks to the new version when a version is created.
+- Applied product team changes only to the latest version and returned each member's status.
+- Pointed getting started, product, and redlines documentation videos at refreshed recordings.
+
+### Fixed
+
+- Fixed dashboard Total Products to count only the latest version of each product.
+- Bound workspace onboarding to the verified caller and resumed interrupted provisioning.
+
+
 ## [0.9.1] - 2026-10-17
 
 ### Added
