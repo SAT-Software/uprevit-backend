@@ -1,6 +1,6 @@
 import { Db, Document, ObjectId } from 'mongodb';
 import { AUDIT_LOG_V2_COLLECTION } from '../models/auditLogV2';
-import { ACTIVE_WORKFLOW_STATUSES, WORKFLOWS_COLLECTION } from '../models/workflow';
+import { ACTIVE_WORKFLOW_STATUSES, UNDECIDED_DECISIONS, WORKFLOWS_COLLECTION } from '../models/workflow';
 import { COMPLETION_TABS } from './productLifecycle';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -25,7 +25,7 @@ export type AnalyticsFilters = {
 type QueryParams = Record<string, string | undefined> | null;
 
 const startOfDay = (date: Date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-const validDate = (date: Date, value: string) => (date.toISOString().startsWith(value) ? date : null);
+const validDate = (date: Date, value: string) => (Number.isFinite(date.getTime()) && date.toISOString().startsWith(value) ? date : null);
 const parseDay = (value: string) =>
 	/^\d{4}-\d{2}-\d{2}$/.test(value) ? validDate(new Date(`${value}T00:00:00.000Z`), value) : null;
 const parseMonth = (value: string) =>
@@ -84,12 +84,13 @@ const releasedMatch = (filters: AnalyticsFilters, from: Date, to: Date): Documen
 	released_at: { $gte: from, $lt: to },
 });
 
-const creationEvents = (db: Db, workspaceId: ObjectId, from: Date, to: Date) =>
+const creationEvents = (db: Db, workspaceId: ObjectId, from: Date, to: Date, productIds?: ObjectId[]) =>
 	db.collection(AUDIT_LOG_V2_COLLECTION).aggregate<{ productId: ObjectId; occurredAt: Date }>([
 		{
 			$match: {
 				workspaceId,
 				'scope.type': 'product',
+				...(productIds && { 'scope.id': { $in: productIds.map(String) } }),
 				eventKey: { $in: PRODUCT_CREATION_EVENT_KEYS },
 				occurredAt: { $gte: from, $lt: to },
 			},
@@ -117,7 +118,7 @@ const pendingAssignments = (db: Db, workspaceId: ObjectId) =>
 	db.collection(WORKFLOWS_COLLECTION).aggregate<{ userId: ObjectId; name: string; productIds: ObjectId[] }>([
 		{ $match: { workspaceId, status: { $in: ACTIVE_WORKFLOW_STATUSES } } },
 		{ $unwind: '$assignments' },
-		{ $match: { 'assignments.decision': 'pending' } },
+		{ $match: { 'assignments.decision': { $in: UNDECIDED_DECISIONS } } },
 		{
 			$project: {
 				userId: '$assignments.userId',
@@ -194,7 +195,7 @@ export const getAnalytics = async (db: Db, filters: AnalyticsFilters) => {
 	const createdAt = new Map(created.map((event) => [String(event.productId), event.occurredAt]));
 	const missingCreation = releasedInRange.filter((product) => !createdAt.has(String(product._id)));
 	if (missingCreation.length) {
-		const events = await creationEvents(db, filters.workspaceId, new Date(0), filters.to);
+		const events = await creationEvents(db, filters.workspaceId, new Date(0), filters.to, missingCreation.map((product) => product._id));
 		for (const event of events) createdAt.set(String(event.productId), event.occurredAt);
 	}
 	const daysToRelease = releasedInRange.flatMap((product) => {

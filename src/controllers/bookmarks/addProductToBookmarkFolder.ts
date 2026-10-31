@@ -8,6 +8,7 @@ import { UserBookmarks } from "../../models/bookmarks";
 import type { Product } from "../../models/product";
 import { ObjectId } from "mongodb";
 import { productLineageFilter } from "../../utils/productLifecycle";
+import { moveBookmarksToVersion } from "../../utils/bookmarks";
 import { updateAuditLog } from "../../utils/auditLog";
 import { AuditLogAction } from "../../models/auditLog";
 
@@ -73,6 +74,9 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			}
 			return ResponseWrapper.conflict("Product is already bookmarked in this folder.");
 		}
+
+		const current = await products.findOne({ ...productLineageFilter(product), is_latest: true }, { projection: { _id: 1 } });
+		if (current && !current._id.equals(productId)) await moveBookmarksToVersion(db, productId, current._id);
 
 		await updateAuditLog({
 			entity: "product_bookmark_folder",
