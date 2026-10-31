@@ -25,8 +25,19 @@ export type AnalyticsFilters = {
 type QueryParams = Record<string, string | undefined> | null;
 
 const startOfDay = (date: Date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-const parseDay = (value: string) => (/^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00.000Z`) : null);
-const parseMonth = (value: string) => (/^\d{4}-\d{2}$/.test(value) ? new Date(`${value}-01T00:00:00.000Z`) : null);
+const validDate = (date: Date, value: string) => (date.toISOString().startsWith(value) ? date : null);
+const parseDay = (value: string) =>
+	/^\d{4}-\d{2}-\d{2}$/.test(value) ? validDate(new Date(`${value}T00:00:00.000Z`), value) : null;
+const parseMonth = (value: string) =>
+	/^\d{4}-\d{2}$/.test(value) ? validDate(new Date(`${value}-01T00:00:00.000Z`), value) : null;
+const dueDate = (value: unknown) => {
+	const date = value ? new Date(value as string) : null;
+	return date && !Number.isNaN(date.getTime()) ? date : null;
+};
+const monthWindow = (month: Date, filters: AnalyticsFilters): [Date, Date] => [
+	new Date(Math.max(month.getTime(), filters.from.getTime())),
+	new Date(Math.min(nextMonth(month).getTime(), filters.to.getTime())),
+];
 const nextMonth = (date: Date) => new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
 const toDay = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -153,7 +164,6 @@ export const getAnalytics = async (db: Db, filters: AnalyticsFilters) => {
 	const calendarFrom = filters.from;
 	const calendarTo = new Date(today.getTime() + CALENDAR_FUTURE_DAYS * DAY_MS);
 	const months = monthsBetween(filters.from, filters.to);
-	const monthsFrom = parseMonth(months[0])!;
 
 	const [current, released, created, assignments] = await Promise.all([
 		products
@@ -168,18 +178,18 @@ export const getAnalytics = async (db: Db, filters: AnalyticsFilters) => {
 			})
 			.toArray(),
 		products
-			.find(releasedMatch(filters, monthsFrom, filters.to), { projection: { released_at: 1, target_date: 1 } })
+			.find(releasedMatch(filters, filters.from, filters.to), { projection: { released_at: 1, target_date: 1 } })
 			.toArray(),
-		createdProductIds(db, filters, monthsFrom, filters.to),
+		createdProductIds(db, filters, filters.from, filters.to),
 		pendingAssignments(db, filters.workspaceId),
 	]);
 
 	const scopedIds = new Set(current.map((product) => String(product._id)));
 	const isScoped = Boolean(filters.departmentId || filters.projectId);
 	const active = current.filter((product) => ACTIVE_STATUSES.includes(product.status));
-	const overdue = active.filter((product) => product.target_date && new Date(product.target_date) < today);
+	const overdue = active.filter((product) => (dueDate(product.target_date) ?? today) < today);
 	const releasedInRange = released.filter((product) => product.released_at >= filters.from);
-	const withTarget = releasedInRange.filter((product) => product.target_date);
+	const withTarget = releasedInRange.filter((product) => dueDate(product.target_date));
 
 	const createdAt = new Map(created.map((event) => [String(event.productId), event.occurredAt]));
 	const missingCreation = releasedInRange.filter((product) => !createdAt.has(String(product._id)));
@@ -207,8 +217,9 @@ export const getAnalytics = async (db: Db, filters: AnalyticsFilters) => {
 
 	const calendar = new Map<string, number>();
 	for (const product of active) {
-		if (!product.target_date) continue;
-		const due = startOfDay(new Date(product.target_date));
+		const target = dueDate(product.target_date);
+		if (!target) continue;
+		const due = startOfDay(target);
 		if (due < calendarFrom || due >= calendarTo) continue;
 		calendar.set(toDay(due), (calendar.get(toDay(due)) ?? 0) + 1);
 	}
@@ -297,12 +308,12 @@ export const buildDrillDownMatch = async (
 	case 'released': {
 		const month = value && parseMonth(value);
 		if (value && !month) return null;
-		return month ? releasedMatch(filters, month, nextMonth(month)) : releasedMatch(filters, filters.from, filters.to);
+		return month ? releasedMatch(filters, ...monthWindow(month, filters)) : releasedMatch(filters, filters.from, filters.to);
 	}
 	case 'created': {
 		const month = value && parseMonth(value);
 		if (!month) return null;
-		const events = await createdProductIds(db, filters, month, nextMonth(month));
+		const events = await createdProductIds(db, filters, ...monthWindow(month, filters));
 		return { _id: { $in: events.map((event) => event.productId) } };
 	}
 	case 'approver': {
