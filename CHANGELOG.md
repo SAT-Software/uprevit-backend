@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-31
+
+### Fixed
+
+- Fixed `ensure:core-indexes` failing on databases where a collection does not exist yet; it now creates those indexes and their collections.
+
+
 ## [0.10.0] - 2026-10-31
 
 ### Added

@@ -6,9 +6,9 @@ The main infrastructure entrypoint is `template.yaml`, and the application code 
 
 ## Current Release
 
-**0.10.0** adds analytics and drill-down APIs, multi-sheet workbook exports, and faster product and dashboard responses, and keeps bookmarks and team changes on the latest product version.
+**0.10.1** fixes `ensure:core-indexes` on databases without every collection. **0.10.0** adds analytics and drill-down APIs, multi-sheet workbook exports, and faster product and dashboard responses, and keeps bookmarks and team changes on the latest product version.
 
-See [CHANGELOG.md](./CHANGELOG.md) for the full release notes. Use it with the matching `0.10.0` UI release.
+See [CHANGELOG.md](./CHANGELOG.md) for the full release notes. Use it with the `0.10.0` UI release.
 
 ## Environment Variables
 
@@ -105,7 +105,7 @@ Recommended release flow:
 5. Create the release tag
 6. Merge `main` back into `develop`
 
-Keep release versions aligned with `../uprevit-ui`, and merge and verify the backend before the UI. For this release, use `release/0.10.0` and create the `v0.10.0` tag after production verification. After `main` deploys, fast-forward `demo` to the same `main` commit so both environments run the same SHA.
+Keep release versions aligned with `../uprevit-ui`, and merge and verify the backend before the UI. For this release, use `hotfix/0.10.1` and create the `v0.10.1` tag after production verification. After `main` deploys, fast-forward `demo` to the same `main` commit so both environments run the same SHA.
 
 Existing databases need the product lifecycle migration (`src/scripts/migrateProductLifecycle.ts`) and Product Owner backfill (`src/scripts/backfillProductOwners.ts`). Rehearse both on dev with `--dry-run` first and verify their counts. The lifecycle migration maps legacy Submitted versions to Released or Obsolete and separates archiving from status; the owner backfill preserves existing owners and fills missing ones from the creator or an active workspace admin.
 
@@ -113,7 +113,7 @@ Existing databases need the product lifecycle migration (`src/scripts/migratePro
 
 After the `0.10.0` backend deploys to an environment, run each script against its database with `--dry-run` first, check the output, then run it again without `--dry-run`. Both are safe to rerun.
 
-1. `MONGODB_URI=... DB_NAME=... npm --prefix src run ensure:core-indexes -- --dry-run`
+1. `MONGODB_URI=... DB_NAME=... npm --prefix src run ensure:core-indexes -- --dry-run` (needs `0.10.1` or later on databases missing a collection)
 2. `MONGODB_URI=... DB_NAME=... npm --prefix src run migrate:bookmarks-latest-version -- --dry-run`
 3. Create a new API Gateway deployment of the `Prod` stage once so response compression takes effect.
 
