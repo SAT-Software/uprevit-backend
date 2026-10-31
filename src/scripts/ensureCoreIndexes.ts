@@ -20,7 +20,8 @@ export const ensureCoreIndexes = async (db: Db, dryRun: boolean) => {
 	let created = 0;
 	for (const [collectionName, keys] of Object.entries(CORE_INDEXES)) {
 		const collection = db.collection(collectionName);
-		const existing = new Set((await collection.indexes()).map((index) => JSON.stringify(index.key)));
+		const indexes = await collection.indexes().catch((error) => (error?.code === 26 ? [] : Promise.reject(error)));
+		const existing = new Set(indexes.map((index) => JSON.stringify(index.key)));
 		const missing = keys.filter((key) => !existing.has(JSON.stringify(key)));
 		for (const key of missing) console.log(`${dryRun ? 'Would create' : 'Creating'} ${collectionName} ${JSON.stringify(key)}`);
 		if (!dryRun && missing.length > 0) {
