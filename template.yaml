@@ -1699,6 +1699,40 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/dashboard/getDashboardActivityStats.ts]
 
+  GetAnalyticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/analytics/getAnalytics.lambdaHandler
+      Events:
+        GetAnalytics:
+          Type: Api
+          Properties:
+            Path: /analytics
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/analytics/getAnalytics.ts]
+
+  GetAnalyticsProductsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/analytics/getAnalyticsProducts.lambdaHandler
+      Events:
+        GetAnalyticsProducts:
+          Type: Api
+          Properties:
+            Path: /analytics/products
+            Method: get
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/analytics/getAnalyticsProducts.ts]
+
   # ──────────────────────────────────────────────────────────────────────────
   # SOURCE FILES
   # ──────────────────────────────────────────────────────────────────────────

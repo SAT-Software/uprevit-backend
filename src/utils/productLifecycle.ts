@@ -15,7 +15,7 @@ export const editableStatusFilter = { status: { $nin: CONTENT_LOCKED_STATUSES } 
 /** Thrown inside a transaction when the product changed after it was read; maps to 409. */
 export class LifecycleConflictError extends Error {}
 
-const COMPLETION_TABS = [
+export const COMPLETION_TABS = [
 	'product_information',
 	'compliance_information',
 	'label_components',
