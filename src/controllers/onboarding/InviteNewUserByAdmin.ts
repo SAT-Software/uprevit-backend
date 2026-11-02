@@ -137,7 +137,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 				}
 
 				const message = error instanceof Error ? error.message : 'Invitation failed';
-				logError(`Failed to invite user: ${normalizedEmail}`, error);
+				logError('Failed to invite user', error);
 				results.push({ email: normalizedEmail, status: "Failed", reason: message });
 			}
 		}
