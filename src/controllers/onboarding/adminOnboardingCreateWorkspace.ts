@@ -13,6 +13,7 @@ import { createBillingAccountForWorkspace } from '../../utils/billing/billingAcc
 import { assertSeatActivationAllowed } from '../../utils/billing/enforcement';
 import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 import { MongoServerError, ObjectId } from 'mongodb';
+import { withTelemetry } from '../../utils/telemetry';
 
 type WorkspaceOnboarding = {
 	_id: string;
@@ -42,7 +43,7 @@ const resolveAdminName = (name: unknown, email: string): string => {
  * @return {Promise<APIGatewayProxyResult>}
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		// Ensure caller is admin
 		const auth = await authenticateWithRole(event, 'admin');
@@ -186,4 +187,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Admin onboarding create workspace handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to complete onboarding');
 	}
-}
+})

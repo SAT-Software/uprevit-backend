@@ -7,6 +7,7 @@ import { logError } from '../../utils/logger';
 import { requireTenantContext } from '../../utils/tenantContext';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 import { enrichDepartmentsWithImageUrls, enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
+import { withTelemetry } from '../../utils/telemetry';
 
 type DepartmentUser = {
 	_id: ObjectId;
@@ -27,7 +28,7 @@ type DepartmentWithUsers = Omit<Department, 'users'> & {
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 
 		const tenantResult = await requireTenantContext(event);
@@ -103,4 +104,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get department handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get department');
 	}
-}; 
+}); 

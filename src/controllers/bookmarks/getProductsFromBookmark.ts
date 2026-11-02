@@ -6,13 +6,14 @@ import { validateAllObjectIds } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
 import { UserBookmarks } from "../../models/bookmarks";
 import { ObjectId } from "mongodb";
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * @param {APIGatewayProxyEvent} event
  * @returns {Promise<APIGatewayProxyResult>}
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -90,4 +91,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get products from bookmark handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to get products from bookmark folder');
 	}
-};
+});

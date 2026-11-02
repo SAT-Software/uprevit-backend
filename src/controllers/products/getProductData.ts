@@ -14,6 +14,7 @@ import {
 	enrichItemsWithSignedUrls,
 	type TenantUploadSigningOptions,
 } from '../../utils/s3-storage';
+import { withTelemetry } from '../../utils/telemetry';
 
 const enrichLabelComponentsWithSignedUrls = async (
 	labelComponents: LabelComponents['data'],
@@ -100,7 +101,7 @@ const enrichLabelTagsWithSignedUrls = async (
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -371,4 +372,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 		return ResponseWrapper.internalServerError('Failed to get product data');
 	}
-};
+});

@@ -17,6 +17,7 @@ import {
 	reserveSupportAttachmentUpload,
 	supportAttachmentKey,
 } from '../../utils/supportAttachments';
+import { withTelemetry } from '../../utils/telemetry';
 
 const HOURLY_UPLOAD_LIMIT = 40;
 
@@ -28,7 +29,7 @@ const isSupportedContentType = (value: unknown): value is SupportAttachmentConte
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -84,4 +85,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Create support attachment handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to prepare screenshot upload');
 	}
-};
+});

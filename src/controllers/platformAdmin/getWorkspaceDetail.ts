@@ -19,13 +19,14 @@ import {
 import { getBillingAccountByWorkspaceId } from '../../utils/billing/billingAccounts';
 import { resolveLiveWorkspaceBillingPreview } from '../../utils/billing/chargebeeBillingDetail';
 import { serializeWorkspaceFreezes } from '../../utils/billing/serializers';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Returns workspace profile, admin list, billing preview, and recent platform audit events.
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Workspace detail payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -99,4 +100,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin get workspace detail failed', error);
 		return ResponseWrapper.internalServerError('Failed to load workspace detail');
 	}
-};
+});

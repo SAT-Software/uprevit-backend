@@ -1,6 +1,7 @@
 import { ScheduledEvent } from 'aws-lambda';
 import { logError } from '../../utils/logger';
 import { processScheduledUsageEventRetries } from '../../utils/billing/usageEventChargebeeSync';
+import { withTelemetry } from '../../utils/telemetry';
 
 const { BETTER_STACK_HEARTBEAT_URL } = process.env;
 
@@ -25,7 +26,7 @@ const sendHeartbeat = async (succeeded: boolean): Promise<void> => {
  * @param {ScheduledEvent} _event EventBridge scheduled event
  * @return {Promise<void>}
  */
-export const lambdaHandler = async (_event: ScheduledEvent): Promise<void> => {
+export const lambdaHandler = withTelemetry(async (_event: ScheduledEvent): Promise<void> => {
 	try {
 		const result = await processScheduledUsageEventRetries();
 		console.log(JSON.stringify({
@@ -38,4 +39,4 @@ export const lambdaHandler = async (_event: ScheduledEvent): Promise<void> => {
 		await sendHeartbeat(false);
 		throw error;
 	}
-};
+});

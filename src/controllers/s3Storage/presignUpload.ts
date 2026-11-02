@@ -15,6 +15,7 @@ import { ACTIVE_WORKFLOW_STATUSES } from "../../models/workflow";
 import { WORKFLOW_ATTACHMENT_MAX_BYTES } from "../../models/workflowDiscussion";
 import { canComment, getProductTeamIds } from "../../utils/workflowDiscussion";
 import { findWorkflow } from "../../utils/workflows";
+import { withTelemetry } from '../../utils/telemetry';
 
 const PRODUCT_ASSET_CONTENT_TYPES = new Set([
 	"image/png",
@@ -50,7 +51,7 @@ const resolveUploadScope = (value: unknown): UploadScope => {
 	return "workspace-assets";
 };
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const auth = await authenticateRequest(event);
 		if (!auth.isValid) return auth.error;
@@ -147,4 +148,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Failed to generate presigned upload URL', error);
 		return ResponseWrapper.internalServerError('Failed to generate presigned URL.');
 	}
-}
+})

@@ -10,13 +10,14 @@ import {
 	createSupportAttachmentViewUrl,
 	ensureSupportAttachmentIndexes,
 } from '../../utils/supportAttachments';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Returns a short-lived view URL for a support screenshot to an allowlisted Uprevit support reviewer.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const reviewer = await requireSupportReviewer(event);
 		if (!reviewer.ok) return reviewer.response;
@@ -56,4 +57,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get support attachment handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get screenshot');
 	}
-};
+});

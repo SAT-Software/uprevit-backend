@@ -9,6 +9,7 @@ import { buildLegacyAuditLookupStage, PRODUCT_ACTIVITY_UPDATE_ACTIONS } from '..
 import { addProductReleaseInfo, buildProductStatusMatch, productSummaryProjection } from '../../utils/productLifecycle';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 import { productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
+import { withTelemetry } from '../../utils/telemetry';
 
 const ALLOWED_SORT_FIELDS = [
 	'product_name',
@@ -69,7 +70,7 @@ const ARCHIVE_FILTER_FIELDS: Record<string, ListFilterField> = {
  *
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -259,4 +260,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get all products handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get products');
 	}
-};
+});

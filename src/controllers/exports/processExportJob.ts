@@ -18,6 +18,7 @@ import { generateReportsExcelExport } from '../../utils/reports/exportReportsExc
 import { generateReportsPDFExport } from '../../utils/reports/exportReportsPDF';
 import { buildExportPipeline } from '../../utils/reports/queryBuilder';
 import { uploadExportObjectByKey } from '../../utils/s3-storage';
+import { withTelemetry } from '../../utils/telemetry';
 
 const EXPORTS_PREFIX = (process.env.EXPORTS_PREFIX || 'exports').replace(/^\/+|\/+$/g, '');
 const DEFAULT_MAX_RECEIVE_COUNT = 4;
@@ -228,7 +229,7 @@ const generateReportArtifact = async ({
  * @param {SQSEvent} event - SQS event payload
  * @return {Promise<SQSBatchResponse>} Batch item failure response
  */
-export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
+export const lambdaHandler = withTelemetry(async (event: SQSEvent): Promise<SQSBatchResponse> => {
 	const batchItemFailures: SQSBatchResponse['batchItemFailures'] = [];
 
 	for (const record of event.Records) {
@@ -342,4 +343,4 @@ export const lambdaHandler = async (event: SQSEvent): Promise<SQSBatchResponse> 
 	}
 
 	return { batchItemFailures };
-};
+});

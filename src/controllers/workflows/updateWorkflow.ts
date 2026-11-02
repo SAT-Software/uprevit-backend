@@ -16,6 +16,7 @@ import {
 	lineageIdOf,
 	requireWorkflowContext,
 } from '../../utils/workflows';
+import { withTelemetry } from '../../utils/telemetry';
 
 const ACTIONS = ['update-details', 'add-product', 'remove-product', 'add-assignment', 'remove-assignment'] as const;
 type Action = typeof ACTIONS[number];
@@ -37,7 +38,7 @@ type Change = {
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const workflowResult = await requireWorkflowContext(event);
 		if (!workflowResult.ok) return workflowResult.response;
@@ -214,4 +215,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Update workflow handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to update workflow');
 	}
-};
+});

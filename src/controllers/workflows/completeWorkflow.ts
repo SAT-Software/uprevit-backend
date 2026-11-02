@@ -11,13 +11,14 @@ import {
 	workflowEvents,
 } from '../../utils/workflowLifecycle';
 import { canManageWorkflow, findWorkflow, requireWorkflowContext } from '../../utils/workflows';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Completes a Ready to Complete workflow, releasing its Products. Only the Initiator or an admin may do this.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const workflowResult = await requireWorkflowContext(event);
 		if (!workflowResult.ok) return workflowResult.response;
@@ -41,4 +42,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Complete workflow handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to complete workflow');
 	}
-};
+});

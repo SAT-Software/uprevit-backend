@@ -9,6 +9,7 @@ import { recordAuditEvent } from '../../utils/auditLogV2';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Create a project
@@ -16,7 +17,7 @@ import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext } from '..
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -138,4 +139,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Create project handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to create project');
 	}
-};
+});

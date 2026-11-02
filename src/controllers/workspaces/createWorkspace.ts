@@ -9,6 +9,7 @@ import { authenticateWithRole } from '../../utils/authUtils';
 import { logError } from '../../utils/logger';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 import { createBillingAccountForWorkspace } from '../../utils/billing/billingAccounts';
+import { withTelemetry } from '../../utils/telemetry';
 
 
 /**
@@ -23,7 +24,7 @@ import { createBillingAccountForWorkspace } from '../../utils/billing/billingAcc
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const auth = await authenticateWithRole(event, 'admin');
 
@@ -85,4 +86,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Create workspace handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to create workspace');
 	}
-};
+});

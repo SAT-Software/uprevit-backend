@@ -13,6 +13,7 @@ import { enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 import { logError, logInfo } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
+import { withTelemetry } from '../../utils/telemetry';
 
 const ADMIN_ONLY_SCOPES: AuditScopeType[] = ['department', 'project', 'archive'];
 const MAX_SEARCH_LENGTH = 200;
@@ -49,7 +50,7 @@ const parseActions = (rawActions: string | undefined): AuditAction[] | null => {
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Paginated audit log response
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -224,4 +225,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get audit logs handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to get audit logs in auditLogs/getAuditLogs handler.');
 	}
-};
+});
