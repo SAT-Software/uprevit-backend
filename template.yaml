@@ -709,6 +709,40 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/products/createProduct.ts]
 
+  CheckProductImportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/checkProductImport.lambdaHandler
+      Events:
+        CheckProductImport:
+          Type: Api
+          Properties:
+            Path: /products/import/check
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/checkProductImport.ts]
+
+  ImportProductsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/products/importProducts.lambdaHandler
+      Events:
+        ImportProducts:
+          Type: Api
+          Properties:
+            Path: /products/import
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/products/importProducts.ts]
+
   GetAllProductsFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
