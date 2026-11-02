@@ -176,12 +176,12 @@ jobs:
               "AppBaseUrl": os.environ.get("APP_BASE_URL", ""),
               "SupportReviewerEmailsParam": os.environ.get("SUPPORT_REVIEWER_EMAILS_PARAM", ""),
               "PosthogSupportSecretParam": os.environ.get("POSTHOG_SUPPORT_SECRET_PARAM", ""),
-              "PosthogProjectToken": os.environ.get("POSTHOG_PROJECT_TOKEN", ""),
               "SupportAttachmentsAllowedOrigins": os.environ.get("SUPPORT_ATTACHMENTS_ALLOWED_ORIGINS", ""),
           }
           always_set = {
               "MonitoringAlertEmail": os.environ.get("MONITORING_ALERT_EMAIL", ""),
               "BetterStackHeartbeatUrl": os.environ.get("BETTER_STACK_HEARTBEAT_URL", ""),
+              "PosthogProjectToken": os.environ.get("POSTHOG_PROJECT_TOKEN", ""),
           }
 
           for key, value in parameters.items():
