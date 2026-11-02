@@ -36,6 +36,43 @@ const INFO_FIELDS = [
 
 export const nameKey = (value: string) => value.trim().toLowerCase();
 
+/**
+ * Matches a stored name case-insensitively, ignoring spaces around it on either side.
+ * @param {string} value Name from the import file
+ * @return {RegExp} Pattern for the stored name
+ */
+export const exactName = (value: string) => new RegExp(`^\\s*${value.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
+
+const IMPORT_LOCKS_COLLECTION = 'product_import_locks';
+const IMPORT_LOCK_MS = 5 * 60 * 1000;
+
+/**
+ * Lets one import request per workspace run at a time, so concurrent requests can't both create the same plan number,
+ * department or project. A lock left by a crashed request expires on its own.
+ * The `expires_at` condition is what makes a held lock fail with a duplicate key; a filter on `_id` alone would take it over.
+ * IMPORT_LOCK_MS must stay longer than the ImportProductsFunction timeout in template.yaml.
+ * @param {Db} db Database
+ * @param {ObjectId} workspaceId Workspace
+ * @return {Promise<boolean>} False when another import holds the lock
+ */
+export const acquireImportLock = async (db: Db, workspaceId: ObjectId): Promise<boolean> => {
+	const now = new Date();
+	try {
+		await db.collection<{ _id: ObjectId; expires_at: Date }>(IMPORT_LOCKS_COLLECTION).updateOne(
+			{ _id: workspaceId, expires_at: { $lt: now } },
+			{ $set: { expires_at: new Date(now.getTime() + IMPORT_LOCK_MS) } },
+			{ upsert: true },
+		);
+		return true;
+	} catch (error) {
+		if ((error as { code?: number }).code === 11000) return false;
+		throw error;
+	}
+};
+
+export const releaseImportLock = (db: Db, workspaceId: ObjectId) =>
+	db.collection<{ _id: ObjectId }>(IMPORT_LOCKS_COLLECTION).deleteOne({ _id: workspaceId });
+
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
 const hasDuplicates = (values: string[]) => new Set(values.map(nameKey)).size !== values.length;
@@ -85,7 +122,7 @@ export const validateImportProduct = (input: ImportProductInput): string | null 
 	if (components.some((item) => !text(item?.component_number))) return 'Every label component needs a number';
 	if (components.some((item) => item.label_type != null && !Array.isArray(item.label_type))) return 'Label types must be a list';
 	if (components.some((item) => !COMPONENT_TYPES.includes(text(item.component_type)))) {
-		return 'Component type must be Pre-printed, Blank or N/A';
+		return 'Component type must be Preprinted, Blank or N/A';
 	}
 	if (hasDuplicates(components.map((item) => text(item.component_number)))) return 'A component number is used more than once';
 

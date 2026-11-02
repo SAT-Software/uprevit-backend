@@ -48,7 +48,11 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			}).toArray(),
 		]);
 
-		const departmentIds = new Map(departments.map((department) => [nameKey(department.department_name), department._id!.toString()]));
+		const departmentIds = new Map<string, string[]>();
+		for (const department of departments) {
+			const key = nameKey(department.department_name);
+			departmentIds.set(key, [...(departmentIds.get(key) ?? []), department._id!.toString()]);
+		}
 		const projectsByNumber = new Map(projects.map((project) => [project.project_number?.trim(), project.project_name]));
 		const projectsByName = new Map<string, Project[]>();
 		for (const project of projects) {
@@ -62,14 +66,15 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 				.filter((value) => projectsByNumber.has(value.trim()))
 				.map((value) => ({ project_number: value, project_name: projectsByNumber.get(value.trim()) })),
 			destinations: destinations.map(({ department_name: departmentName, project_name: projectName }) => {
-				const departmentId = departmentIds.get(nameKey(departmentName)) ?? null;
+				const matchingDepartments = departmentIds.get(nameKey(departmentName)) ?? [];
+				const departmentId = matchingDepartments.length === 1 ? matchingDepartments[0] : null;
 				const matches = departmentId && projectName.trim() ? projectsByName.get(`${departmentId}\n${nameKey(projectName)}`) ?? [] : [];
 				const project = matches.length === 1 ? matches[0] : undefined;
 				return {
 					department_name: departmentName,
 					project_name: projectName,
-					department_exists: Boolean(departmentId),
-					ambiguous: matches.length > 1,
+					department_exists: matchingDepartments.length > 0,
+					ambiguous: matchingDepartments.length > 1 || matches.length > 1,
 					project: project ? { _id: project._id!.toString(), project_name: project.project_name, project_number: project.project_number } : null,
 				};
 			}),
