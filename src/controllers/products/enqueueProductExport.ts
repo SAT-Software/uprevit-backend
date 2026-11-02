@@ -17,13 +17,14 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateAllObjectIds } from '../../utils/validationUtils';
 import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
 import { assertUsageActionAllowed } from '../../utils/billing/enforcement';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Queues a product export job from request body format.
  * @param {APIGatewayProxyEvent} event - API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Accepted response with job id
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	if (!event.body) {
 		return ResponseWrapper.badRequest('Request body is required');
 	}
@@ -126,4 +127,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Failed to queue product export', error, { format });
 		return ResponseWrapper.internalServerError('Failed to queue product export');
 	}
-};
+});

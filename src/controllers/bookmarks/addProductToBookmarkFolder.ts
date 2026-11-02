@@ -11,13 +11,14 @@ import { productLineageFilter } from "../../utils/productLifecycle";
 import { moveBookmarksToVersion } from "../../utils/bookmarks";
 import { updateAuditLog } from "../../utils/auditLog";
 import { AuditLogAction } from "../../models/auditLog";
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * @param {APIGatewayProxyEvent} event
  * @returns {Promise<APIGatewayProxyResult>}
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -96,4 +97,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Add product to bookmark folder handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to add product to bookmark folder');
 	}
-};
+});

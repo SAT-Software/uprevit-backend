@@ -16,6 +16,7 @@ import {
 	loadWorkflowProductState,
 	requireWorkflowContext,
 } from '../../utils/workflows';
+import { withTelemetry } from '../../utils/telemetry';
 
 type ProductAudit = { action: 'create' | 'update'; actionBy: string; actionAt: Date };
 
@@ -43,7 +44,7 @@ const loadOpenChangeRequestCounts = async (db: Db, workflow: Workflow) => {
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const workflowResult = await requireWorkflowContext(event);
 		if (!workflowResult.ok) return workflowResult.response;
@@ -103,4 +104,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get workflow handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get workflow');
 	}
-};
+});

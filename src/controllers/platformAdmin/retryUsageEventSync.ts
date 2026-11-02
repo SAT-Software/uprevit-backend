@@ -12,13 +12,14 @@ import {
 	retryPendingUsageEventsForWorkspace,
 	retryUsageEventSyncById,
 } from '../../utils/billing/usageEventChargebeeSync';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Manually retries Chargebee sync for one usage event or all retryable events in a workspace.
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Retry result payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -94,4 +95,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		}
 		return ResponseWrapper.internalServerError('Failed to retry usage event sync');
 	}
-};
+});

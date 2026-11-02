@@ -8,12 +8,13 @@ import { ObjectId } from "mongodb";
 import { SourceFile } from "../../models/sourceFiles";
 import { Product } from "../../models/product";
 import { createPresignedGetUrl } from "../../utils/s3-storage";
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * @param {APIGatewayProxyEvent} event 
  * @return {Promise<APIGatewayProxyResult>}
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -88,4 +89,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get current folder by ID handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to get folder');
 	}
-}
+})

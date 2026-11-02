@@ -6,6 +6,7 @@ import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateBoolean } from '../../utils/validationUtils';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 import { isWorkspaceAdmin, requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Archive a department
@@ -13,7 +14,7 @@ import { isWorkspaceAdmin, requireTenantContext, tenantObjectIdFilter } from '..
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -104,4 +105,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Archive department handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to archive department');
 	}
-};
+});

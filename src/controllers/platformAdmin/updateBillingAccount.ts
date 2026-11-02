@@ -18,6 +18,7 @@ import { recordPlatformAuditEvent } from '../../utils/platformAuditLog';
 import { getBillingAccountByWorkspaceId, normalizeLimits } from '../../utils/billing/billingAccounts';
 import { parseOptionalIsoDate } from '../../utils/billing/billingPeriod';
 import { serializeBillingAccount } from '../../utils/billing/serializers';
+import { withTelemetry } from '../../utils/telemetry';
 
 const ACCOUNT_STATUSES: BillingAccountStatus[] = ['draft', 'pilot', 'active', 'past_due', 'cancelled'];
 const CADENCES: BillingCadence[] = ['monthly', 'yearly'];
@@ -43,7 +44,7 @@ type UpdateBillingInput = {
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Updated billing account payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -217,4 +218,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin update billing account failed', error);
 		return ResponseWrapper.internalServerError('Failed to update billing account');
 	}
-};
+});

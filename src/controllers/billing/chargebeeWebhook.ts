@@ -18,6 +18,7 @@ import {
 	resolveChargebeeSubscriptionForMirror,
 	syncPastDueFromChargebee,
 } from '../../utils/billing/chargebeeWebhooks';
+import { withTelemetry } from '../../utils/telemetry';
 
 const safeCompare = (left: string, right: string): boolean => {
 	const leftBuffer = Buffer.from(left);
@@ -77,7 +78,7 @@ const retryWebhookLater = async (eventId: string): Promise<APIGatewayProxyResult
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Acknowledgement response
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	let eventId: string | undefined;
 
 	try {
@@ -157,4 +158,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Chargebee webhook processing failed', error);
 		return ResponseWrapper.internalServerError('Failed to process webhook');
 	}
-};
+});

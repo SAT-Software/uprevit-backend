@@ -5,13 +5,14 @@ import { isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContex
 import { getWorkspaceInvoiceAccess } from '../../utils/billing/invoiceAccess';
 import { retrieveChargebeeInvoicePdf } from '../../utils/billing/chargebeeClient';
 import { serializeInvoicePdfDownload } from '../../utils/billing/invoiceSerializers';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Returns a Chargebee invoice PDF download URL for a workspace invoice.
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Invoice download payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event, { allowAccessFrozen: true });
 		if (!tenantResult.ok) return tenantResult.response;
@@ -59,4 +60,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Download billing invoice failed', error);
 		return ResponseWrapper.internalServerError('Failed to download invoice');
 	}
-};
+});

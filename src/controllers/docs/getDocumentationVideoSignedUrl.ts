@@ -4,13 +4,14 @@ import { authenticateRequest } from "../../utils/authUtils";
 import { createDocumentationVideoSignedUrl } from "../../utils/documentation-video-url";
 import { logError } from "../../utils/logger";
 import { ResponseWrapper } from "../../utils/responseWrapper";
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Returns a signed URL for a documentation video (CloudFront or S3 presigned GET).
  * @param {APIGatewayProxyEvent} event - API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Signed URL and expiry for the video
  */
-export const lambdaHandler = async (
+export const lambdaHandler = withTelemetry(async (
 	event: APIGatewayProxyEvent,
 ): Promise<APIGatewayProxyResult> => {
 	try {
@@ -39,4 +40,4 @@ export const lambdaHandler = async (
 		logError("Failed to generate documentation video URL", error);
 		return ResponseWrapper.internalServerError("Failed to generate documentation video URL");
 	}
-};
+});

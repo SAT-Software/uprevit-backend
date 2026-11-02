@@ -111,6 +111,10 @@ Parameters:
     Type: String
     Description: "SSM Parameter Store path (SecureString) for the PostHog Support secret API key, e.g. /uprevit/dev/support/identity-secret"
     Default: ""
+  PosthogProjectToken:
+    Type: String
+    Description: "Public PostHog project token for backend error tracking; empty disables it"
+    Default: ""
   MonitoringAlertEmail:
     Type: String
     Description: "Email that receives CloudWatch monitoring alarms; when set, the alarms are created"
@@ -171,6 +175,8 @@ Globals:
         SES_FROM_ADDRESS: !Ref SesFromAddress
         APP_BASE_URL: !Ref AppBaseUrl
         MONITORING_STACK: !If [HasMonitoringAlerts, !Ref AWS::StackName, ""]
+        POSTHOG_PROJECT_TOKEN: !Ref PosthogProjectToken
+        POSTHOG_HOST: https://us.i.posthog.com
     # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
     LoggingConfig:
       LogFormat: JSON

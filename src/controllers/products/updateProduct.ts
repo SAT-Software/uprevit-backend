@@ -20,6 +20,7 @@ import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError, pro
 import { getMemberName, notify } from '../../utils/notifications';
 import { saveProductContent, sendChangeNotices } from '../../utils/workflowChangeNotices';
 import { WorkflowConflictError } from '../../utils/workflowLifecycle';
+import { withTelemetry } from '../../utils/telemetry';
 
 const ACTIONS = ['update-product', 'submit', 'return-to-draft', 'archive', 'restore', 'update-status'] as const;
 type Action = Exclude<typeof ACTIONS[number], 'update-status'>;
@@ -47,7 +48,7 @@ const fromLegacyStatus = (status: unknown, product: Product): Action | null => {
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -226,4 +227,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Update product handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to update product');
 	}
-};
+});

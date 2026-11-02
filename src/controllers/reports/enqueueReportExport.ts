@@ -13,6 +13,7 @@ import { validateMissingFields, validateObjectIds } from '../../utils/validation
 import type { PersistedReportExportRequest, QueryCondition } from '../../types/reports';
 import { ALLOWED_SORT_FIELDS } from '../../types/reports';
 import { assertUsageActionAllowed } from '../../utils/billing/enforcement';
+import { withTelemetry } from '../../utils/telemetry';
 
 type RequestBody = {
 	workspaceId?: string;
@@ -30,7 +31,7 @@ type RequestBody = {
  * @param {APIGatewayProxyEvent} event - API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Accepted response with job id
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	if (!event.body) {
 		return ResponseWrapper.badRequest('Request body is required');
 	}
@@ -158,4 +159,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Failed to queue report export', error, { format });
 		return ResponseWrapper.internalServerError('Failed to queue report export');
 	}
-};
+});

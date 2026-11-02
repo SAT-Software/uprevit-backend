@@ -18,13 +18,14 @@ import {
 	findBillingAccountByChargebeeCustomerId,
 } from '../../utils/billing/chargebeeWebhooks';
 import { retryPendingUsageEventsForWorkspace } from '../../utils/billing/usageEventChargebeeSync';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Links a Chargebee subscription to a workspace billing account.
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Subscription linked payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -110,4 +111,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin link Chargebee subscription failed', error);
 		return ResponseWrapper.internalServerError('Failed to link Chargebee subscription');
 	}
-};
+});

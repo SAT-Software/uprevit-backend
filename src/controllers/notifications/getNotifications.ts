@@ -5,13 +5,14 @@ import { parseListQuery } from '../../utils/listQuery';
 import { logError } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { requireTenantContext } from '../../utils/tenantContext';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Lists the caller's notifications, newest first, with their unread count. `unread=true` lists only unread ones.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -59,4 +60,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get notifications handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get notifications');
 	}
-};
+});

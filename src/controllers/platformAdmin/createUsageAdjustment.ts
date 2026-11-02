@@ -15,6 +15,7 @@ import {
 	buildChargebeeDeduplicationId,
 	trySyncUsageEventToChargebee,
 } from '../../utils/billing/usageEventChargebeeSync';
+import { withTelemetry } from '../../utils/telemetry';
 
 const METRICS: BillingUsageMetric[] = ['completed_export', 'upload_bytes'];
 
@@ -23,7 +24,7 @@ const METRICS: BillingUsageMetric[] = ['completed_export', 'upload_bytes'];
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Usage event created payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -116,4 +117,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin create usage adjustment failed', error);
 		return ResponseWrapper.internalServerError('Failed to create usage adjustment');
 	}
-};
+});

@@ -13,6 +13,7 @@ import {
 	type PlatformAuditLog,
 } from '../../models/platformAuditLog';
 import { serializePlatformAuditLog } from '../../utils/platformAdminSerializers';
+import { withTelemetry } from '../../utils/telemetry';
 
 const ALLOWED_SORT_FIELDS = ['occurredAt', 'action', 'status'];
 
@@ -23,7 +24,7 @@ const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Paginated platform audit logs
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -101,4 +102,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin list audit logs failed', error);
 		return ResponseWrapper.internalServerError('Failed to list platform audit logs');
 	}
-};
+});
