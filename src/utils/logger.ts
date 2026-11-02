@@ -1,3 +1,5 @@
+import { captureError } from './telemetry';
+
 /**
  * Structured logging utility for Lambda functions
  */
@@ -32,6 +34,7 @@ export function logError(message: string, error: unknown, context?: LogContext):
 	}
 
 	console.error(JSON.stringify(logEntry));
+	captureError(message, error, context);
 }
 
 /**

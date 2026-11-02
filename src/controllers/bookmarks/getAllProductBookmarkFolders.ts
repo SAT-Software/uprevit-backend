@@ -3,13 +3,14 @@ import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
 import { requireTenantContext } from "../../utils/tenantContext";
 import { getDb } from "../../utils/db";
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * @param {APIGatewayProxyEvent} event 
  * @returns {Promise<APIGatewayProxyResult>}
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -39,4 +40,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get all product bookmark folders handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to get product bookmark folders');
 	}
-}
+})

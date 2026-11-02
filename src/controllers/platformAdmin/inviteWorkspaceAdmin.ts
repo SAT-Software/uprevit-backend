@@ -20,6 +20,7 @@ import {
 	InviteEmailConflictError,
 	normalizeInviteEmail,
 } from '../../utils/platformInviteUtils';
+import { withTelemetry } from '../../utils/telemetry';
 
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
@@ -28,7 +29,7 @@ const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGI
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Workspace admin invite result
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -129,4 +130,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin workspace admin invite failed', error);
 		return ResponseWrapper.internalServerError('Failed to send workspace admin invite');
 	}
-};
+});

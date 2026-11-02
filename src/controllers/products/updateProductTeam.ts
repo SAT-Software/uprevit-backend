@@ -12,6 +12,7 @@ import { canManageProductTeam, findActiveWorkspaceMember } from '../../utils/pro
 import { getMemberName, notify } from '../../utils/notifications';
 import { flagUnavailableAssignments, touchActiveWorkflows } from '../../utils/workflowAssignments';
 import { lineageIdOf } from '../../utils/workflows';
+import { withTelemetry } from '../../utils/telemetry';
 
 const ACTIONS = ['set-owner', 'add-contributor', 'remove-contributor'] as const;
 type Action = typeof ACTIONS[number];
@@ -27,7 +28,7 @@ const EVENT_KEYS: Record<Action, string> = {
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -141,4 +142,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Update product team handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to update product team');
 	}
-};
+});

@@ -7,6 +7,7 @@ import { logError } from '../../utils/logger';
 import { requirePlatformOperator } from '../../utils/platformAdminContext';
 import { recordPlatformAuditEvent } from '../../utils/platformAuditLog';
 import { serializeWorkspaceFreezes } from '../../utils/billing/serializers';
+import { withTelemetry } from '../../utils/telemetry';
 
 type FreezeInput = {
 	usageFreezeEnabled?: boolean;
@@ -18,7 +19,7 @@ type FreezeInput = {
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Updated workspace freeze state payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -95,4 +96,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin update freezes failed', error);
 		return ResponseWrapper.internalServerError('Failed to update workspace freezes');
 	}
-};
+});

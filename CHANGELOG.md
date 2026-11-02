@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added PostHog error tracking for API and job errors logged with `logError`, sending only user and workspace IDs, enabled by the `PosthogProjectToken` parameter.
+
+### Updated
+
+- Invalid or expired login tokens are logged as warnings instead of errors.
+
 ## [0.10.1] - 2026-10-31
 
 ### Fixed

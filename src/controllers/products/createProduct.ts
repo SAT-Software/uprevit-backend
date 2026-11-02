@@ -9,6 +9,7 @@ import { logError } from '../../utils/logger';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 import { findActiveWorkspaceMember } from '../../utils/productAccess';
 import { computeCompleteCount } from '../../utils/productLifecycle';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Create a product
@@ -16,7 +17,7 @@ import { computeCompleteCount } from '../../utils/productLifecycle';
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	let userId: string | undefined;
 	
 	try {
@@ -171,4 +172,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Create product handler failed', err, { userId });
 		return ResponseWrapper.internalServerError('Failed to create product');
 	}
-};
+});

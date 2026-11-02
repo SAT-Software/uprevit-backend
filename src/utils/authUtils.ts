@@ -2,7 +2,7 @@ import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { ResponseWrapper } from './responseWrapper';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
-import { logError } from './logger';
+import { logWarn } from './logger';
 
 const createVerifier = () => CognitoJwtVerifier.create({
 	userPoolId: process.env.USER_POOL_ID!,
@@ -38,7 +38,7 @@ export async function verifyJWT(token: string): Promise<TokenValidationResponse>
 		const payload = await getVerifier().verify(token);
 		return {payload, isValid: true};
 	} catch (err) {
-		logError('JWT verification failed', err);
+		logWarn('JWT verification failed', { error: err instanceof Error ? err.message : String(err) });
 		return {isValid: false};
 	}
 }
@@ -58,7 +58,7 @@ export async function validateRole(token: string, role: string): Promise<TokenVa
 
 		return {isValid: false};
 	} catch (err) {
-		logError('Role validation failed', err);
+		logWarn('Role validation failed', { error: err instanceof Error ? err.message : String(err) });
 		return {isValid: false};
 	}
 }

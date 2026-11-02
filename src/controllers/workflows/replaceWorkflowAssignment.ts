@@ -7,6 +7,7 @@ import { WorkflowReplacementError, replaceAssignment } from '../../utils/workflo
 import { parseJsonObject } from '../../utils/workflowInput';
 import { WorkflowConflictError, getActorSnapshot, parseWorkflowText, withContentChangeFlags } from '../../utils/workflowLifecycle';
 import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Replaces an approver who has not decided yet with another eligible member, with a required reason. Only the
@@ -14,7 +15,7 @@ import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const workflowResult = await requireWorkflowContext(event);
 		if (!workflowResult.ok) return workflowResult.response;
@@ -65,4 +66,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Replace workflow assignment handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to replace approver');
 	}
-};
+});

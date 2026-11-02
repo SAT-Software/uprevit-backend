@@ -12,12 +12,13 @@ import { resolveWorkspaceProductName } from "../../utils/sourceFilesAudit";
 import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
 import { getBillingAccountByWorkspaceId, normalizeLimits } from "../../utils/billing/billingAccounts";
 import { recordCommittedUploadBytes } from "../../utils/billing/uploadCommit";
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * @param {APIGatewayProxyEvent} event
  * @return {Promise<APIGatewayProxyResult>}
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -194,4 +195,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Create source file/folder handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to create source file or folder');
 	}
-}
+})

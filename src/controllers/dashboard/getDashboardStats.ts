@@ -4,6 +4,7 @@ import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * API endpoint to get dashboard statistics for a workspace
@@ -11,7 +12,7 @@ import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantCo
  * @returns Dashboard statistics including counts for departments, projects, products, source files, and archives
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -104,4 +105,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get dashboard stats handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get dashboard stats');
 	}
-};
+});

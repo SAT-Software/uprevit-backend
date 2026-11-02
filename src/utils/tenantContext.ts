@@ -4,6 +4,7 @@ import { authenticateRequest, type AuthResult } from './authUtils';
 import { getAuthenticatedUserContext } from './authenticatedUser';
 import { assertWorkspaceAccessAllowed } from './billing/enforcement';
 import { ResponseWrapper } from './responseWrapper';
+import { setTelemetryIdentity } from './telemetry';
 
 export type TenantContext = {
 	workspaceId: ObjectId;
@@ -59,6 +60,7 @@ export const requireTenantContext = async (
 			response: ResponseWrapper.unauthorized('Unable to resolve authenticated user context'),
 		};
 	}
+	setTelemetryIdentity(userContext.userId, userContext.workspaceId);
 
 	if (!options.allowAccessFrozen) {
 		const accessCheck = await assertWorkspaceAccessAllowed(userContext.workspaceId);

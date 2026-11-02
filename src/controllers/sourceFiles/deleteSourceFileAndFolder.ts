@@ -10,6 +10,7 @@ import { recordAuditEvent } from "../../utils/auditLogV2";
 import type { AuditLogV2Change } from "../../models/auditLogV2";
 import { resolveWorkspaceProductName } from "../../utils/sourceFilesAudit";
 import { deleteObjectByKey } from "../../utils/s3-storage";
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Recursively finds all descendant node IDs for a given parent folder.
@@ -40,7 +41,7 @@ async function findDescendantIds(
  * @param {APIGatewayProxyEvent} event 
  * @return {Promise<APIGatewayProxyResult>}
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -159,4 +160,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Delete source file/folder handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to delete source file or folder');
 	}
-}
+})

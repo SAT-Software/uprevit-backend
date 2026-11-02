@@ -5,13 +5,14 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { requireTenantContext } from '../../utils/tenantContext';
 import { createSupportIdentityHash } from '../../utils/support';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Returns the caller's signed Support identity and whether their workspace opted in to support session replay.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -40,4 +41,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get support config handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get support config');
 	}
-};
+});

@@ -4,13 +4,14 @@ import { authenticateRequest } from "../../utils/authUtils";
 import { getDb } from "../../utils/db";
 import { StandardSymbol } from "../../models/standardSymbols";
 import { createStandardSymbolPresignedGetUrlMap } from "../../utils/s3-storage";
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Get all standard symbols
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const auth = await authenticateRequest(event)
 		if(!auth.isValid) {
@@ -44,4 +45,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		return ResponseWrapper.internalServerError('Failed to get all the standard symbols data')
         
 	}
-}   
+})   

@@ -9,12 +9,13 @@ import { SourceFile } from '../../models/sourceFiles';
 import type { AuditLogV2Change } from '../../models/auditLogV2';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 import { resolveWorkspaceProductName } from '../../utils/sourceFilesAudit';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * @param {APIGatewayProxyEvent} event 
  * @return {Promise<APIGatewayProxyResult>}
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -179,4 +180,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Update source files folder handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to update source file folder');
 	}
-};
+});
