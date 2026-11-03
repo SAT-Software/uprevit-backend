@@ -16,11 +16,14 @@ const toId = (value: unknown): string | undefined => {
 
 const EMAIL_PATTERN = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}/gi;
 
-const redactText = (text: string): string => text.slice(0, 2000).replace(EMAIL_PATTERN, '[email]');
+const QUOTED_PATTERN = /"(?:[^"\\]|\\.)*"/g;
 
-const redactEmails = (error: unknown): unknown => {
+const redactText = (text: string): string =>
+	text.slice(0, 2000).replace(QUOTED_PATTERN, '"[redacted]"').replace(EMAIL_PATTERN, '[email]');
+
+export const redactError = (error: unknown): unknown => {
 	if (!(error instanceof Error)) return typeof error === 'string' ? redactText(error) : error;
-	const safe = new Error(redactText(error.message));
+	const safe = new Error(error instanceof SyntaxError ? 'Invalid JSON' : redactText(error.message));
 	safe.name = error.name;
 	const frames = error.stack?.split('\n').filter((line) => line.trimStart().startsWith('at ')) ?? [];
 	safe.stack = [`${safe.name}: ${safe.message}`, ...frames].join('\n');
@@ -46,7 +49,7 @@ export function captureError(message: string, error: unknown, context: Record<st
 	if (!client) return;
 
 	const capture = client
-		.captureExceptionImmediate(redactEmails(error), toId(context.userId) ?? requestIdentity.userId, {
+		.captureExceptionImmediate(redactError(error), toId(context.userId) ?? requestIdentity.userId, {
 			source: 'lambda',
 			message,
 			functionName: AWS_LAMBDA_FUNCTION_NAME,
