@@ -6,6 +6,7 @@ import { logError } from '../../utils/logger';
 import { enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 import { requireTenantContext, tenantUserIdFilter } from '../../utils/tenantContext';
 import { validateAllObjectIds } from '../../utils/validationUtils';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Get a user
@@ -13,7 +14,7 @@ import { validateAllObjectIds } from '../../utils/validationUtils';
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -51,4 +52,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get user handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get user');
 	}
-};
+});

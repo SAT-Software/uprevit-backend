@@ -7,6 +7,7 @@ import { assertWorkspaceMatch, requireTenantContext, tenantObjectIdFilter } from
 import { validateAllObjectIds } from '../../utils/validationUtils';
 import { productLineageFilter, productSummaryProjection } from '../../utils/productLifecycle';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Get all versions of a product
@@ -14,7 +15,7 @@ import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -104,4 +105,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get all product versions handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get product versions');
 	}
-};
+});

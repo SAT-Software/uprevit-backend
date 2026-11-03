@@ -15,6 +15,7 @@ import {
 	normalizeInviteEmail,
 } from "../../utils/platformInviteUtils";
 import { findInactiveWorkspaceUserByEmail, reactivateWorkspaceUser } from "../../utils/userRemoval";
+import { withTelemetry } from '../../utils/telemetry';
 
 const cognito = new CognitoIdentityProviderClient({ region: 'us-east-1' });
 
@@ -28,7 +29,7 @@ type InviteResult = {
  * @param {APIGatewayProxyEvent} event 
  * @return  {Promise<APIGatewayProxyResult>}
  */
-export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -136,7 +137,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 				}
 
 				const message = error instanceof Error ? error.message : 'Invitation failed';
-				logError(`Failed to invite user: ${normalizedEmail}`, error);
+				logError('Failed to invite user', error);
 				results.push({ email: normalizedEmail, status: "Failed", reason: message });
 			}
 		}
@@ -146,4 +147,4 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 		logError('Invite new user by admin handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to invite users');
 	}
-};
+});

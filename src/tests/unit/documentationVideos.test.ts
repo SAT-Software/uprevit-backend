@@ -20,6 +20,9 @@ describe("documentationVideos allowlist", () => {
 		expect(getDocumentationVideoObjectKey("review-outputs.exports")).toBe(
 			"videos/review-outputs/exports.mp4",
 		);
+		expect(getDocumentationVideoObjectKey("review-outputs.approval-workflows")).toBe(
+			"videos/review-outputs/approval-workflows.mp4",
+		);
 	});
 
 	it("rejects unknown keys", () => {

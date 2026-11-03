@@ -16,6 +16,7 @@ export const DOCUMENTATION_VIDEOS = {
 	"projects.projects-tab": "videos/projects/projects-tab-v2.mp4",
 	"reports-analytics.overview": "videos/reports-analytics/overview.mp4",
 	"reports-analytics.reports": "videos/reports-analytics/reports.mp4",
+	"review-outputs.approval-workflows": "videos/review-outputs/approval-workflows.mp4",
 	"review-outputs.archives": "videos/review-outputs/archives.mp4",
 	"review-outputs.exports": "videos/review-outputs/exports.mp4",
 	"review-outputs.notifications": "videos/review-outputs/notifications.mp4",

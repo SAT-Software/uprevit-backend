@@ -4,13 +4,14 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { requirePlatformOperator } from '../../utils/platformAdminContext';
 import { BILLING_ACCOUNTS_COLLECTION } from '../../models/billing';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Returns platform-wide dashboard summary counts.
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Platform summary payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -53,4 +54,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin get summary failed', error);
 		return ResponseWrapper.internalServerError('Failed to load platform summary');
 	}
-};
+});

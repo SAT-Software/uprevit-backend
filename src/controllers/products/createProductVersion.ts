@@ -9,6 +9,7 @@ import { recordAuditEvent } from "../../utils/auditLogV2";
 import { canCreateVersion, LifecycleConflictError, productLineageFilter } from "../../utils/productLifecycle";
 import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError } from "../../utils/productAccess";
 import { moveBookmarksToVersion } from "../../utils/bookmarks";
+import { withTelemetry } from '../../utils/telemetry';
 
 const CREATE_VERSION_CONFLICT = 'A new version can only be created from the latest released version';
 
@@ -19,7 +20,7 @@ const CREATE_VERSION_CONFLICT = 'A new version can only be created from the late
  */
 
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -103,4 +104,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Create product version handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to create product version');
 	}
-}
+})

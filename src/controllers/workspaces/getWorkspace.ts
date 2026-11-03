@@ -5,6 +5,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 import { enrichWorkspaceWithLogoUrl } from '../../utils/s3-storage';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * API endpoint to get a workspace by id
@@ -12,7 +13,7 @@ import { enrichWorkspaceWithLogoUrl } from '../../utils/s3-storage';
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		if (!event.pathParameters?.id) {
 			return ResponseWrapper.badRequest('Missing required fields: id is required');
@@ -50,4 +51,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get workspace handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get workspace');
 	}
-}; 
+}); 

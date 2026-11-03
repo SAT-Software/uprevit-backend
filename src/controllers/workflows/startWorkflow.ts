@@ -20,13 +20,14 @@ import {
 	getWorkflowReadiness,
 	requireWorkflowContext,
 } from '../../utils/workflows';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Starts a ready Draft workflow: its versions become In Review and its setup is locked.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const workflowResult = await requireWorkflowContext(event);
 		if (!workflowResult.ok) return workflowResult.response;
@@ -130,4 +131,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Start workflow handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to start workflow');
 	}
-};
+});

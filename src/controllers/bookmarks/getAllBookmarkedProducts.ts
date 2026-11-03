@@ -10,6 +10,7 @@ import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
 import { buildProductStatusMatch } from '../../utils/productLifecycle';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 import { productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
+import { withTelemetry } from '../../utils/telemetry';
 
 const MAX_FILTER_LENGTH = 200;
 
@@ -89,7 +90,7 @@ function emptyProductsResult(page: number, limit: number): APIGatewayProxyResult
 }
 
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -285,4 +286,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get all bookmarked products handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to get bookmarked products');
 	}
-};
+});

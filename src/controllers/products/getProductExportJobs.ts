@@ -10,13 +10,14 @@ import {
 } from '../../utils/productExportJobs';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Lists export jobs for authenticated user.
  * @param {APIGatewayProxyEvent} event - API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Product export jobs list response
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const auth = await authenticateRequest(event);
 		if (!auth.isValid) return auth.error;
@@ -76,7 +77,7 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get product export jobs handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to fetch product export jobs');
 	}
-};
+});
 
 const parseStatusFilters = (statusQuery?: string): ExportJobStatus[] | undefined => {
 	if (!statusQuery || !statusQuery.trim()) return undefined;

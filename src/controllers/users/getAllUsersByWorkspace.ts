@@ -7,6 +7,7 @@ import { ObjectId } from 'mongodb';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 import { enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
+import { withTelemetry } from '../../utils/telemetry';
 
 const ALLOWED_SORT_FIELDS = ['name', 'email', 'designation', 'location', 'status', 'userType'];
 
@@ -21,7 +22,7 @@ const USER_FILTER_FIELDS: Record<string, ListFilterField> = {
 };
 
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -97,4 +98,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get users by workspace handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get users');
 	}
-};
+});

@@ -8,6 +8,7 @@ import { buildListFiltersMatch, parseListQuery } from '../../utils/listQuery';
 import { BILLING_ACCOUNTS_COLLECTION, type BillingAccount } from '../../models/billing';
 import { Workspace } from '../../models/workspace';
 import { serializeWorkspaceListItem } from '../../utils/platformAdminSerializers';
+import { withTelemetry } from '../../utils/telemetry';
 
 const ALLOWED_SORT_FIELDS = ['workspaceName', 'companyName', 'memberCount'];
 const LIST_FILTER_FIELDS = {
@@ -22,7 +23,7 @@ const escapeRegex = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Paginated workspace directory
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -121,4 +122,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin list workspaces failed', error);
 		return ResponseWrapper.internalServerError('Failed to list workspaces');
 	}
-};
+});

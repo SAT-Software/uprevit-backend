@@ -8,13 +8,14 @@ import { requirePlatformOperator } from '../../utils/platformAdminContext';
 import { recordPlatformAuditEvent } from '../../utils/platformAuditLog';
 import { getBillingAccountByWorkspaceId } from '../../utils/billing/billingAccounts';
 import { buildChargebeeBillingDetail } from '../../utils/billing/chargebeeBillingDetail';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Returns Chargebee billing detail and invoices for a workspace (platform admin).
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Chargebee billing payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -55,4 +56,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin get billing chargebee failed', error);
 		return ResponseWrapper.internalServerError('Failed to load billing information');
 	}
-};
+});

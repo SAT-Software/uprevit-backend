@@ -7,13 +7,14 @@ import { getProductExportJobByIdForUser } from '../../utils/productExportJobs';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { createExportPresignedGetUrl } from '../../utils/s3-storage';
 import { validateAllObjectIds } from '../../utils/validationUtils';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Generates a signed download URL for a completed product export job.
  * @param {APIGatewayProxyEvent} event - API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Signed URL response
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const auth = await authenticateRequest(event);
 		if (!auth.isValid) return auth.error;
@@ -72,4 +73,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Download product export job handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to generate export download URL');
 	}
-};
+});

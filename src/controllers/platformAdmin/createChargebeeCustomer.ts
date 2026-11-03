@@ -15,13 +15,14 @@ import {
 	retrieveChargebeeCustomer,
 } from '../../utils/billing/chargebeeClient';
 import { BILLING_ACCOUNTS_COLLECTION, type BillingAccount } from '../../models/billing';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Creates a Chargebee customer and links it to the workspace billing account.
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Customer created payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -119,4 +120,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin create Chargebee customer failed', error);
 		return ResponseWrapper.internalServerError('Failed to create Chargebee customer');
 	}
-};
+});

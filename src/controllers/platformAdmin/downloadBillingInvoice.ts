@@ -6,13 +6,14 @@ import { requirePlatformOperator } from '../../utils/platformAdminContext';
 import { getWorkspaceInvoiceAccess } from '../../utils/billing/invoiceAccess';
 import { retrieveChargebeeInvoicePdf } from '../../utils/billing/chargebeeClient';
 import { serializeInvoicePdfDownload } from '../../utils/billing/invoiceSerializers';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Returns a Chargebee invoice PDF download URL for a workspace (platform admin).
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Invoice download payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -60,4 +61,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin download billing invoice failed', error);
 		return ResponseWrapper.internalServerError('Failed to download invoice');
 	}
-};
+});

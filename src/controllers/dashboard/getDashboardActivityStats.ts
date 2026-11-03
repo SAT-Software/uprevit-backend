@@ -5,6 +5,7 @@ import { getDashboardActivityStats } from '../../utils/dashboardActivityStats';
 import { logError } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * API endpoint to get 30-day dashboard activity statistics for a workspace.
@@ -12,7 +13,7 @@ import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantCo
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} Activity breakdowns for departments, projects, products, source files, and archives
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -40,4 +41,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get dashboard activity stats handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get dashboard activity stats');
 	}
-};
+});

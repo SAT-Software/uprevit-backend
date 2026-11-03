@@ -11,6 +11,7 @@ import { logError } from '../../utils/logger';
 import { isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
 import { getBillingAccountByWorkspaceId, normalizeLimits } from '../../utils/billing/billingAccounts';
 import { serializeBillingAccount } from '../../utils/billing/serializers';
+import { withTelemetry } from '../../utils/telemetry';
 
 const isEnforcementMode = (value: unknown): value is EnforcementMode =>
 	value === 'overage' || value === 'block';
@@ -26,7 +27,7 @@ type PreferencesInput = {
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Billing preferences updated payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -103,4 +104,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Update billing preferences failed', error);
 		return ResponseWrapper.internalServerError('Failed to update billing preferences');
 	}
-};
+});

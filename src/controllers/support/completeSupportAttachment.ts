@@ -9,13 +9,14 @@ import {
 	ensureSupportAttachmentIndexes,
 	verifySupportAttachmentObject,
 } from '../../utils/supportAttachments';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Verifies the caller's uploaded support screenshot and marks it ready to be linked from a ticket.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
@@ -56,4 +57,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Complete support attachment handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to verify screenshot');
 	}
-};
+});

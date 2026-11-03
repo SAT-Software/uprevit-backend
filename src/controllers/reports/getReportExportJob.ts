@@ -7,13 +7,14 @@ import { getExportJobByIdForUser } from '../../utils/exportJobs';
 import { logError } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateAllObjectIds } from '../../utils/validationUtils';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Gets a single report export job by id.
  * @param {APIGatewayProxyEvent} event - API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Report export job details
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const auth = await authenticateRequest(event);
 		if (!auth.isValid) return auth.error;
@@ -55,4 +56,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get report export job handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to fetch report export job');
 	}
-};
+});

@@ -6,6 +6,7 @@ import { logError } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { canAddressRequest, canComment, getProductTeamIds, withAttachmentUrls, workflowDiscussion } from '../../utils/workflowDiscussion';
 import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Returns a workflow's comments and change requests, oldest first. Filters by `kind` (comment or change_request) and by
@@ -13,7 +14,7 @@ import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const workflowResult = await requireWorkflowContext(event);
 		if (!workflowResult.ok) return workflowResult.response;
@@ -61,4 +62,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Get workflow discussion handler failed', err);
 		return ResponseWrapper.internalServerError('Failed to get workflow discussion');
 	}
-};
+});

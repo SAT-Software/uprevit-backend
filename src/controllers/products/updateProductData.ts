@@ -39,6 +39,7 @@ import {
 	assertNewUploadCommitsAllowed,
 	recordUploadCommitsFromPayload,
 } from '../../utils/billing/uploadCommit';
+import { withTelemetry } from '../../utils/telemetry';
 
 const validTabs = [
 	'product-information',
@@ -244,7 +245,7 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
 
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	const tenantResult = await requireTenantContext(event);
 	if (!tenantResult.ok) return tenantResult.response;
 
@@ -771,4 +772,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 			`Internal server error: ${error instanceof Error ? error.message : String(error)}`,
 		);
 	}
-};
+});

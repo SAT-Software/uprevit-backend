@@ -13,13 +13,14 @@ import {
 	serializeBillingAccount,
 	serializeWorkspaceFreezes,
 } from '../../utils/billing/serializers';
+import { withTelemetry } from '../../utils/telemetry';
 
 /**
  * Returns full billing account detail for a workspace.
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Billing account retrieved payload
  */
-export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
 		const operatorResult = await requirePlatformOperator(event);
 		if (!operatorResult.ok) return operatorResult.response;
@@ -71,4 +72,4 @@ export const lambdaHandler = async (event: APIGatewayProxyEvent): Promise<APIGat
 		logError('Platform admin get billing account failed', error);
 		return ResponseWrapper.internalServerError('Failed to load billing account');
 	}
-};
+});

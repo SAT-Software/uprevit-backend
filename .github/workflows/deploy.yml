@@ -83,6 +83,7 @@ jobs:
       APP_BASE_URL: ${{ vars.APP_BASE_URL }}
       SUPPORT_REVIEWER_EMAILS_PARAM: ${{ vars.SUPPORT_REVIEWER_EMAILS_PARAM }}
       POSTHOG_SUPPORT_SECRET_PARAM: ${{ vars.POSTHOG_SUPPORT_SECRET_PARAM }}
+      POSTHOG_PROJECT_TOKEN: ${{ vars.POSTHOG_PROJECT_TOKEN }}
       SUPPORT_ATTACHMENTS_ALLOWED_ORIGINS: ${{ vars.SUPPORT_ATTACHMENTS_ALLOWED_ORIGINS }}
       MONITORING_ALERT_EMAIL: ${{ vars.MONITORING_ALERT_EMAIL }}
     
@@ -180,6 +181,7 @@ jobs:
           always_set = {
               "MonitoringAlertEmail": os.environ.get("MONITORING_ALERT_EMAIL", ""),
               "BetterStackHeartbeatUrl": os.environ.get("BETTER_STACK_HEARTBEAT_URL", ""),
+              "PosthogProjectToken": os.environ.get("POSTHOG_PROJECT_TOKEN", ""),
           }
 
           for key, value in parameters.items():
