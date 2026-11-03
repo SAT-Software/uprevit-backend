@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added admin-only `POST /products/import/check` to find used plan numbers, existing departments and projects, and taken project numbers before a template import.
 - Added admin-only `POST /products/import` to create Draft products in batches of up to 50, creating missing departments and projects by name with audit events.
 - Added the `review-outputs.approval-workflows` documentation video key.
-- Added PostHog error tracking for API and job errors logged with `logError`, sending only user and workspace IDs, enabled by the `PosthogProjectToken` parameter.
+- Added PostHog error tracking for API and job errors logged with `logError`, sending only user and workspace IDs with emails, quoted values and JSON parse input removed, enabled by the `PosthogProjectToken` parameter.
 
 ### Updated
 
