@@ -7,6 +7,8 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { requireTenantContext } from '../../utils/tenantContext';
 import { withTelemetry } from '../../utils/telemetry';
 
+const UNPAGED_LIMIT = 500;
+
 /**
  * API endpoint to list the products behind an analytics chart segment.
  *
@@ -27,7 +29,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		const listQuery = parseListQuery({ query, allowedSortFields: ['product_name'], defaultSort: 'product_name' });
 		if (listQuery.error) return listQuery.error;
-		const { page, limit, skip, order } = listQuery.value!;
+		const { page, skip, order } = listQuery.value!;
+		const limit = query?.page || query?.limit ? listQuery.value!.limit : UNPAGED_LIMIT;
 
 		const db = await getDb();
 		const match = await buildDrillDownMatch(db, parsed.filters, metric, query?.value);
