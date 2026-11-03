@@ -7,13 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-03
+
 ### Added
 
+- Added admin-only `POST /products/import/check` to find used plan numbers, existing departments and projects, and taken project numbers before a template import.
+- Added admin-only `POST /products/import` to create Draft products in batches of up to 50, creating missing departments and projects by name with audit events.
+- Added the `review-outputs.approval-workflows` documentation video key.
 - Added PostHog error tracking for API and job errors logged with `logError`, sending only user and workspace IDs, enabled by the `PosthogProjectToken` parameter.
 
 ### Updated
 
 - Invalid or expired login tokens are logged as warnings instead of errors.
+- Paged analytics drill-down products and return their total count. Requests without `page` or `limit` still return up to 500 products.
+
+### Fixed
+
+- Fixed analytics drill-down products to honor the requested sort order.
+- Fixed onboarding to check the workspace logo before creating a workspace and on retries, with a clear error when it is unavailable.
 
 ## [0.10.1] - 2026-10-31
 
