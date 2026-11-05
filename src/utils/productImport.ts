@@ -10,8 +10,7 @@ export type ImportProductInput = {
 	product_name: string;
 	product_description: string;
 	target_date?: string | null;
-	project_id?: string | null;
-	new_project?: { department_name: string; project_name: string; project_number: string } | null;
+	project_id: string;
 	product_information?: Partial<Record<
 		'market_geography' | 'country_of_origin' | 'oem_contract_manufacturer' | 'commercial_clinical' |
 		'manufacturing_location' | 'class_of_device' | 'basic_udi_di', string
@@ -36,19 +35,12 @@ const INFO_FIELDS = [
 
 export const nameKey = (value: string) => value.trim().toLowerCase();
 
-/**
- * Matches a stored name case-insensitively, ignoring spaces around it on either side.
- * @param {string} value Name from the import file
- * @return {RegExp} Pattern for the stored name
- */
-export const exactName = (value: string) => new RegExp(`^\\s*${value.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i');
-
 const IMPORT_LOCKS_COLLECTION = 'product_import_locks';
 const IMPORT_LOCK_MS = 5 * 60 * 1000;
 
 /**
- * Lets one import request per workspace run at a time, so concurrent requests can't both create the same plan number,
- * department or project. A lock left by a crashed request expires on its own.
+ * Lets one import request per workspace run at a time, so concurrent requests can't both create the same plan number.
+ * A lock left by a crashed request expires on its own.
  * The `expires_at` condition is what makes a held lock fail with a duplicate key; a filter on `_id` alone would take it over.
  * IMPORT_LOCK_MS must stay longer than the ImportProductsFunction timeout in template.yaml.
  * @param {Db} db Database
@@ -94,16 +86,8 @@ export const validateImportProduct = (input: ImportProductInput): string | null 
 		return 'Target date is not a valid date';
 	}
 
-	const newProject = input.new_project;
-	if (input.project_id) {
-		if (!ObjectId.isValid(input.project_id)) return 'Invalid project';
-	} else if (newProject) {
-		if (!text(newProject.department_name)) return 'Department is required to create a project';
-		if (!text(newProject.project_name)) return 'Project name is required';
-		if (!text(newProject.project_number)) return 'Project number is required to create a project';
-	} else {
-		return 'Assign a project';
-	}
+	if (!text(input.project_id)) return 'Assign a project';
+	if (!ObjectId.isValid(input.project_id)) return 'Invalid project';
 
 	const lists = [input.compliance, input.languages, input.label_components, input.custom_fields];
 	if (lists.some((list) => list != null && !Array.isArray(list))) return 'Standards, languages, components and custom fields must be lists';

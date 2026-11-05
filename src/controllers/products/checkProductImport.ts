@@ -14,7 +14,7 @@ const isStringList = (value: unknown): value is string[] =>
 	Array.isArray(value) && value.length <= MAX_ITEMS && value.every((item) => typeof item === 'string');
 
 /**
- * Checks an import file against the workspace: used plan numbers, existing departments and projects, taken project numbers
+ * Checks an import file against the workspace: used plan numbers, and existing projects matched by number or name
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
@@ -28,14 +28,9 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		const input = JSON.parse(event.body || '{}');
 		const planNumbers = input?.plan_numbers;
-		const projectNumbers = input?.project_numbers ?? [];
-		const destinations = input?.destinations ?? [];
-		if (!isStringList(planNumbers) || !isStringList(projectNumbers)) {
-			return ResponseWrapper.badRequest(`plan_numbers and project_numbers must be lists of at most ${MAX_ITEMS} strings`);
-		}
-		if (!Array.isArray(destinations) || destinations.length > MAX_ITEMS ||
-			destinations.some((item) => typeof item?.department_name !== 'string' || typeof item?.project_name !== 'string')) {
-			return ResponseWrapper.badRequest('destinations must be a list of department and project names');
+		const projectValues = input?.projects ?? [];
+		if (!isStringList(planNumbers) || !isStringList(projectValues)) {
+			return ResponseWrapper.badRequest(`plan_numbers and projects must be lists of at most ${MAX_ITEMS} strings`);
 		}
 
 		const db = await getDb();
@@ -48,36 +43,35 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			}).toArray(),
 		]);
 
-		const departmentIds = new Map<string, string[]>();
-		for (const department of departments) {
-			const key = nameKey(department.department_name);
-			departmentIds.set(key, [...(departmentIds.get(key) ?? []), department._id!.toString()]);
-		}
-		const projectsByNumber = new Map(projects.map((project) => [project.project_number?.trim(), project.project_name]));
-		const projectsByName = new Map<string, Project[]>();
+		const departmentNames = new Map(departments.map((department) => [department._id!.toString(), department.department_name]));
+		const byNumber = new Map<string, Project>();
+		const byName = new Map<string, Project[]>();
 		for (const project of projects) {
-			const key = `${project.department_id?.toString()}\n${nameKey(project.project_name)}`;
-			projectsByName.set(key, [...(projectsByName.get(key) ?? []), project]);
+			if (!departmentNames.has(project.department_id?.toString())) continue;
+			if (project.project_number?.trim()) byNumber.set(nameKey(project.project_number), project);
+			const key = nameKey(project.project_name);
+			byName.set(key, [...(byName.get(key) ?? []), project]);
 		}
 
 		return ResponseWrapper.success({
 			existing_plan_numbers: planNumbers.filter((value) => usedPlanNumbers.has(nameKey(value))),
-			taken_project_numbers: projectNumbers
-				.filter((value) => projectsByNumber.has(value.trim()))
-				.map((value) => ({ project_number: value, project_name: projectsByNumber.get(value.trim()) })),
-			destinations: destinations.map(({ department_name: departmentName, project_name: projectName }) => {
-				const matchingDepartments = departmentIds.get(nameKey(departmentName)) ?? [];
-				const departmentId = matchingDepartments.length === 1 ? matchingDepartments[0] : null;
-				const matches = departmentId && projectName.trim() ? projectsByName.get(`${departmentId}\n${nameKey(projectName)}`) ?? [] : [];
-				const project = matches.length === 1 ? matches[0] : undefined;
+			projects: projectValues.map((value) => {
+				const named = byName.get(nameKey(value)) ?? [];
+				const project = byNumber.get(nameKey(value)) ?? (named.length === 1 ? named[0] : undefined);
 				return {
-					department_name: departmentName,
-					project_name: projectName,
-					department_exists: matchingDepartments.length > 0,
-					ambiguous: matchingDepartments.length > 1 || matches.length > 1,
-					project: project ? { _id: project._id!.toString(), project_name: project.project_name, project_number: project.project_number } : null,
+					value,
+					ambiguous: !project && named.length > 1,
+					project: project ? {
+						_id: project._id!.toString(),
+						project_name: project.project_name,
+						project_number: project.project_number,
+						department_name: departmentNames.get(project.department_id.toString()),
+					} : null,
 				};
 			}),
+			// Released UI clients still read these lists; remove once they no longer do
+			taken_project_numbers: [],
+			destinations: [],
 		});
 	} catch (err) {
 		logError('Check product import handler failed', err);
