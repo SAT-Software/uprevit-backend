@@ -302,7 +302,7 @@ describe('platformAdmin', () => {
 
 			expect(response.statusCode).toBe(201);
 			expect(inviteUtils.createInvitedCognitoUser).toHaveBeenCalledWith(
-				expect.objectContaining({ groupName: 'admin', email: 'new@customer.com' }),
+				expect.objectContaining({ groupNames: ['admin'], email: 'new@customer.com' }),
 			);
 		});
 

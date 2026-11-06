@@ -822,6 +822,7 @@ describe('billing summaries', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 3),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'admin', count: 1 }, { _id: 'approver', count: 1 }, { _id: null, count: 1 }]) })),
 					};
 				}
 				return {
@@ -837,6 +838,7 @@ describe('billing summaries', () => {
 		});
 
 		expect(summary.usage.activeSeats).toBe(3);
+		expect(summary.usage.seatClasses).toEqual({ full: 1, approver: 1, manager: 1 });
 		expect(summary.usage.exports).toBe(2);
 		expect(summary.limitStatus.seats.used).toBe(3);
 	});

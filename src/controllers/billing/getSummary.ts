@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
+import { canManageBilling, requireTenantContext } from '../../utils/tenantContext';
 import { getBillingAccountByWorkspaceId } from '../../utils/billing/billingAccounts';
 import { buildBillingSummary } from '../../utils/billing/serializers';
 import { getWorkspaceById } from '../../utils/billing/enforcement';
@@ -19,7 +19,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (!tenantResult.ok) return tenantResult.response;
 
 		const { context } = tenantResult;
-		if (!isWorkspaceAdmin(context.cognitoGroups)) {
+		if (!canManageBilling(context)) {
 			return ResponseWrapper.forbidden('Insufficient permissions');
 		}
 

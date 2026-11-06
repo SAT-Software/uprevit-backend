@@ -1,5 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { CognitoIdentityProviderClient, AdminCreateUserCommand, AdminUpdateUserAttributesCommand, AdminAddUserToGroupCommand } from "@aws-sdk/client-cognito-identity-provider";
+import { CognitoIdentityProviderClient, AdminCreateUserCommand, AdminUpdateUserAttributesCommand } from "@aws-sdk/client-cognito-identity-provider";
 import { getDb } from "../../utils/db";
 import { User } from "../../models/user";
 import { ObjectId } from "mongodb";
@@ -15,6 +15,7 @@ import {
 	normalizeInviteEmail,
 } from "../../utils/platformInviteUtils";
 import { findInactiveWorkspaceUserByEmail, reactivateWorkspaceUser } from "../../utils/userRemoval";
+import { parseAssignableMemberAccess, syncMemberCognitoGroups, type MemberAccess } from "../../utils/memberAccess";
 import { withTelemetry } from '../../utils/telemetry';
 
 const cognito = new CognitoIdentityProviderClient({ region: 'us-east-1' });
@@ -56,6 +57,15 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 		const validationError = validateUserArray(users, "users");
 		if(validationError) return validationError;
 
+		const parsedAccesses = (users as Array<{ userType?: unknown; isManager?: unknown }>).map((user) => (
+			user.userType === undefined && user.isManager === undefined
+				? { userType: 'user' as const, isManager: false }
+				: parseAssignableMemberAccess(user.userType ?? null, user.isManager ?? false)
+		));
+		const accessError = parsedAccesses.find((access): access is string => typeof access === 'string');
+		if (accessError) return ResponseWrapper.badRequest(accessError);
+		const accesses = parsedAccesses as MemberAccess[];
+
 		const inviteCheck = await assertUsageActionAllowed(context.workspaceId, 'invite');
 		if (!inviteCheck.allowed) return ResponseWrapper.forbidden(inviteCheck.reason);
 
@@ -63,8 +73,9 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 		const workspaceObjectId = context.workspaceId;
 		const results: InviteResult[] = [];
 
-		for (const user of users) {
+		for (const [index, user] of users.entries()) {
 			const { email, name } = user;
+			const access = accesses[index];
 			const normalizedEmail = normalizeInviteEmail(email);
 			try {
 				await assertEmailAvailableForWorkspaceMemberInvite(db, normalizedEmail, workspaceObjectId);
@@ -76,7 +87,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 						name,
 						workspaceId: workspaceObjectId,
 						actorUserId: context.userId,
-						userType: inactiveUser.userType ?? 'user',
+						access: inactiveUser.userType === 'admin' ? { ...access, userType: 'admin' } : access,
 					});
 					results.push({ email: normalizedEmail, status: 'Reactivated' });
 					continue;
@@ -102,7 +113,8 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 					name: name,
 					cognitoSub: cognitoSub,
 					workspaceId: workspaceObjectId,
-					userType: "user",
+					userType: access.userType,
+					isManager: access.isManager,
 					status: "invited",
 				};
 				const userResult = await db.collection("users").insertOne(newUserDoc);
@@ -123,11 +135,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 					],
 				}));
 
-				await cognito.send(new AdminAddUserToGroupCommand({
-					UserPoolId: process.env.USER_POOL_ID!,
-					Username: normalizedEmail,
-					GroupName: "user",
-				}));
+				await syncMemberCognitoGroups(normalizedEmail, access);
 
 				results.push({ email: normalizedEmail, status: "Success" });
 			} catch (error: unknown) {

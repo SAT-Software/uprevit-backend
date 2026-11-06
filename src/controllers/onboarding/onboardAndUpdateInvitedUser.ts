@@ -1,4 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import { syncMemberCognitoGroups } from '../../utils/memberAccess';
 import { getDb } from "../../utils/db";
 import { requireTenantContext } from "../../utils/tenantContext";
 import { ResponseWrapper } from "../../utils/responseWrapper";
@@ -93,6 +94,10 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 				Username: existingUser.email,
 				UserAttributes: [{ Name: 'custom:status', Value: 'active' }],
 			}));
+			await syncMemberCognitoGroups(existingUser.email, {
+				userType: existingUser.userType === undefined ? 'user' : existingUser.userType,
+				isManager: existingUser.isManager === true,
+			});
 		} catch (error) {
 			cognitoSyncError = error;
 		}

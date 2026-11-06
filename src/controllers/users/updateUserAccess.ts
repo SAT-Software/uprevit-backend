@@ -1,0 +1,66 @@
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { ObjectId } from 'mongodb';
+import { AuditLogAction } from '../../models/auditLog';
+import { EDITOR_USER_TYPES, type User } from '../../models/user';
+import { updateAuditLog } from '../../utils/auditLog';
+import { getDb } from '../../utils/db';
+import { logError } from '../../utils/logger';
+import { findMemberAccessBlockers, parseAssignableMemberAccess, syncMemberCognitoGroups } from '../../utils/memberAccess';
+import { ResponseWrapper } from '../../utils/responseWrapper';
+import { isWorkspaceAdmin, requireTenantContext, tenantUserIdFilter } from '../../utils/tenantContext';
+import { withTelemetry } from '../../utils/telemetry';
+
+/**
+ * Changes a member's base User Type (User, Approver or none) and Manager access. Admin access is changed only by
+ * platform operators. Losing edit access is blocked while the member is on a Product team or initiates an active
+ * workflow, and losing every base type is blocked while they are an approver in one.
+ * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
+ * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
+ */
+export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+	try {
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+
+		const { context } = tenantResult;
+		if (!isWorkspaceAdmin(context.cognitoGroups)) return ResponseWrapper.forbidden('Insufficient permissions');
+
+		const id = event.pathParameters?.id;
+		if (!id || !ObjectId.isValid(id)) return ResponseWrapper.badRequest('A valid user id is required');
+
+		const input = JSON.parse(event.body || '{}');
+		const access = parseAssignableMemberAccess(input.userType, input.isManager);
+		if (typeof access === 'string') return ResponseWrapper.badRequest(access);
+
+		const db = await getDb();
+		const users = db.collection<User>('users');
+		const target = await users.findOne(tenantUserIdFilter(id, context.workspaceId));
+		if (!target || target.status === 'inactive') return ResponseWrapper.notFound('Member not found');
+		if (target.userType === 'admin') return ResponseWrapper.forbidden('Only platform operators can change Admin access');
+
+		if (!access.userType || !EDITOR_USER_TYPES.includes(access.userType)) {
+			const blockers = await findMemberAccessBlockers(db, context.workspaceId, target._id!, access.userType);
+			if (blockers.products.length > 0 || blockers.workflows.length > 0) {
+				return ResponseWrapper.conflict('Reassign this member\'s Products and workflows first', { blockers });
+			}
+		}
+
+		await syncMemberCognitoGroups(target.email, access);
+		await users.updateOne({ _id: target._id }, { $set: access });
+
+		await updateAuditLog({
+			entity: 'user',
+			entityId: id,
+			action: AuditLogAction.UPDATE,
+			actionBy: context.userId.toString(),
+			actionAt: new Date(),
+			active: true,
+		});
+
+		return ResponseWrapper.success({ message: 'Member access updated', user: { ...target, ...access } });
+	} catch (err) {
+		if (err instanceof SyntaxError) return ResponseWrapper.badRequest('Invalid JSON body');
+		logError('Update user access handler failed', err);
+		return ResponseWrapper.internalServerError('Failed to update member access');
+	}
+});

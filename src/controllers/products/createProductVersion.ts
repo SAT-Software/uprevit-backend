@@ -22,7 +22,7 @@ const CREATE_VERSION_CONFLICT = 'A new version can only be created from the late
 
 export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const tenantResult = await requireTenantContext(event);
+		const tenantResult = await requireTenantContext(event, { requireEditor: true });
 		if (!tenantResult.ok) return tenantResult.response;
 
 		const { context, auth } = tenantResult;

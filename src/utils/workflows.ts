@@ -15,7 +15,7 @@ import type { AuthResult } from './authUtils';
 import { getDb } from './db';
 import { allTabsCompletedFilter, computeCompleteCount } from './productLifecycle';
 import { ResponseWrapper } from './responseWrapper';
-import { isWorkspaceAdmin, requireTenantContext, type TenantContext } from './tenantContext';
+import { isWorkspaceAdmin, requireTenantContext, type RequireTenantContextOptions, type TenantContext } from './tenantContext';
 
 export const WORKFLOW_EDIT_FORBIDDEN_MESSAGE = 'Only the Initiator or an admin can change this workflow';
 export const WORKFLOW_NOT_DRAFT_MESSAGE = 'Only Draft workflows can be changed';
@@ -57,10 +57,14 @@ const ensureWorkflowIndexes = async (db: Db) => {
 /**
  * Authenticates the request and loads the workspace's workflow settings.
  * @param {APIGatewayProxyEvent} event API Gateway event
+ * @param {RequireTenantContextOptions} options Tenant context options
  * @return {Promise<WorkflowContextResult>} Tenant context, database and workspace
  */
-export const requireWorkflowContext = async (event: APIGatewayProxyEvent): Promise<WorkflowContextResult> => {
-	const tenantResult = await requireTenantContext(event);
+export const requireWorkflowContext = async (
+	event: APIGatewayProxyEvent,
+	options?: RequireTenantContextOptions,
+): Promise<WorkflowContextResult> => {
+	const tenantResult = await requireTenantContext(event, options);
 	if (!tenantResult.ok) return tenantResult;
 
 	const db = await getDb();

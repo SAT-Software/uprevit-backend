@@ -1,6 +1,6 @@
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { ClientSession, Db, Filter, ObjectId } from 'mongodb';
-import type { User } from '../models/user';
+import { APPROVER_USER_TYPES, type User } from '../models/user';
 import {
 	ACTIVE_WORKFLOW_STATUSES,
 	UNDECIDED_DECISIONS,
@@ -59,10 +59,10 @@ export const replaceAssignment = async ({ db, workflowId, workspaceId, assignmen
 		if (assignment.userId.equals(userId)) throw new WorkflowReplacementError('Pick someone other than the current approver');
 
 		const member = await txDb.collection<User>('users').findOne(
-			{ _id: userId, workspaceId, status: 'active' },
+			{ _id: userId, workspaceId, status: 'active', userType: { $in: APPROVER_USER_TYPES } },
 			{ projection: { name: 1, email: 1 }, session },
 		);
-		if (!member) throw new WorkflowReplacementError('The new approver must be an active member of this workspace');
+		if (!member) throw new WorkflowReplacementError('The new approver must be an active Admin, User or Approver in this workspace');
 
 		let relationship = assignment.relationship;
 		if (assignment.functionType === 'product_team') {

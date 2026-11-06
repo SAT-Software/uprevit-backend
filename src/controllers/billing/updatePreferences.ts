@@ -8,7 +8,7 @@ import {
 import { getDb } from '../../utils/db';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
+import { canManageBilling, requireTenantContext } from '../../utils/tenantContext';
 import { getBillingAccountByWorkspaceId, normalizeLimits } from '../../utils/billing/billingAccounts';
 import { serializeBillingAccount } from '../../utils/billing/serializers';
 import { withTelemetry } from '../../utils/telemetry';
@@ -33,7 +33,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (!tenantResult.ok) return tenantResult.response;
 
 		const { context } = tenantResult;
-		if (!isWorkspaceAdmin(context.cognitoGroups)) {
+		if (!canManageBilling(context)) {
 			return ResponseWrapper.forbidden('Insufficient permissions');
 		}
 

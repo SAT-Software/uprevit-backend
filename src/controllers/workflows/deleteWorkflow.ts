@@ -19,7 +19,7 @@ import { withTelemetry } from '../../utils/telemetry';
  */
 export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const workflowResult = await requireWorkflowContext(event);
+		const workflowResult = await requireWorkflowContext(event, { requireEditor: true });
 		if (!workflowResult.ok) return workflowResult.response;
 
 		const { context, auth, db } = workflowResult;

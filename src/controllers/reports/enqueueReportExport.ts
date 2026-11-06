@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 import { EXPORT_JOB_COLLECTION, EXPORT_JOB_FORMATS, type ExportJobFormat } from '../../models/exportJob';
 import { authenticateRequest } from '../../utils/authUtils';
 import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
+import { canEditWorkspaceData, READ_ONLY_MESSAGE } from '../../utils/tenantContext';
 import { getDb } from '../../utils/db';
 import { createQueuedExportJob } from '../../utils/exportJobs';
 import { enqueueExportJobMessage } from '../../utils/exportQueue';
@@ -107,6 +108,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (!userContext) {
 			return ResponseWrapper.unauthorized('Unable to resolve authenticated user context');
 		}
+		if (!canEditWorkspaceData(userContext)) return ResponseWrapper.forbidden(READ_ONLY_MESSAGE);
 
 		const requestedWorkspaceId = new ObjectId(body.workspaceId);
 		if (requestedWorkspaceId.toString() !== userContext.workspaceId.toString()) {

@@ -1,6 +1,6 @@
 import { Db, ObjectId } from 'mongodb';
 import type { Product, ProductTeamMember } from '../models/product';
-import type { User } from '../models/user';
+import type { User, UserType } from '../models/user';
 import { enrichUsersWithProfileAvatarUrls, type TenantUploadSigningOptions } from './s3-storage';
 import { isWorkspaceAdmin, type TenantContext } from './tenantContext';
 
@@ -38,15 +38,16 @@ export const canManageProductTeam = (user: ProductActor, product: ProductTeam) =
 	['owner', 'admin'].includes(getProductRole(user, product));
 
 /**
- * Finds an active member of the workspace, used to validate owner and contributor picks.
+ * Finds an active member of the workspace with one of the given User Types, used to validate team and approver picks.
  * @param {Db} db Database handle
  * @param {ObjectId} workspaceId Workspace the member must belong to
  * @param {unknown} userId Requested user id
+ * @param {UserType[]} userTypes User Types the member may have
  * @return {Promise<User | null>} The active member, or null
  */
-export const findActiveWorkspaceMember = async (db: Db, workspaceId: ObjectId, userId: unknown) => {
+export const findActiveWorkspaceMember = async (db: Db, workspaceId: ObjectId, userId: unknown, userTypes: UserType[]) => {
 	if (typeof userId !== 'string' || !ObjectId.isValid(userId)) return null;
-	return db.collection<User>('users').findOne({ _id: new ObjectId(userId), workspaceId, status: 'active' });
+	return db.collection<User>('users').findOne({ _id: new ObjectId(userId), workspaceId, status: 'active', userType: { $in: userTypes } });
 };
 
 const TEAM_MEMBER_PIPELINE = [{ $project: { name: 1, email: 1, profileAvatar: 1, status: 1 } }];
