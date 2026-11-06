@@ -44,23 +44,24 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		]);
 
 		const departmentNames = new Map(departments.map((department) => [department._id!.toString(), department.department_name]));
-		const byNumber = new Map<string, Project>();
+		const byNumber = new Map<string, Project[]>();
 		const byName = new Map<string, Project[]>();
 		for (const project of projects) {
 			if (!departmentNames.has(project.department_id?.toString())) continue;
-			if (project.project_number?.trim()) byNumber.set(nameKey(project.project_number), project);
-			const key = nameKey(project.project_name);
-			byName.set(key, [...(byName.get(key) ?? []), project]);
+			const add = (map: Map<string, Project[]>, key: string) => map.set(key, [...(map.get(key) ?? []), project]);
+			if (project.project_number?.trim()) add(byNumber, nameKey(project.project_number));
+			add(byName, nameKey(project.project_name));
 		}
 
 		return ResponseWrapper.success({
 			existing_plan_numbers: planNumbers.filter((value) => usedPlanNumbers.has(nameKey(value))),
 			projects: projectValues.map((value) => {
-				const named = byName.get(nameKey(value)) ?? [];
-				const project = byNumber.get(nameKey(value)) ?? (named.length === 1 ? named[0] : undefined);
+				const numbered = byNumber.get(nameKey(value)) ?? [];
+				const matches = numbered.length ? numbered : byName.get(nameKey(value)) ?? [];
+				const project = matches.length === 1 ? matches[0] : undefined;
 				return {
 					value,
-					ambiguous: !project && named.length > 1,
+					ambiguous: matches.length > 1,
 					project: project ? {
 						_id: project._id!.toString(),
 						project_name: project.project_name,
