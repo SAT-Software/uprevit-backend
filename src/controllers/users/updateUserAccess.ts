@@ -5,8 +5,8 @@ import { EDITOR_USER_TYPES, type User } from '../../models/user';
 import { updateAuditLog } from '../../utils/auditLog';
 import { getDb, withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
-import { findMemberAccessBlockers, parseAssignableMemberAccess, syncMemberCognitoGroups } from '../../utils/memberAccess';
-import { assertSeatActivationAllowed } from '../../utils/billing/enforcement';
+import { findMemberAccessBlockers, parseAssignableMemberAccess, syncMemberCognitoGroups, type MemberAccess } from '../../utils/memberAccess';
+import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from '../../utils/billing/enforcement';
 import { seatClassForUserType } from '../../utils/billing/usageRecording';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { isWorkspaceAdmin, requireTenantContext, tenantUserIdFilter } from '../../utils/tenantContext';
@@ -50,7 +50,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			return ResponseWrapper.conflict('Reassign this member\'s Products and workflows first', { blockers });
 		}
 		const seatClass = seatClassForUserType(access.userType);
-		if (target.status === 'active' && seatClass !== seatClassForUserType(target.userType)) {
+		const takesNewSeat = target.status === 'active' && seatClass !== seatClassForUserType(target.userType);
+		if (takesNewSeat) {
 			const seatCheck = await assertSeatActivationAllowed(context.workspaceId, seatClass);
 			if (!seatCheck.allowed) return ResponseWrapper.forbidden(seatCheck.reason);
 		}
@@ -60,6 +61,19 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			await txDb.collection<User>('users').updateOne({ _id: target._id }, { $set: access }, { session });
 			await touchActiveWorkflows(txDb, context.workspaceId, { 'assignments.userId': target._id }, session);
 		});
+
+		if (takesNewSeat) {
+			const postChangeCheck = await verifySeatLimitAfterActivation(context.workspaceId, seatClass);
+			if (!postChangeCheck.allowed) {
+				const previousAccess: MemberAccess = {
+					userType: target.userType === undefined ? 'user' : target.userType,
+					isManager: target.isManager === true,
+				};
+				await users.updateOne({ _id: target._id }, { $set: previousAccess });
+				await syncMemberCognitoGroups(target.email, previousAccess);
+				return ResponseWrapper.forbidden(postChangeCheck.reason);
+			}
+		}
 
 		await updateAuditLog({
 			entity: 'user',

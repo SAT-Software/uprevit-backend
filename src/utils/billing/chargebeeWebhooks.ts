@@ -155,11 +155,10 @@ export const buildChargebeeMirrorUpdate = (
 	const ssoItemPriceIds = getChargebeeSsoAddonItemPriceIds();
 	const planItem = items.find((item) => item.item_type === 'plan') ?? items[0];
 	const resolvedSeats = resolveSubscriptionSeatQuantity(items, seatItemPriceIds, limits.seats);
-	const resolvedApproverSeats = resolveSubscriptionSeatQuantity(
-		items,
-		getChargebeeApproverSeatAddonItemPriceIds(),
-		limits.approverSeats,
-	);
+	const approverSeatItemPriceIds = getChargebeeApproverSeatAddonItemPriceIds();
+	const resolvedApproverSeats = approverSeatItemPriceIds.length > 0
+		? findAddonQuantity(items, approverSeatItemPriceIds) ?? 0
+		: limits.approverSeats;
 	const ssoPresent = hasAddon(items, ssoItemPriceIds);
 	const sso = account.sso ?? { enabled: false };
 	const now = new Date();
