@@ -69,8 +69,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 					userType: target.userType === undefined ? 'user' : target.userType,
 					isManager: target.isManager === true,
 				};
-				await users.updateOne({ _id: target._id }, { $set: previousAccess });
-				await syncMemberCognitoGroups(target.email, previousAccess);
+				const restored = await users.updateOne({ _id: target._id, ...access }, { $set: previousAccess });
+				if (restored.modifiedCount > 0) await syncMemberCognitoGroups(target.email, previousAccess);
 				return ResponseWrapper.forbidden(postChangeCheck.reason);
 			}
 		}
