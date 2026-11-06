@@ -2535,6 +2535,23 @@ Resources:
         <<: *EsbuildProps
         EntryPoints: [controllers/platformAdmin/getBillingInvoice.ts]
 
+  PlatformAdminRecordInvoicePaymentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/platformAdmin/recordInvoicePayment.lambdaHandler
+      Events:
+        PlatformAdminRecordInvoicePayment:
+          Type: Api
+          Properties:
+            Path: /platform-admin/workspaces/{workspaceId}/invoices/{invoiceId}/record-payment
+            Method: post
+    Metadata:
+      <<: *EsbuildBase
+      BuildProperties:
+        <<: *EsbuildProps
+        EntryPoints: [controllers/platformAdmin/recordInvoicePayment.ts]
+
   PlatformAdminDownloadBillingInvoiceFunction:
     Type: AWS::Serverless::Function
     Properties:
