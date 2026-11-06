@@ -14,7 +14,8 @@ import { touchActiveWorkflows } from '../../utils/workflowAssignments';
 /**
  * Changes a member's base User Type (User, Approver or none) and Manager access. Admin access is changed only by
  * platform operators. Losing edit access is blocked while the member is on a Product team or initiates an active
- * workflow, and losing every base type is blocked while they are an approver in one.
+ * workflow, and losing every base type is blocked while they are an approver in one. With `dryRun: true` it only
+ * returns those blockers without changing anything.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
  * @return {Promise<APIGatewayProxyResult>} API Gateway Lambda Proxy Output Format
  */
@@ -39,11 +40,12 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (!target || target.status === 'inactive') return ResponseWrapper.notFound('Member not found');
 		if (target.userType === 'admin') return ResponseWrapper.forbidden('Only platform operators can change Admin access');
 
-		if (!access.userType || !EDITOR_USER_TYPES.includes(access.userType)) {
-			const blockers = await findMemberAccessBlockers(db, context.workspaceId, target._id!, access.userType);
-			if (blockers.products.length > 0 || blockers.workflows.length > 0) {
-				return ResponseWrapper.conflict('Reassign this member\'s Products and workflows first', { blockers });
-			}
+		const blockers = !access.userType || !EDITOR_USER_TYPES.includes(access.userType)
+			? await findMemberAccessBlockers(db, context.workspaceId, target._id!, access.userType)
+			: { products: [], workflows: [] };
+		if (input.dryRun === true) return ResponseWrapper.success({ blockers });
+		if (blockers.products.length > 0 || blockers.workflows.length > 0) {
+			return ResponseWrapper.conflict('Reassign this member\'s Products and workflows first', { blockers });
 		}
 
 		await syncMemberCognitoGroups(target.email, access);
