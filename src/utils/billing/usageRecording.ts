@@ -36,6 +36,7 @@ export const ensureUsageEventIndexes = async (): Promise<void> => {
 
 export type PeriodUsageTotals = {
 	activeSeats: number;
+	seatClasses: SeatClassCounts;
 	exports: number;
 	uploadBytes: number;
 };
@@ -127,7 +128,7 @@ export const aggregateUsageForPeriod = async ({
 		],
 	}).toArray();
 
-	const eventTotals = events.reduce<Omit<PeriodUsageTotals, 'activeSeats'>>(
+	const eventTotals = events.reduce<Omit<PeriodUsageTotals, 'activeSeats' | 'seatClasses'>>(
 		(totals, event) => {
 			if (event.metric === 'completed_export') {
 				totals.exports += event.quantity;
@@ -139,20 +140,22 @@ export const aggregateUsageForPeriod = async ({
 		{ exports: 0, uploadBytes: 0 },
 	);
 
-	const activeSeats = await countActiveWorkspaceSeats(workspaceId);
+	const seatClasses = await countActiveSeatsByClass(workspaceId);
 
 	return {
-		activeSeats,
+		activeSeats: seatClasses.full,
+		seatClasses,
 		...eventTotals,
 	};
 };
 
-export const countActiveWorkspaceSeats = async (workspaceId: ObjectId): Promise<number> => {
-	const db = await getDb();
-	return db.collection('users').countDocuments({ workspaceId, status: 'active' });
-};
-
 export type SeatClassCounts = { full: number; approver: number; manager: number };
+export type SeatClass = keyof SeatClassCounts;
+
+export const seatClassForUserType = (userType: User['userType']): SeatClass => {
+	if (userType === 'approver') return 'approver';
+	return userType === null ? 'manager' : 'full';
+};
 
 /**
  * Counts active members by Seat Class, which comes only from the base User Type: Admin or User is a Full Seat,
@@ -165,15 +168,16 @@ export const countActiveSeatsByClass = async (workspaceId: ObjectId): Promise<Se
 	const rows = await db.collection<User>('users')
 		.aggregate<{ _id: User['userType']; count: number }>([
 			{ $match: { workspaceId, status: 'active' } },
-			{ $group: { _id: '$userType', count: { $sum: 1 } } },
+			{
+				$group: {
+					_id: { $cond: [{ $eq: [{ $type: '$userType' }, 'missing'] }, 'user', '$userType'] },
+					count: { $sum: 1 },
+				},
+			},
 		])
 		.toArray();
 	const counts: SeatClassCounts = { full: 0, approver: 0, manager: 0 };
-	for (const { _id: userType, count } of rows) {
-		if (userType === 'approver') counts.approver += count;
-		else if (userType === null) counts.manager += count;
-		else counts.full += count;
-	}
+	for (const { _id: userType, count } of rows) counts[seatClassForUserType(userType)] += count;
 	return counts;
 };
 

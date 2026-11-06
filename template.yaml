@@ -83,6 +83,14 @@ Parameters:
     Type: String
     Description: "Chargebee item price ID for the yearly seat add-on"
     Default: ""
+  ChargebeeApproverSeatAddonItemPriceIdMonthly:
+    Type: String
+    Description: "Chargebee item price ID for the monthly Approver seat add-on"
+    Default: ""
+  ChargebeeApproverSeatAddonItemPriceIdYearly:
+    Type: String
+    Description: "Chargebee item price ID for the yearly Approver seat add-on"
+    Default: ""
   ChargebeeSsoAddonItemPriceId:
     Type: String
     Description: "Legacy Chargebee SSO add-on item price ID(s); comma-separated or use monthly/yearly params"
@@ -169,6 +177,8 @@ Globals:
         CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
         CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
         CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+        CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+        CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
         CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
         CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
         CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly

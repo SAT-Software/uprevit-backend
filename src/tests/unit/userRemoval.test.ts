@@ -235,8 +235,8 @@ describe('userRemoval', () => {
 		});
 
 		expect(result.reactivated).toBe(true);
-		expect(billingEnforcement.assertSeatActivationAllowed).toHaveBeenCalledWith(workspaceId, 1);
-		expect(billingEnforcement.verifySeatLimitAfterActivation).toHaveBeenCalledWith(workspaceId);
+		expect(billingEnforcement.assertSeatActivationAllowed).toHaveBeenCalledWith(workspaceId, 'full');
+		expect(billingEnforcement.verifySeatLimitAfterActivation).toHaveBeenCalledWith(workspaceId, 'full');
 		expect(collections.workspaces.updateOne).toHaveBeenCalled();
 	});
 

@@ -6,6 +6,8 @@ import { updateAuditLog } from '../../utils/auditLog';
 import { getDb, withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
 import { findMemberAccessBlockers, parseAssignableMemberAccess, syncMemberCognitoGroups } from '../../utils/memberAccess';
+import { assertSeatActivationAllowed } from '../../utils/billing/enforcement';
+import { seatClassForUserType } from '../../utils/billing/usageRecording';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { isWorkspaceAdmin, requireTenantContext, tenantUserIdFilter } from '../../utils/tenantContext';
 import { withTelemetry } from '../../utils/telemetry';
@@ -46,6 +48,11 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (input.dryRun === true) return ResponseWrapper.success({ blockers });
 		if (blockers.products.length > 0 || blockers.workflows.length > 0) {
 			return ResponseWrapper.conflict('Reassign this member\'s Products and workflows first', { blockers });
+		}
+		const seatClass = seatClassForUserType(access.userType);
+		if (target.status === 'active' && seatClass !== seatClassForUserType(target.userType)) {
+			const seatCheck = await assertSeatActivationAllowed(context.workspaceId, seatClass);
+			if (!seatCheck.allowed) return ResponseWrapper.forbidden(seatCheck.reason);
 		}
 
 		await syncMemberCognitoGroups(target.email, access);

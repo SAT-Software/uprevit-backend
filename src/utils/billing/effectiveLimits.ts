@@ -13,6 +13,7 @@ export const resolveEffectiveLimits = async (
 	return {
 		...limits,
 		seats: liveUsageLimits.seats,
+		approverSeats: liveUsageLimits.approverSeats,
 		ssoAllowed: liveUsageLimits.ssoAllowed,
 	};
 };

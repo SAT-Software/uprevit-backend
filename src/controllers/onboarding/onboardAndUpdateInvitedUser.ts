@@ -10,6 +10,7 @@ import { AuditLogAction } from "../../models/auditLog";
 import type { User } from '../../models/user';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from '../../utils/billing/enforcement';
+import { seatClassForUserType } from '../../utils/billing/usageRecording';
 import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 import { AdminUpdateUserAttributesCommand, CognitoIdentityProviderClient } from '@aws-sdk/client-cognito-identity-provider';
 import { withTelemetry } from '../../utils/telemetry';
@@ -51,9 +52,10 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 
 		const previousStatus = existingUser.status;
 		const activatingUser = previousStatus !== 'active';
+		const seatClass = seatClassForUserType(existingUser.userType);
 
 		if (activatingUser) {
-			const seatCheck = await assertSeatActivationAllowed(context.workspaceId, 1);
+			const seatCheck = await assertSeatActivationAllowed(context.workspaceId, seatClass);
 			if (!seatCheck.allowed) return ResponseWrapper.forbidden(seatCheck.reason);
 		}
 
@@ -75,7 +77,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 		}
 
 		if (activatingUser) {
-			const postActivationCheck = await verifySeatLimitAfterActivation(context.workspaceId);
+			const postActivationCheck = await verifySeatLimitAfterActivation(context.workspaceId, seatClass);
 			if (!postActivationCheck.allowed) {
 				await db.collection("users").updateOne(
 					{ cognitoSub: context.cognitoSub, workspaceId: context.workspaceId, status: 'active' },

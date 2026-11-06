@@ -110,8 +110,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			updates.periodEnd = parsedPeriodEnd.date;
 		}
 
-		const seatInput = input.limits?.seats;
-		if (seatInput !== undefined) {
+		if (input.limits?.seats !== undefined || input.limits?.approverSeats !== undefined) {
 			return ResponseWrapper.badRequest('Seat limits are mirrored from Chargebee and cannot be edited manually');
 		}
 

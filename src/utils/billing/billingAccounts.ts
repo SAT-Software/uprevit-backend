@@ -14,6 +14,7 @@ export const DEFAULT_LIMITS: WorkspaceLimits = {
 	enabled: false,
 	enforcementMode: 'overage',
 	seats: 1,
+	approverSeats: 0,
 	exports: 100,
 	uploadGb: 10,
 	ssoAllowed: false,
@@ -21,6 +22,7 @@ export const DEFAULT_LIMITS: WorkspaceLimits = {
 
 export const limitsToUsageLimits = (limits: WorkspaceLimits): UsageLimits => ({
 	seats: limits.seats,
+	approverSeats: limits.approverSeats,
 	exports: limits.exports,
 	uploadGb: limits.uploadGb,
 	ssoAllowed: limits.ssoAllowed,

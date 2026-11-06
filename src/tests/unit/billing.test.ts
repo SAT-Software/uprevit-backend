@@ -9,6 +9,7 @@ const dbModule = jest.requireMock('../../utils/db') as any;
 
 const defaultCollectionFallback = () => ({
 	countDocuments: jest.fn(async () => 0),
+	aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 0 }]) })),
 	createIndex: jest.fn(async () => undefined),
 	findOne: jest.fn(async () => null),
 	find: jest.fn(() => ({ toArray: jest.fn(async () => []) })),
@@ -181,6 +182,7 @@ describe('metric enforcement', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 0),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 0 }]) })),
 					};
 				}
 				return defaultCollectionFallback();
@@ -201,6 +203,7 @@ describe('metric enforcement', () => {
 							enabled: true,
 							enforcementMode: 'block',
 							seats: 1,
+							approverSeats: 0,
 							exports: 1,
 							uploadGb: 1,
 							ssoAllowed: false,
@@ -222,6 +225,7 @@ describe('metric enforcement', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 0),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 0 }]) })),
 					};
 				}
 				return defaultCollectionFallback();
@@ -249,6 +253,7 @@ describe('metric enforcement', () => {
 							enabled: true,
 							enforcementMode: 'block',
 							seats: 5,
+							approverSeats: 0,
 							exports: 5,
 							uploadGb: 10,
 							ssoAllowed: false,
@@ -269,6 +274,7 @@ describe('metric enforcement', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 1),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 1 }]) })),
 					};
 				}
 				return defaultCollectionFallback();
@@ -290,6 +296,7 @@ describe('metric enforcement', () => {
 								enabled: true,
 								enforcementMode: 'block',
 								seats: 5,
+								approverSeats: 0,
 								exports: 5,
 								uploadGb: 10,
 								ssoAllowed: false,
@@ -316,12 +323,14 @@ describe('metric enforcement', () => {
 				if (name === 'exportJobs') {
 					return {
 						countDocuments: jest.fn(async () => 3),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 3 }]) })),
 						createIndex: jest.fn(async () => undefined),
 					};
 				}
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 0),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 0 }]) })),
 					};
 				}
 				return defaultCollectionFallback();
@@ -348,6 +357,7 @@ describe('metric enforcement', () => {
 							enabled: true,
 							enforcementMode: 'block',
 							seats: 2,
+							approverSeats: 0,
 							exports: 10,
 							uploadGb: 10,
 							ssoAllowed: false,
@@ -390,6 +400,7 @@ describe('metric enforcement', () => {
 							enabled: true,
 							enforcementMode: 'block',
 							seats: 2,
+							approverSeats: 0,
 							exports: 10,
 							uploadGb: 10,
 							ssoAllowed: false,
@@ -400,13 +411,14 @@ describe('metric enforcement', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 2),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 2 }]) })),
 					};
 				}
 				return defaultCollectionFallback();
 			}),
 		});
 
-		const result = await assertSeatActivationAllowed(workspaceId, 1);
+		const result = await assertSeatActivationAllowed(workspaceId, 'full');
 
 		expect(result.allowed).toBe(false);
 	});
@@ -425,6 +437,7 @@ describe('metric enforcement', () => {
 							enabled: true,
 							enforcementMode: 'overage',
 							seats: 2,
+							approverSeats: 0,
 							exports: 10,
 							uploadGb: 10,
 							ssoAllowed: false,
@@ -435,13 +448,14 @@ describe('metric enforcement', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 2),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 2 }]) })),
 					};
 				}
 				return defaultCollectionFallback();
 			}),
 		});
 
-		const result = await assertSeatActivationAllowed(workspaceId, 1);
+		const result = await assertSeatActivationAllowed(workspaceId, 'full');
 
 		expect(result.allowed).toBe(true);
 	});
@@ -460,6 +474,7 @@ describe('metric enforcement', () => {
 							enabled: false,
 							enforcementMode: 'block',
 							seats: 2,
+							approverSeats: 0,
 							exports: 10,
 							uploadGb: 10,
 							ssoAllowed: false,
@@ -470,13 +485,14 @@ describe('metric enforcement', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 2),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 2 }]) })),
 					};
 				}
 				return defaultCollectionFallback();
 			}),
 		});
 
-		const result = await assertSeatActivationAllowed(workspaceId, 1);
+		const result = await assertSeatActivationAllowed(workspaceId, 'full');
 
 		expect(result.allowed).toBe(true);
 	});
@@ -495,6 +511,7 @@ describe('metric enforcement', () => {
 							enabled: true,
 							enforcementMode: 'block',
 							seats: 5,
+							approverSeats: 0,
 							exports: 10,
 							uploadGb: 10,
 							ssoAllowed: false,
@@ -505,13 +522,14 @@ describe('metric enforcement', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 4),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 4 }]) })),
 					};
 				}
 				return defaultCollectionFallback();
 			}),
 		});
 
-		const result = await assertSeatActivationAllowed(workspaceId, 1);
+		const result = await assertSeatActivationAllowed(workspaceId, 'full');
 
 		expect(result.allowed).toBe(true);
 	});
@@ -525,6 +543,7 @@ describe('metric enforcement', () => {
 							enabled: true,
 							enforcementMode: 'block',
 							seats: 1,
+							approverSeats: 0,
 							exports: 10,
 							uploadGb: 10,
 							ssoAllowed: false,
@@ -535,13 +554,14 @@ describe('metric enforcement', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 2),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 2 }]) })),
 					};
 				}
 				return defaultCollectionFallback();
 			}),
 		});
 
-		const result = await verifySeatLimitAfterActivation(workspaceId);
+		const result = await verifySeatLimitAfterActivation(workspaceId, 'full');
 
 		expect(result.allowed).toBe(false);
 		expect(result.reason).toContain('Seat limit reached');
@@ -556,6 +576,7 @@ describe('metric enforcement', () => {
 							enabled: true,
 							enforcementMode: 'block',
 							seats: 5,
+							approverSeats: 0,
 							exports: 1,
 							uploadGb: 10,
 							ssoAllowed: false,
@@ -574,6 +595,7 @@ describe('metric enforcement', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 0),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 0 }]) })),
 					};
 				}
 				return defaultCollectionFallback();
@@ -721,6 +743,7 @@ describe('upload commit helpers', () => {
 				enabled: true,
 				enforcementMode: 'block',
 				seats: 1,
+				approverSeats: 0,
 				exports: 1,
 				uploadGb: 0.001,
 				ssoAllowed: false,
@@ -743,6 +766,7 @@ describe('upload commit helpers', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 0),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 0 }]) })),
 					};
 				}
 				return {
@@ -789,6 +813,7 @@ describe('billing summaries', () => {
 			enabled: true,
 			enforcementMode: 'block',
 			seats: 5,
+			approverSeats: 0,
 			exports: 100,
 			uploadGb: 10,
 			ssoAllowed: false,
@@ -837,10 +862,10 @@ describe('billing summaries', () => {
 			account: billingAccount,
 		});
 
-		expect(summary.usage.activeSeats).toBe(3);
+		expect(summary.usage.activeSeats).toBe(1);
 		expect(summary.usage.seatClasses).toEqual({ full: 1, approver: 1, manager: 1 });
 		expect(summary.usage.exports).toBe(2);
-		expect(summary.limitStatus.seats.used).toBe(3);
+		expect(summary.limitStatus.seats.used).toBe(1);
 	});
 
 	it('aggregates events by occurredAt when stored billing period differs from current term', async () => {
@@ -876,6 +901,7 @@ describe('billing summaries', () => {
 				if (name === 'users') {
 					return {
 						countDocuments: jest.fn(async () => 1),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 1 }]) })),
 					};
 				}
 				return {

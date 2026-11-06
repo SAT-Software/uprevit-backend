@@ -25,6 +25,7 @@ describe('chargebeeBillingDetail', () => {
 			enabled: true,
 			enforcementMode: 'overage',
 			seats: 5,
+			approverSeats: 0,
 			exports: 100,
 			uploadGb: 10,
 			ssoAllowed: false,
