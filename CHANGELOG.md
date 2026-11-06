@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Updated
+
+- `POST /products/import` no longer creates departments or projects; every product needs the `project_id` of an existing project.
+- `POST /products/import/check` takes `projects` (names or project numbers from the file) and matches each to an existing project by project number, then by name.
+
 ## [0.11.0] - 2026-11-03
 
 ### Added
