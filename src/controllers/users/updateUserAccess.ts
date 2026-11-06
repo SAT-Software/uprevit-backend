@@ -3,12 +3,13 @@ import { ObjectId } from 'mongodb';
 import { AuditLogAction } from '../../models/auditLog';
 import { EDITOR_USER_TYPES, type User } from '../../models/user';
 import { updateAuditLog } from '../../utils/auditLog';
-import { getDb } from '../../utils/db';
+import { getDb, withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
 import { findMemberAccessBlockers, parseAssignableMemberAccess, syncMemberCognitoGroups } from '../../utils/memberAccess';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { isWorkspaceAdmin, requireTenantContext, tenantUserIdFilter } from '../../utils/tenantContext';
 import { withTelemetry } from '../../utils/telemetry';
+import { touchActiveWorkflows } from '../../utils/workflowAssignments';
 
 /**
  * Changes a member's base User Type (User, Approver or none) and Manager access. Admin access is changed only by
@@ -46,7 +47,10 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		}
 
 		await syncMemberCognitoGroups(target.email, access);
-		await users.updateOne({ _id: target._id }, { $set: access });
+		await withTransaction(async (txDb, session) => {
+			await txDb.collection<User>('users').updateOne({ _id: target._id }, { $set: access }, { session });
+			await touchActiveWorkflows(txDb, context.workspaceId, { 'assignments.userId': target._id }, session);
+		});
 
 		await updateAuditLog({
 			entity: 'user',

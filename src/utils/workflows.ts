@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ClientSession, Db, ObjectId } from 'mongodb';
 import type { Product, ProductStatus } from '../models/product';
-import type { User } from '../models/user';
+import { APPROVER_USER_TYPES, type User } from '../models/user';
 import type { Workspace } from '../models/workspace';
 import {
 	ACTIVE_WORKFLOW_STATUSES,
@@ -259,7 +259,7 @@ export const getWorkflowReadiness = async (db: Db, workflow: Workflow, session?:
 
 	const assigneeIds = [...new Map(workflow.assignments.map((assignment) => [assignment.userId.toString(), assignment.userId])).values()];
 	const activeIds = new Set(assigneeIds.length === 0 ? [] : (await db.collection<User>('users')
-		.find({ _id: { $in: assigneeIds }, workspaceId: workflow.workspaceId, status: 'active' }, { projection: { _id: 1 }, session })
+		.find({ _id: { $in: assigneeIds }, workspaceId: workflow.workspaceId, status: 'active', userType: { $in: APPROVER_USER_TYPES } }, { projection: { _id: 1 }, session })
 		.toArray()).map((user) => user._id!.toString()));
 	const inactiveNames = [...new Set(workflow.assignments
 		.filter((assignment) => !activeIds.has(assignment.userId.toString()))
@@ -311,7 +311,7 @@ export const getWorkflowReadiness = async (db: Db, workflow: Workflow, session?:
 			message: workflow.assignments.length === 0
 				? 'Add approvers first'
 				: inactiveNames.length
-					? `No longer active: ${listNames(inactiveNames)}`
+					? `No longer active approvers: ${listNames(inactiveNames)}. Replace them.`
 					: missingLabels ? `${missingLabels} approver(s) have no Function` : 'All approvers are active',
 		},
 		{
