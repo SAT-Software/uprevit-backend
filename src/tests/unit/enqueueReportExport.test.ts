@@ -58,6 +58,8 @@ describe('enqueueReportExport', () => {
 		getAuthenticatedUserContext.mockResolvedValue({
 			userId,
 			workspaceId,
+			userType: 'user',
+			isManager: false,
 		});
 
 		createQueuedExportJob.mockResolvedValue({

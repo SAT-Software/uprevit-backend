@@ -7,6 +7,7 @@ import {
 	type UsageUnit,
 } from '../../models/billing';
 import { getDb } from '../db';
+import type { User } from '../../models/user';
 import { resolveUsagePeriod } from './billingPeriod';
 import { getBillingAccountByWorkspaceId } from './billingAccounts';
 import {
@@ -149,6 +150,31 @@ export const aggregateUsageForPeriod = async ({
 export const countActiveWorkspaceSeats = async (workspaceId: ObjectId): Promise<number> => {
 	const db = await getDb();
 	return db.collection('users').countDocuments({ workspaceId, status: 'active' });
+};
+
+export type SeatClassCounts = { full: number; approver: number; manager: number };
+
+/**
+ * Counts active members by Seat Class, which comes only from the base User Type: Admin or User is a Full Seat,
+ * Approver an Approver Seat, and no base type (Manager only) a free Manager Seat.
+ * @param {ObjectId} workspaceId Workspace id
+ * @return {Promise<SeatClassCounts>} Active members per Seat Class
+ */
+export const countActiveSeatsByClass = async (workspaceId: ObjectId): Promise<SeatClassCounts> => {
+	const db = await getDb();
+	const rows = await db.collection<User>('users')
+		.aggregate<{ _id: User['userType']; count: number }>([
+			{ $match: { workspaceId, status: 'active' } },
+			{ $group: { _id: '$userType', count: { $sum: 1 } } },
+		])
+		.toArray();
+	const counts: SeatClassCounts = { full: 0, approver: 0, manager: 0 };
+	for (const { _id: userType, count } of rows) {
+		if (userType === 'approver') counts.approver += count;
+		else if (userType === null) counts.manager += count;
+		else counts.full += count;
+	}
+	return counts;
 };
 
 export const recordCompletedExport = async ({

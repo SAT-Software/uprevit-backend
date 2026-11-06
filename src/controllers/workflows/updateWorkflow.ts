@@ -1,4 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { APPROVER_USER_TYPES } from '../../models/user';
 import { ObjectId, type Filter, type UpdateFilter } from 'mongodb';
 import type { Product } from '../../models/product';
 import { ACTIVE_WORKFLOW_STATUSES, WORKFLOWS_COLLECTION, type Workflow, type WorkflowAssignment } from '../../models/workflow';
@@ -40,7 +41,7 @@ type Change = {
  */
 export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const workflowResult = await requireWorkflowContext(event);
+		const workflowResult = await requireWorkflowContext(event, { requireEditor: true });
 		if (!workflowResult.ok) return workflowResult.response;
 
 		const { context, db } = workflowResult;
@@ -123,8 +124,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			}
 
 			case 'add-assignment': {
-				const member = await findActiveWorkspaceMember(db, context.workspaceId, input.userId);
-				if (!member) return { error: ResponseWrapper.badRequest('The approver must be an active member of this workspace') };
+				const member = await findActiveWorkspaceMember(db, context.workspaceId, input.userId, APPROVER_USER_TYPES);
+				if (!member) return { error: ResponseWrapper.badRequest('The approver must be an active Admin, User or Approver in this workspace') };
 				const userId = member._id!;
 				const base = {
 					_id: new ObjectId(),

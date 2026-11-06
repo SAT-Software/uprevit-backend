@@ -16,6 +16,7 @@ import {
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateAllObjectIds } from '../../utils/validationUtils';
 import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
+import { canEditWorkspaceData, READ_ONLY_MESSAGE } from '../../utils/tenantContext';
 import { assertUsageActionAllowed } from '../../utils/billing/enforcement';
 import { withTelemetry } from '../../utils/telemetry';
 
@@ -72,6 +73,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (!userContext) {
 			return ResponseWrapper.unauthorized('Unable to resolve authenticated user context');
 		}
+		if (!canEditWorkspaceData(userContext)) return ResponseWrapper.forbidden(READ_ONLY_MESSAGE);
 
 		const db = await getDb();
 		const productObjectId = new ObjectId(productId);

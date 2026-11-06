@@ -1,8 +1,6 @@
 import {
-	AdminAddUserToGroupCommand,
 	AdminDisableUserCommand,
 	AdminEnableUserCommand,
-	AdminRemoveUserFromGroupCommand,
 	AdminUpdateUserAttributesCommand,
 	CognitoIdentityProviderClient,
 } from '@aws-sdk/client-cognito-identity-provider';
@@ -24,6 +22,7 @@ import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from './b
 import { recordAuditEvent } from './auditLogV2';
 import { notify } from './notifications';
 import { flagUnavailableAssignments, touchActiveWorkflows } from './workflowAssignments';
+import { memberCognitoGroups, syncMemberCognitoGroups, type MemberAccess } from './memberAccess';
 
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
 
@@ -65,18 +64,6 @@ const enableCognitoUser = async (email: string): Promise<void> => {
 		UserPoolId: process.env.USER_POOL_ID!,
 		Username: email,
 	}));
-};
-
-const removeCognitoGroup = async (email: string, groupName: 'admin' | 'user'): Promise<void> => {
-	try {
-		await cognito.send(new AdminRemoveUserFromGroupCommand({
-			UserPoolId: process.env.USER_POOL_ID!,
-			Username: email,
-			GroupName: groupName,
-		}));
-	} catch {
-		// Group membership may already be absent.
-	}
 };
 
 const setCognitoStatus = async (email: string, status: string): Promise<void> => {
@@ -238,8 +225,7 @@ export const deactivateWorkspaceUser = async ({
 	} else {
 		await disableCognitoUser(targetUser.email);
 		await setCognitoStatus(targetUser.email, 'inactive');
-		const groupName = targetUser.userType === 'admin' ? 'admin' : 'user';
-		await removeCognitoGroup(targetUser.email, groupName);
+		await syncMemberCognitoGroups(targetUser.email, null);
 	}
 
 	await cleanupMembershipReferences(db, workspaceId, targetUserId, actorUserId);
@@ -274,7 +260,7 @@ export type ReactivateWorkspaceUserInput = {
 	name: string;
 	workspaceId: ObjectId;
 	actorUserId: ObjectId;
-	userType?: 'user' | 'admin';
+	access?: MemberAccess;
 };
 
 export type ReactivateWorkspaceUserResult = {
@@ -308,8 +294,11 @@ export const reactivateWorkspaceUser = async (
 		throw new UserReactivationError('No removed member found with this email in this workspace');
 	}
 
-	const userType = input.userType ?? existingUser.userType ?? 'user';
-	const groupName = userType === 'admin' ? 'admin' : 'user';
+	const access: MemberAccess = input.access ?? {
+		userType: existingUser.userType === undefined ? 'user' : existingUser.userType,
+		isManager: existingUser.isManager === true,
+	};
+	const { userType, isManager } = access;
 	const userId = existingUser._id;
 	const seatCheck = await assertSeatActivationAllowed(workspaceId, 1);
 	if (!seatCheck.allowed) {
@@ -329,7 +318,7 @@ export const reactivateWorkspaceUser = async (
 		if (hasCognitoAccount) {
 			await disableCognitoUser(normalizedEmail);
 			await setCognitoStatus(normalizedEmail, 'inactive');
-			await removeCognitoGroup(normalizedEmail, groupName);
+			await syncMemberCognitoGroups(normalizedEmail, null);
 		}
 	};
 
@@ -341,7 +330,8 @@ export const reactivateWorkspaceUser = async (
 					name: existingUser.name,
 					email: existingUser.email,
 					status: 'inactive',
-					userType: existingUser.userType ?? userType,
+					userType: existingUser.userType === undefined ? userType : existingUser.userType,
+					isManager: existingUser.isManager === true,
 					removedAt: existingUser.removedAt ?? new Date(),
 					removedByUserId: existingUser.removedByUserId ?? input.actorUserId,
 					...(existingUser.cognitoSub ? { cognitoSub: existingUser.cognitoSub } : {}),
@@ -360,7 +350,7 @@ export const reactivateWorkspaceUser = async (
 			const created = await createInvitedCognitoUser({
 				email: normalizedEmail,
 				name: input.name,
-				groupName,
+				groupNames: memberCognitoGroups(access),
 				customAttributes: [
 					{ Name: 'custom:userId', Value: userId.toString() },
 					{ Name: 'custom:workspaceId', Value: workspaceId.toString() },
@@ -382,11 +372,7 @@ export const reactivateWorkspaceUser = async (
 				],
 			}));
 
-			await cognito.send(new AdminAddUserToGroupCommand({
-				UserPoolId: process.env.USER_POOL_ID!,
-				Username: normalizedEmail,
-				GroupName: groupName,
-			}));
+			await syncMemberCognitoGroups(normalizedEmail, access);
 		}
 
 		await db.collection<User>('users').updateOne(
@@ -398,6 +384,7 @@ export const reactivateWorkspaceUser = async (
 					cognitoSub,
 					status: 'active',
 					userType,
+					isManager,
 				},
 				$unset: {
 					removedAt: '',

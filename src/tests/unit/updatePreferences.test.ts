@@ -8,7 +8,7 @@ jest.mock('../../utils/db', () => ({
 
 jest.mock('../../utils/tenantContext', () => ({
 	requireTenantContext: jest.fn(),
-	isWorkspaceAdmin: jest.fn(),
+	canManageBilling: jest.fn(),
 }));
 
 jest.mock('../../utils/billing/billingAccounts', () => ({
@@ -61,7 +61,7 @@ describe('updatePreferences', () => {
 			ok: true,
 			context: { workspaceId, cognitoGroups: ['workspace-admin'] },
 		});
-		tenantContext.isWorkspaceAdmin.mockReturnValue(true);
+		tenantContext.canManageBilling.mockReturnValue(true);
 
 		billingAccounts.getBillingAccountByWorkspaceId.mockResolvedValue({
 			_id: billingAccountId,
@@ -130,7 +130,7 @@ describe('updatePreferences', () => {
 	});
 
 	it('rejects non-workspace admins', async () => {
-		tenantContext.isWorkspaceAdmin.mockReturnValue(false);
+		tenantContext.canManageBilling.mockReturnValue(false);
 
 		const response = await lambdaHandler(buildEvent({ enforcementMode: 'block' }));
 

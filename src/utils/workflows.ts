@@ -1,7 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ClientSession, Db, ObjectId } from 'mongodb';
 import type { Product, ProductStatus } from '../models/product';
-import type { User } from '../models/user';
+import { APPROVER_USER_TYPES, type User } from '../models/user';
 import type { Workspace } from '../models/workspace';
 import {
 	ACTIVE_WORKFLOW_STATUSES,
@@ -15,7 +15,7 @@ import type { AuthResult } from './authUtils';
 import { getDb } from './db';
 import { allTabsCompletedFilter, computeCompleteCount } from './productLifecycle';
 import { ResponseWrapper } from './responseWrapper';
-import { isWorkspaceAdmin, requireTenantContext, type TenantContext } from './tenantContext';
+import { isWorkspaceAdmin, requireTenantContext, type RequireTenantContextOptions, type TenantContext } from './tenantContext';
 
 export const WORKFLOW_EDIT_FORBIDDEN_MESSAGE = 'Only the Initiator or an admin can change this workflow';
 export const WORKFLOW_NOT_DRAFT_MESSAGE = 'Only Draft workflows can be changed';
@@ -57,10 +57,14 @@ const ensureWorkflowIndexes = async (db: Db) => {
 /**
  * Authenticates the request and loads the workspace's workflow settings.
  * @param {APIGatewayProxyEvent} event API Gateway event
+ * @param {RequireTenantContextOptions} options Tenant context options
  * @return {Promise<WorkflowContextResult>} Tenant context, database and workspace
  */
-export const requireWorkflowContext = async (event: APIGatewayProxyEvent): Promise<WorkflowContextResult> => {
-	const tenantResult = await requireTenantContext(event);
+export const requireWorkflowContext = async (
+	event: APIGatewayProxyEvent,
+	options?: RequireTenantContextOptions,
+): Promise<WorkflowContextResult> => {
+	const tenantResult = await requireTenantContext(event, options);
 	if (!tenantResult.ok) return tenantResult;
 
 	const db = await getDb();
@@ -255,7 +259,7 @@ export const getWorkflowReadiness = async (db: Db, workflow: Workflow, session?:
 
 	const assigneeIds = [...new Map(workflow.assignments.map((assignment) => [assignment.userId.toString(), assignment.userId])).values()];
 	const activeIds = new Set(assigneeIds.length === 0 ? [] : (await db.collection<User>('users')
-		.find({ _id: { $in: assigneeIds }, workspaceId: workflow.workspaceId, status: 'active' }, { projection: { _id: 1 }, session })
+		.find({ _id: { $in: assigneeIds }, workspaceId: workflow.workspaceId, status: 'active', userType: { $in: APPROVER_USER_TYPES } }, { projection: { _id: 1 }, session })
 		.toArray()).map((user) => user._id!.toString()));
 	const inactiveNames = [...new Set(workflow.assignments
 		.filter((assignment) => !activeIds.has(assignment.userId.toString()))
@@ -307,7 +311,7 @@ export const getWorkflowReadiness = async (db: Db, workflow: Workflow, session?:
 			message: workflow.assignments.length === 0
 				? 'Add approvers first'
 				: inactiveNames.length
-					? `No longer active: ${listNames(inactiveNames)}`
+					? `No longer active approvers: ${listNames(inactiveNames)}. Replace them.`
 					: missingLabels ? `${missingLabels} approver(s) have no Function` : 'All approvers are active',
 		},
 		{

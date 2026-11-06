@@ -17,7 +17,7 @@ jest.mock('../../config/chargebeeConfig', () => ({
 
 jest.mock('../../utils/tenantContext', () => ({
 	requireTenantContext: jest.fn(),
-	isWorkspaceAdmin: jest.fn(),
+	canManageBilling: jest.fn(),
 }));
 
 const billingAccounts = jest.requireMock('../../utils/billing/billingAccounts') as any;
@@ -207,7 +207,7 @@ describe('billing invoice controllers', () => {
 			ok: true,
 			context: { workspaceId, cognitoGroups: ['workspace-admin'] },
 		});
-		tenantContext.isWorkspaceAdmin.mockReturnValue(true);
+		tenantContext.canManageBilling.mockReturnValue(true);
 		chargebeeConfig.isChargebeeConfigured.mockReturnValue(true);
 		billingAccounts.getBillingAccountByWorkspaceId.mockResolvedValue({
 			chargebee: { customerId },
@@ -239,7 +239,7 @@ describe('billing invoice controllers', () => {
 	});
 
 	it('rejects non-workspace admins', async () => {
-		tenantContext.isWorkspaceAdmin.mockReturnValue(false);
+		tenantContext.canManageBilling.mockReturnValue(false);
 
 		const response = await getBillingInvoice(buildEvent('1'));
 

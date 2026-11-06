@@ -2,7 +2,7 @@ import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { ClientSession, Db, ObjectId } from 'mongodb';
 import type { NotificationType } from '../models/notification';
 import type { Product } from '../models/product';
-import type { User } from '../models/user';
+import { APPROVER_USER_TYPES, type User } from '../models/user';
 import {
 	ACTIVE_WORKFLOW_STATUSES,
 	UNDECIDED_DECISIONS,
@@ -52,9 +52,10 @@ export const getActorSnapshot = async (db: Db, workspaceId: ObjectId, userId: Ob
 };
 
 /**
- * Re-checks inside a decision transaction that the approver is still an active member and, for Product Team, still on
- * the Product's team. Team and membership changes write the affected workflows in their own transaction (see
- * `touchActiveWorkflows`), so a decision that read the old state conflicts and retries instead of committing.
+ * Re-checks inside a decision transaction that the approver is still an active member who can approve and, for
+ * Product Team, still on the Product's team. Team, membership and access changes write the affected workflows in their
+ * own transaction (see `touchActiveWorkflows`), so a decision that read the old state conflicts and retries instead of
+ * committing.
  * @param {Db} db Transaction database handle
  * @param {ObjectId} workspaceId Workspace id
  * @param {WorkflowAssignment} assignment The approver's assignment
@@ -63,10 +64,10 @@ export const getActorSnapshot = async (db: Db, workspaceId: ObjectId, userId: Ob
  */
 export const assertCanDecide = async (db: Db, workspaceId: ObjectId, assignment: WorkflowAssignment, session: ClientSession) => {
 	const member = await db.collection<User>('users').findOne(
-		{ _id: assignment.userId, workspaceId, status: 'active' },
+		{ _id: assignment.userId, workspaceId, status: 'active', userType: { $in: APPROVER_USER_TYPES } },
 		{ projection: { _id: 1 }, session },
 	);
-	if (!member) throw new WorkflowConflictError('Only active members can decide');
+	if (!member) throw new WorkflowConflictError('Only active Admins, Users and Approvers can decide');
 	if (!(await isStillEligible(db, workspaceId, assignment, session))) {
 		throw new WorkflowConflictError('You are no longer on this Product\'s team, so you can\'t decide for it.');
 	}

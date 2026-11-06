@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId, type UpdateFilter } from 'mongodb';
 import { getDb, withTransaction } from '../../utils/db';
 import type { Product } from '../../models/product';
-import type { User } from '../../models/user';
+import { EDITOR_USER_TYPES, type User } from '../../models/user';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
@@ -30,7 +30,7 @@ const EVENT_KEYS: Record<Action, string> = {
  */
 export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const tenantResult = await requireTenantContext(event);
+		const tenantResult = await requireTenantContext(event, { requireEditor: true });
 		if (!tenantResult.ok) return tenantResult.response;
 
 		const { context, auth } = tenantResult;
@@ -69,8 +69,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			if (isOwner) return ResponseWrapper.badRequest('This member is already the Product Owner');
 			if (action === 'add-contributor' && isContributor) return ResponseWrapper.badRequest('This member is already a contributor');
 
-			member = await findActiveWorkspaceMember(db, context.workspaceId, input.userId);
-			if (!member) return ResponseWrapper.badRequest('The member must be active in this workspace');
+			member = await findActiveWorkspaceMember(db, context.workspaceId, input.userId, EDITOR_USER_TYPES);
+			if (!member) return ResponseWrapper.badRequest('The member must be an active Admin or User in this workspace');
 
 			update = action === 'set-owner'
 				? { $set: { owner_user_id: userId }, $pull: { contributor_user_ids: userId } }

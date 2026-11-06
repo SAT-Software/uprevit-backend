@@ -72,7 +72,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const { cognitoSub } = await createInvitedCognitoUser({
 			email: normalizedEmail,
 			name: input.name.trim(),
-			groupName: 'admin',
+			groupNames: ['admin'],
 		});
 
 		const newUserDoc: User = {

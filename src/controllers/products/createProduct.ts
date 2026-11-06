@@ -1,4 +1,5 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { EDITOR_USER_TYPES } from '../../models/user';
 import { getDb } from '../../utils/db';
 import type { Product } from '../../models/product';
 import { ObjectId } from 'mongodb';
@@ -21,7 +22,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 	let userId: string | undefined;
 	
 	try {
-		const tenantResult = await requireTenantContext(event);
+		const tenantResult = await requireTenantContext(event, { requireEditor: true });
 		if (!tenantResult.ok) return tenantResult.response;
 
 		const { context, auth } = tenantResult;
@@ -69,8 +70,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		let ownerUserId = context.userId;
 		if (input.owner_user_id !== undefined && input.owner_user_id !== context.userId.toString()) {
-			const owner = await findActiveWorkspaceMember(db, workspaceObjectId, input.owner_user_id);
-			if (!owner?._id) return ResponseWrapper.badRequest('Product Owner must be an active member of this workspace');
+			const owner = await findActiveWorkspaceMember(db, workspaceObjectId, input.owner_user_id, EDITOR_USER_TYPES);
+			if (!owner?._id) return ResponseWrapper.badRequest('Product Owner must be an active Admin or User in this workspace');
 			ownerUserId = owner._id;
 		}
 

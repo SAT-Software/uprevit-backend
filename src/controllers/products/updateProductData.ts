@@ -246,7 +246,7 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
  */
 
 export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
-	const tenantResult = await requireTenantContext(event);
+	const tenantResult = await requireTenantContext(event, { requireEditor: true });
 	if (!tenantResult.ok) return tenantResult.response;
 
 	const { context, auth } = tenantResult;

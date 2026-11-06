@@ -37,6 +37,10 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			return ResponseWrapper.badRequest('Missing required fields: name, email, and userType are required');
 		}
 
+		if (input.userType !== 'user' && input.userType !== 'approver') {
+			return ResponseWrapper.badRequest('User Type must be User or Approver');
+		}
+
 		const db = await getDb();
 		const normalizedAvatar = normalizePersistedAssetReference(input.profileAvatar, '');
 

@@ -10,7 +10,7 @@ import { createPresignedUrl, type UploadScope } from "../../utils/s3-storage";
 import type { Product } from "../../models/product";
 import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
 import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE } from "../../utils/productAccess";
-import { parseCognitoGroups } from "../../utils/tenantContext";
+import { canEditWorkspaceData, parseCognitoGroups, READ_ONLY_MESSAGE } from "../../utils/tenantContext";
 import { ACTIVE_WORKFLOW_STATUSES } from "../../models/workflow";
 import { WORKFLOW_ATTACHMENT_MAX_BYTES } from "../../models/workflowDiscussion";
 import { canComment, getProductTeamIds } from "../../utils/workflowDiscussion";
@@ -90,6 +90,10 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			});
 
 			return ResponseWrapper.created({ message: "Presigned URL generated successfully.", uploadUrl, key, expiresIn: 3600 });
+		}
+
+		if (uploadScope === "source-files" && !canEditWorkspaceData(userContext)) {
+			return ResponseWrapper.forbidden(READ_ONLY_MESSAGE);
 		}
 
 		if (userContext.workspaceId) {

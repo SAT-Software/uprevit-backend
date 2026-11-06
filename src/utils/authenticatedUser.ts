@@ -5,6 +5,8 @@ import { getDb } from './db';
 export type AuthenticatedUserContext = {
 	userId: ObjectId;
 	workspaceId: ObjectId;
+	userType: User['userType'];
+	isManager: boolean;
 };
 
 /**
@@ -20,7 +22,7 @@ export const getAuthenticatedUserContext = async (
 	const db = await getDb();
 	const user = await db.collection<User>('users').findOne(
 		{ cognitoSub },
-		{ projection: { _id: 1, workspaceId: 1, status: 1 } },
+		{ projection: { _id: 1, workspaceId: 1, status: 1, userType: 1, isManager: 1 } },
 	);
 
 	if (!user?._id || !(user.workspaceId instanceof ObjectId)) {
@@ -34,5 +36,7 @@ export const getAuthenticatedUserContext = async (
 	return {
 		userId: user._id,
 		workspaceId: user.workspaceId,
+		userType: user.userType,
+		isManager: user.isManager === true,
 	};
 };

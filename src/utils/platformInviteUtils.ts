@@ -158,12 +158,12 @@ export const assertEmailAvailableForWorkspaceMemberInvite = async (
 export type CreateInvitedCognitoUserInput = {
 	email: string;
 	name: string;
-	groupName: 'admin' | 'user';
+	groupNames: string[];
 	customAttributes?: Array<{ Name: string; Value: string }>;
 };
 
 /**
- * Creates a Cognito user, sets attributes, and adds them to a group.
+ * Creates a Cognito user, sets attributes, and adds them to groups.
  * @param {CreateInvitedCognitoUserInput} input Invited user details
  */
 export const createInvitedCognitoUser = async (
@@ -190,11 +190,13 @@ export const createInvitedCognitoUser = async (
 		}));
 	}
 
-	await cognito.send(new AdminAddUserToGroupCommand({
-		UserPoolId: process.env.USER_POOL_ID!,
-		Username: input.email,
-		GroupName: input.groupName,
-	}));
+	for (const groupName of input.groupNames) {
+		await cognito.send(new AdminAddUserToGroupCommand({
+			UserPoolId: process.env.USER_POOL_ID!,
+			Username: input.email,
+			GroupName: groupName,
+		}));
+	}
 
 	return { cognitoSub };
 };

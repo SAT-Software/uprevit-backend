@@ -1,7 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
 import { authenticateRequest, type AuthResult } from './authUtils';
-import { getAuthenticatedUserContext } from './authenticatedUser';
+import { getAuthenticatedUserContext, type AuthenticatedUserContext } from './authenticatedUser';
+import { EDITOR_USER_TYPES, type User } from '../models/user';
 import { assertWorkspaceAccessAllowed } from './billing/enforcement';
 import { ResponseWrapper } from './responseWrapper';
 import { setTelemetryIdentity } from './telemetry';
@@ -11,6 +12,8 @@ export type TenantContext = {
 	userId: ObjectId;
 	cognitoSub: string;
 	cognitoGroups: string[];
+	userType: User['userType'];
+	isManager: boolean;
 };
 
 export type TenantContextResult =
@@ -37,6 +40,8 @@ export const parseCognitoGroups = (groups: unknown): string[] => {
 export type RequireTenantContextOptions = {
 	/** Allow read-only access when workspace access is frozen (e.g. billing summary). */
 	allowAccessFrozen?: boolean;
+	/** Reject Approvers and Manager-only members, who have read-only access to workspace data. */
+	requireEditor?: boolean;
 };
 
 export const requireTenantContext = async (
@@ -62,6 +67,10 @@ export const requireTenantContext = async (
 	}
 	setTelemetryIdentity(userContext.userId, userContext.workspaceId);
 
+	if (options.requireEditor && !canEditWorkspaceData(userContext)) {
+		return { ok: false, response: ResponseWrapper.forbidden(READ_ONLY_MESSAGE) };
+	}
+
 	if (!options.allowAccessFrozen) {
 		const accessCheck = await assertWorkspaceAccessAllowed(userContext.workspaceId);
 		if (!accessCheck.allowed) {
@@ -79,6 +88,8 @@ export const requireTenantContext = async (
 			userId: userContext.userId,
 			cognitoSub,
 			cognitoGroups: parseCognitoGroups(auth.payload['cognito:groups']),
+			userType: userContext.userType,
+			isManager: userContext.isManager,
 		},
 		auth,
 	};
@@ -156,3 +167,13 @@ export const tenantUserIdFilter = (
 };
 
 export const isWorkspaceAdmin = (cognitoGroups: string[]): boolean => cognitoGroups.includes('admin');
+
+export const READ_ONLY_MESSAGE = 'Your access to this workspace is read-only';
+
+type MemberAccess = Pick<AuthenticatedUserContext, 'userType' | 'isManager'>;
+
+export const canEditWorkspaceData = ({ userType }: Pick<MemberAccess, 'userType'>): boolean =>
+	!!userType && EDITOR_USER_TYPES.includes(userType);
+
+export const canManageBilling = ({ userType, isManager }: MemberAccess): boolean =>
+	userType === 'admin' || isManager;
