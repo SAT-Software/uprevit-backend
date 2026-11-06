@@ -48,7 +48,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (amountDue <= 0) return ResponseWrapper.badRequest('This invoice has nothing left to pay');
 
 		const invoice = await recordChargebeeInvoicePayment(invoiceId, { amount: amountDue, referenceNumber });
-		if (invoice.subscription_id) await syncPastDueFromChargebee(invoice.subscription_id);
 
 		const { auth, operator } = operatorResult.context;
 		await recordPlatformAuditEvent({
@@ -63,6 +62,11 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			event,
 			source: 'platform-admin-portal',
 		});
+
+		if (invoice.subscription_id) {
+			await syncPastDueFromChargebee(invoice.subscription_id).catch((error) =>
+				logError('Past due refresh after recording invoice payment failed', error));
+		}
 
 		return ResponseWrapper.success({
 			message: 'Invoice marked as paid',
