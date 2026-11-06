@@ -17,7 +17,6 @@ jest.mock('../../config/chargebeeConfig', () => ({
 
 jest.mock('../../utils/tenantContext', () => ({
 	requireTenantContext: jest.fn(),
-	canManageBilling: jest.fn(),
 }));
 
 const billingAccounts = jest.requireMock('../../utils/billing/billingAccounts') as any;
@@ -205,9 +204,8 @@ describe('billing invoice controllers', () => {
 
 		tenantContext.requireTenantContext.mockResolvedValue({
 			ok: true,
-			context: { workspaceId, cognitoGroups: ['workspace-admin'] },
+			context: { workspaceId, cognitoGroups: ['manager'], isManager: true },
 		});
-		tenantContext.canManageBilling.mockReturnValue(true);
 		chargebeeConfig.isChargebeeConfigured.mockReturnValue(true);
 		billingAccounts.getBillingAccountByWorkspaceId.mockResolvedValue({
 			chargebee: { customerId },
@@ -220,7 +218,7 @@ describe('billing invoice controllers', () => {
 		});
 	});
 
-	it('returns invoice details for workspace admins', async () => {
+	it('returns invoice details for Managers', async () => {
 		const response = await getBillingInvoice(buildEvent('1'));
 		const body = JSON.parse(response.body);
 
@@ -229,7 +227,7 @@ describe('billing invoice controllers', () => {
 		expect(body.data.invoice.lineItems).toHaveLength(1);
 	});
 
-	it('returns pdf download url for workspace admins', async () => {
+	it('returns pdf download url for Managers', async () => {
 		const response = await downloadBillingInvoice(buildEvent('1'));
 		const body = JSON.parse(response.body);
 
@@ -238,8 +236,11 @@ describe('billing invoice controllers', () => {
 		expect(body.data.pdfDownloadUrl).toBe('https://example.com/invoice.pdf');
 	});
 
-	it('rejects non-workspace admins', async () => {
-		tenantContext.canManageBilling.mockReturnValue(false);
+	it('rejects members without Manager access, including Admins', async () => {
+		tenantContext.requireTenantContext.mockResolvedValue({
+			ok: true,
+			context: { workspaceId, cognitoGroups: ['admin'], isManager: false },
+		});
 
 		const response = await getBillingInvoice(buildEvent('1'));
 
