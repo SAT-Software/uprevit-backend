@@ -1,17 +1,6 @@
-import { PDFDocument, rgb, StandardFonts, PDFPage } from 'pdf-lib';
 import { logError } from '../logger';
-
-const PAGE_WIDTH = 842;
-const PAGE_HEIGHT = 595;
-const MARGIN = 20;
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
-const ROW_HEIGHT = 22;
-const HEADER_HEIGHT = 25;
-const FOOTER_HEIGHT = 25;
-
-const HEADER_BG_COLOR = rgb(0.788, 0.855, 0.973);
-const HEADER_TEXT_COLOR = rgb(0, 0, 0);
-const BORDER_COLOR = rgb(0, 0, 0);
+import { PRODUCT_STATUSES, ReportExportContext, describeReportFilters, formatExportDate, statusLabel, statusTone } from '../exportFormatting';
+import { createPdfLayout } from '../pdfLayout';
 
 interface ProductForExport {
 	_id: any;
@@ -29,220 +18,75 @@ interface ProductForExport {
 		};
 		tab_completed?: boolean;
 	};
+	compliance_information?: { tab_completed?: boolean };
+	symbols_graphics?: { tab_completed?: boolean };
+	label_components?: { tab_completed?: boolean };
+	label_tags?: { tab_completed?: boolean };
 }
+
+const completedSections = (product: ProductForExport): number =>
+	[product.product_information, product.compliance_information, product.symbols_graphics, product.label_components, product.label_tags].filter((section) => section?.tab_completed).length;
 
 /**
  * Generates a PDF report export for multiple products.
- * Creates a tabular PDF document with product information including
- * name, plan number, status, market geography, target date, and completion status.
+ * Creates a branded document with a status summary and a product table covering
+ * name, plan number, status, version, target date, market, class, UDI, completion and description.
  * @param {ProductForExport[]} products - Array of products to include in the report
+ * @param {ReportExportContext} context - Workspace name and the report query
  * @return {Promise<Buffer | null>} PDF buffer on success, null on failure
  */
-export async function generateReportsPDFExport(products: ProductForExport[]): Promise<Buffer | null> {
+export async function generateReportsPDFExport(products: ProductForExport[], context: ReportExportContext = {}): Promise<Buffer | null> {
 	try {
-		const pdfDoc = await PDFDocument.create();
-		const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
-		const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+		const layout = await createPdfLayout('Products report', context.workspaceName);
+		const statuses = [...PRODUCT_STATUSES, ...new Set(products.map((product) => product.status).filter((status) => status && !PRODUCT_STATUSES.includes(status)))];
 
-		const pages: PDFPage[] = [];
-		let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-		pages.push(page);
-		let y = PAGE_HEIGHT - MARGIN - HEADER_HEIGHT;
-
-		const addNewPage = (): PDFPage => {
-			page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-			pages.push(page);
-			y = PAGE_HEIGHT - MARGIN - HEADER_HEIGHT;
-			return page;
-		};
-
-		const drawTextInCell = (
-			text: string,
-			x: number,
-			cellY: number,
-			width: number,
-			isBold: boolean,
-			currentPage: PDFPage
-		) => {
-			const size = 8;
-			const font = isBold ? fontBold : fontRegular;
-			let cleanText = String(text || '').replace(/\s+/g, ' ').trim();
-
-			const textWidth = font.widthOfTextAtSize(cleanText, size);
-			if (textWidth > width - 6) {
-				const maxChars = Math.floor((width - 6) / 4.5);
-				cleanText = cleanText.substring(0, maxChars) + '...';
-			}
-
-			currentPage.drawText(cleanText, {
-				x: x + 3,
-				y: cellY - 14,
-				size: size,
-				font: font,
-				color: rgb(0, 0, 0),
-			});
-		};
-
-		const columns = [
-			{ label: 'Product Name', widthPct: 0.16 },
-			{ label: 'Plan Number', widthPct: 0.11 },
-			{ label: 'Status', widthPct: 0.08 },
-			{ label: 'Version', widthPct: 0.06 },
-			{ label: 'Target Date', widthPct: 0.10 },
-			{ label: 'Market Geography', widthPct: 0.13 },
-			{ label: 'Class of Device', widthPct: 0.13 },
-			{ label: 'Basic UDI', widthPct: 0.13 },
-			{ label: 'Description', widthPct: 0.10 },
-		];
-
-		const colWidths = columns.map((h) => h.widthPct * CONTENT_WIDTH);
-
-		page.drawText('Products Report', {
-			x: MARGIN,
-			y: y,
-			size: 14,
-			font: fontBold,
-			color: rgb(0.2, 0.3, 0.6),
-		});
-		y -= 25;
-
-		page.drawText(`Total Products: ${products.length}`, {
-			x: MARGIN,
-			y: y,
-			size: 10,
-			font: fontRegular,
-			color: rgb(0.3, 0.3, 0.3),
-		});
-		y -= 20;
-
-		const drawHeader = () => {
-			page.drawRectangle({
-				x: MARGIN,
-				y: y - 18,
-				width: CONTENT_WIDTH,
-				height: 18,
-				color: HEADER_BG_COLOR,
-				borderColor: BORDER_COLOR,
-				borderWidth: 1,
-			});
-
-			let currentX = MARGIN;
-			columns.forEach((h, i) => {
-				page.drawRectangle({
-					x: currentX,
-					y: y - 18,
-					width: colWidths[i],
-					height: 18,
-					borderColor: BORDER_COLOR,
-					borderWidth: 0.5,
-				});
-
-				const fontSize = 8;
-				let headerText = h.label;
-				const textWidth = fontBold.widthOfTextAtSize(headerText, fontSize);
-				if (textWidth > colWidths[i] - 6) {
-					const maxChars = Math.floor((colWidths[i] - 6) / 4.5);
-					headerText = headerText.substring(0, maxChars) + '...';
-				}
-
-				page.drawText(headerText, {
-					x: currentX + 3,
-					y: y - 12,
-					size: fontSize,
-					font: fontBold,
-					color: HEADER_TEXT_COLOR,
-				});
-				currentX += colWidths[i];
-			});
-			y -= 18;
-		};
-
-		drawHeader();
-
-		products.forEach((product, rowIndex) => {
-			if (y < MARGIN + FOOTER_HEIGHT + ROW_HEIGHT) {
-				addNewPage();
-				drawHeader();
-			}
-
-			if (rowIndex % 2 === 1) {
-				page.drawRectangle({
-					x: MARGIN,
-					y: y - ROW_HEIGHT,
-					width: CONTENT_WIDTH,
-					height: ROW_HEIGHT,
-					color: rgb(0.96, 0.96, 0.96),
-				});
-			}
-
-			const rowData = [
-				product.product_name || '',
-				product.product_plan_number || '',
-				product.status || '',
-				String(product.version || ''),
-				product.target_date ? new Date(product.target_date).toLocaleDateString() : '',
-				product.product_information?.data?.market_geography || '',
-				product.product_information?.data?.class_of_device || '',
-				product.product_information?.data?.basic_udi_di || '',
-				product.product_description || '',
-			];
-
-			let currentX = MARGIN;
-			rowData.forEach((cellData, colIndex) => {
-				page.drawRectangle({
-					x: currentX,
-					y: y - ROW_HEIGHT,
-					width: colWidths[colIndex],
-					height: ROW_HEIGHT,
-					borderColor: BORDER_COLOR,
-					borderWidth: 0.5,
-				});
-
-				drawTextInCell(cellData, currentX, y, colWidths[colIndex], false, page);
-				currentX += colWidths[colIndex];
-			});
-
-			y -= ROW_HEIGHT;
+		layout.titleBlock({
+			heading: 'Products report',
+			meta: [`${products.length} ${products.length === 1 ? 'product' : 'products'}`, layout.generatedAt],
 		});
 
-		const totalPages = pages.length;
-		pages.forEach((p, index) => {
-			const pageNumber = index + 1;
+		layout.filters(describeReportFilters(context));
 
-			const headerText = 'Products Report';
-			const headerFontSize = 10;
-			const headerTextWidth = fontRegular.widthOfTextAtSize(headerText, headerFontSize);
-			p.drawText(headerText, {
-				x: PAGE_WIDTH - MARGIN - headerTextWidth,
-				y: PAGE_HEIGHT - MARGIN + 5,
-				size: headerFontSize,
-				font: fontRegular,
-				color: rgb(0.4, 0.4, 0.4),
-			});
+		layout.stats([
+			{ label: 'Total products', value: products.length },
+			...statuses.map((status) => ({ label: statusLabel(status), value: products.filter((product) => product.status === status).length })),
+		]);
 
-			const footerText = `Page ${pageNumber} of ${totalPages}`;
-			const footerFontSize = 9;
-			const footerTextWidth = fontRegular.widthOfTextAtSize(footerText, footerFontSize);
-			p.drawText(footerText, {
-				x: PAGE_WIDTH - MARGIN - footerTextWidth,
-				y: MARGIN - 15,
-				size: footerFontSize,
-				font: fontRegular,
-				color: rgb(0.4, 0.4, 0.4),
-			});
+		layout.heading('Products', products.length);
+		if (!products.length) {
+			layout.emptyNote('No products match this report.');
+			return await layout.finish();
+		}
 
-			const dateText = `Generated: ${new Date().toLocaleString()}`;
-			p.drawText(dateText, {
-				x: MARGIN,
-				y: MARGIN - 15,
-				size: footerFontSize,
-				font: fontRegular,
-				color: rgb(0.4, 0.4, 0.4),
-			});
-		});
+		layout.table(
+			[
+				{ label: 'Product', weight: 0.17 },
+				{ label: 'Description', weight: 0.2, maxLines: 3 },
+				{ label: 'Status', weight: 0.08 },
+				{ label: 'Version', weight: 0.06, align: 'right' },
+				{ label: 'Target date', weight: 0.09 },
+				{ label: 'Market geography', weight: 0.1 },
+				{ label: 'Class of device', weight: 0.08 },
+				{ label: 'Basic UDI-DI', weight: 0.13 },
+				{ label: 'Sections done', weight: 0.07, align: 'right' },
+			],
+			products.map((product) => {
+				const info = product.product_information?.data;
+				return [
+					{ text: product.product_name, subtext: product.product_plan_number, format: { bold: true } },
+					{ text: product.product_description, muted: true },
+					product.status ? { pill: { text: statusLabel(product.status), tone: statusTone(product.status) } } : {},
+					{ text: product.version ? `v${product.version}` : '' },
+					{ text: formatExportDate(product.target_date) },
+					{ text: info?.market_geography },
+					{ text: info?.class_of_device },
+					{ text: info?.basic_udi_di },
+					{ text: `${completedSections(product)} of 5` },
+				];
+			}),
+		);
 
-		const pdfBytes = await pdfDoc.save();
-		return Buffer.from(pdfBytes);
+		return await layout.finish();
 	} catch (error) {
 		logError('Reports PDF export failed', error);
 		return null;

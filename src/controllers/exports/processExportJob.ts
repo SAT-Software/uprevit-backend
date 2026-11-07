@@ -6,6 +6,7 @@ import type { ExportQueueMessage } from '../../types/export-job';
 import { EXPORT_LIMITS, type PersistedReportExportRequest } from '../../types/reports';
 import { getDb } from '../../utils/db';
 import { generateProductExcelExport } from '../../utils/exportExcel';
+import { getExportWorkspaceName } from '../../utils/exportFormatting';
 import { generateProductPDFExport } from '../../utils/exportPDF';
 import {
 	markExportJobCompleted,
@@ -170,7 +171,7 @@ const generateProductArtifact = async ({
 	format: 'pdf' | 'excel';
 }): Promise<ExportArtifact> => {
 	const rawBuffer = format === 'pdf'
-		? await generateProductPDFExport(product)
+		? await generateProductPDFExport(product, await getExportWorkspaceName(product.workspace_id))
 		: await generateProductExcelExport(product);
 
 	if (!rawBuffer) {
@@ -208,9 +209,10 @@ const generateReportArtifact = async ({
 	);
 
 	const products = (await db.collection<ReportExportProduct>('products').aggregate(pipeline).toArray()) as ReportExportProduct[];
+	const context = { workspaceName: await getExportWorkspaceName(workspaceId), conditions: reportParams.conditions, conditionLogic: reportParams.conditionLogic };
 	const rawBuffer = format === 'pdf'
-		? await generateReportsPDFExport(products)
-		: await generateReportsExcelExport(products);
+		? await generateReportsPDFExport(products, context)
+		: await generateReportsExcelExport(products, context);
 
 	if (!rawBuffer) {
 		throw new Error('Failed to generate export file');
