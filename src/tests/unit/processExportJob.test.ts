@@ -31,6 +31,10 @@ jest.mock('../../utils/reports/queryBuilder', () => ({
 	buildExportPipeline: jest.fn(),
 }));
 
+jest.mock('../../utils/exportFormatting', () => ({
+	getExportWorkspaceName: jest.fn().mockResolvedValue('Acme' as never),
+}));
+
 jest.mock('../../utils/s3-storage', () => ({
 	uploadExportObjectByKey: jest.fn(),
 }));
@@ -182,7 +186,7 @@ describe('processExportJob', () => {
 			conditions: [],
 			sort: { field: 'product_name', order: 'asc' },
 		}, workspaceId, 1000);
-		expect(generateReportsPDFExport).toHaveBeenCalledWith(products);
+		expect(generateReportsPDFExport).toHaveBeenCalledWith(products, expect.objectContaining({ workspaceName: 'Acme' }));
 		expect(uploadExportObjectByKey).toHaveBeenCalledWith({
 			key: expect.stringContaining(`/reports/${workspaceId.toString()}/${jobId.toString()}/Products_Report_`),
 			body: Buffer.from('report-pdf'),

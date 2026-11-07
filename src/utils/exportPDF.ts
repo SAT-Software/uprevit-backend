@@ -1,67 +1,15 @@
-import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib";
-import type { WorkbookCellFormat } from "./workbookCellFormat";
+import { PDFDocument } from "pdf-lib";
 import { Product } from "../models/product";
-import transformUniverExcelData from "./transformUniverExcelData";
+import transformUniverExcelData, { columnToLetter } from "./transformUniverExcelData";
 import { logError } from "./logger";
 import { createPresignedGetUrlMap, createStandardSymbolPresignedGetUrlMap } from "./s3-storage";
+import { formatExportDate, listText, statusLabel, yesNo } from "./exportFormatting";
+import { CONTENT_WIDTH, PdfCell, PdfColumn, PdfImageAsset, createPdfLayout } from "./pdfLayout";
 
-const PAGE_WIDTH = 842;
-const PAGE_HEIGHT = 595;
-const MARGIN = 20;
-const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
-
-const SECTION_TITLE_SPACING = 20;
-const TABLE_HEADER_HEIGHT = 20;
-const TABLE_ROW_HEIGHT = 25;
-const TABLE_BOTTOM_SPACING = 20;
-const TOP_HEADER_HEIGHT = 26;
-const BOTTOM_PADDING = 20;
-const IMAGE_PADDING = 6;
-const HEADER_FONT_SIZE = 10;
-const HEADER_LINE_OFFSET = 4;
-const IMAGE_ROW_SIDE_PADDING = 10;
-const MIN_IMAGE_ROW_HEIGHT = 48;
 const IMAGE_EMBED_CONCURRENCY = 5;
-const AVAILABLE_PAGE_CONTENT_HEIGHT = PAGE_HEIGHT - MARGIN * 2 - TOP_HEADER_HEIGHT - BOTTOM_PADDING;
-const MAX_IMAGE_ROW_HEIGHT = Math.floor(AVAILABLE_PAGE_CONTENT_HEIGHT * 0.65);
-
-const HEADER_BG_COLOR = rgb(0.788, 0.855, 0.973);
-const HEADER_TEXT_COLOR = rgb(0, 0, 0);
-const workbookColor = (value?: string) => typeof value === "string" && /^#[a-f\d]{6}$/i.test(value)
-	? rgb(parseInt(value.slice(1, 3), 16) / 255, parseInt(value.slice(3, 5), 16) / 255, parseInt(value.slice(5, 7), 16) / 255) : undefined;
-const BORDER_COLOR = rgb(0, 0, 0);
-const BODY_TEXT_COLOR = rgb(0, 0, 0);
-const TOP_META_TEXT_COLOR = rgb(0.45, 0.45, 0.45);
-const PLACEHOLDER_TEXT_COLOR = rgb(0.5, 0.5, 0.5);
-
-type TableHeader = {
-	format?: WorkbookCellFormat;
-	label: string;
-	widthPct: number;
-};
-
-type TableCell = {
-	text?: string;
-	format?: WorkbookCellFormat;
-	imageUrl?: string;
-};
-
-type TableRow = {
-	height?: number;
-	cells: TableCell[];
-	isImageRow?: boolean;
-	imageUrl?: string;
-};
-
-type EmbeddedAsset = {
-	image?: PDFImage;
-	placeholderText?: string;
-};
-
-const toCleanString = (value: unknown): string => {
-	if (value === null || value === undefined) return "";
-	return String(value).replace(/\s+/g, " ").trim();
-};
+const MIN_WORKBOOK_COLUMN_WIDTH = 56;
+const MAX_WORKBOOK_COLUMN_WIDTH = 260;
+const COLUMN_TYPE_LABELS: Record<string, string> = { constant: "Constant", variable: "Variable", na: "N/A" };
 
 const toOptionalString = (value: unknown): string | undefined => {
 	if (typeof value !== "string") return undefined;
@@ -208,38 +156,10 @@ const loadSignedUrlMap = async (productData: Product): Promise<Map<string, strin
 	}
 };
 
-const appendDataAndImageRows = (rows: TableRow[], dataCells: string[], imageUrl?: string) => {
-	rows.push({
-		cells: dataCells.map((cell) => ({ text: cell })),
-	});
-
-	if (!imageUrl) return;
-
-	rows.push({
-		isImageRow: true,
-		imageUrl,
-		cells: [],
-	});
-};
-
-const toTextRows = (rows: unknown[][]): TableRow[] => {
-	return rows.map((row) => ({
-		cells: row.map((cell) => ({ text: toCleanString(cell) })),
-	}));
-};
-
-const normalizeTableRow = (row: TableRow, targetColumns: number): TableCell[] => {
-	const normalizedCells: TableCell[] = [];
-	for (let i = 0; i < targetColumns; i += 1) {
-		normalizedCells.push(row.cells[i] || { text: "" });
-	}
-	return normalizedCells;
-};
-
 const embedImageAsset = async (
 	pdfDoc: PDFDocument,
 	url: string,
-): Promise<EmbeddedAsset> => {
+): Promise<PdfImageAsset> => {
 	if (isLikelyWebpUrl(url)) return { placeholderText: "Image format not supported" };
 
 	try {
@@ -262,590 +182,206 @@ const embedImageAsset = async (
 const preloadEmbeddedAssets = async (
 	pdfDoc: PDFDocument,
 	urls: string[],
-): Promise<Map<string, EmbeddedAsset>> => {
+): Promise<Map<string, PdfImageAsset>> => {
 	const uniqueUrls = [...new Set(urls.filter(Boolean))];
-	const entries: Array<readonly [string, EmbeddedAsset]> = [];
+	const entries: Array<readonly [string, PdfImageAsset]> = [];
 
 	for (let i = 0; i < uniqueUrls.length; i += IMAGE_EMBED_CONCURRENCY) {
 		const chunk = uniqueUrls.slice(i, i + IMAGE_EMBED_CONCURRENCY);
 		const chunkEntries = await Promise.all(
 			chunk.map(async (url) => [url, await embedImageAsset(pdfDoc, url)] as const),
 		);
-		await pdfDoc.flush();
 		entries.push(...chunkEntries);
 	}
 
 	return new Map(entries);
 };
 
+const groupWorkbookColumns = (widths: number[]): number[][] => {
+	const minWidths = widths.map((width) => Math.max(MIN_WORKBOOK_COLUMN_WIDTH, width * 0.65));
+	const groups: number[][] = [];
+	let current: number[] = [];
+	let used = 0;
+	minWidths.forEach((width, col) => {
+		if (current.length && used + width > CONTENT_WIDTH) {
+			groups.push(current);
+			current = col > 0 ? [0] : [];
+			used = current.reduce((sum, index) => sum + minWidths[index], 0);
+		}
+		current.push(col);
+		used += width;
+	});
+	if (current.length) groups.push(current);
+	return groups;
+};
+
 /**
  * Generates a PDF export of product data.
- * Creates a multi-page PDF document with sections for product information,
- * compliance, label components, symbols, barcodes, and other product data.
+ * Creates a branded multi-page PDF document with a summary, product information,
+ * compliance, languages, label components, symbols and graphics, workbook data and label tags.
  * @param {Product} productData - The product data to export
+ * @param {string} workspaceName - Workspace name shown in the page header
  * @return {Promise<Buffer | null>} PDF buffer on success, null on failure
  */
-export async function generateProductPDFExport(productData: Product) {
+export async function generateProductPDFExport(productData: Product, workspaceName = "") {
 	try {
-		const pdfDoc = await PDFDocument.create();
-		const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
-		const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-		const fontItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
-		const fontBoldItalic = await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique);
-		const productName = productData.product_name || "Product Export";
-
+		const productName = productData.product_name || "Untitled product";
+		const layout = await createPdfLayout(productName, workspaceName);
 		const signedUrlMap = await loadSignedUrlMap(productData);
+		const graphics = productData.symbols_graphics?.data || [];
+		const byEntity = (entity: string) => graphics.filter((item) => item.entity === entity);
+		const labelComponents = productData.label_components?.data || [];
+		const labelTags = productData.label_tags?.data || [];
+		const imageUrls = new Map<object, string | undefined>([
+			...labelComponents.map((item) => [item, resolveImageUrl(item.image, item.key, signedUrlMap)] as const),
+			...graphics.map((item) => [item, resolveImageUrl(item.image, item.key, signedUrlMap)] as const),
+			...labelTags.map((item) => [item, getPreferredLabelTagImageUrl(item, signedUrlMap)] as const),
+		]);
+		const assets = await preloadEmbeddedAssets(layout.doc, [...imageUrls.values()].filter((url): url is string => Boolean(url)));
+		const imageCell = (item: object): PdfCell => {
+			const url = imageUrls.get(item);
+			return url ? { image: assets.get(url) ?? { placeholderText: "Image unavailable" } } : { text: "No image", muted: true };
+		};
 
-		const infoRows: TableRow[] = [];
-		const infoRawRows: unknown[][] = [
-			["Product Name", productData.product_name || ""],
-			["Product Description", productData.product_description || ""],
-			["Product Plan Number", productData.product_plan_number || ""],
+		const workbooks = [
+			{ title: "Product specifications", source: productData.product_data?.data },
+			{ title: "Operational parameters", source: productData.operational_parameters?.data },
+		].map(({ title, source }) => ({ title, sheets: transformUniverExcelData(source, true).sheets }));
+
+		const info = productData.product_information?.data;
+		const infoRows: Array<[string, unknown]> = [
+			["Product name", productData.product_name],
+			["Product description", productData.product_description],
+			["Product plan number", productData.product_plan_number],
+			["Status", statusLabel(productData.status)],
+			["Version", productData.version],
+			["Target date", formatExportDate(productData.target_date)],
+			["Market geography", info?.market_geography],
+			["Country of origin", info?.country_of_origin],
+			["OEM / contract manufacturer", info?.oem_contract_manufacturer],
+			["Commercial / clinical", info?.commercial_clinical],
+			["Manufacturing location", info?.manufacturing_location],
+			["Class of device", info?.class_of_device],
+			["Basic UDI-DI", info?.basic_udi_di],
+			...(productData.product_information?.custom_fields || []).map((field): [string, unknown] => [field.label, field.value]),
 		];
-
-		if (productData.product_information?.data) {
-			const d = productData.product_information.data;
-			infoRawRows.push(
-				["Market Geography", d.market_geography],
-				["Country of Origin", d.country_of_origin],
-				["OEM/Contract", d.oem_contract_manufacturer],
-				["Commercial/Clinical", d.commercial_clinical],
-				["Manufacturing Location", d.manufacturing_location],
-				["Class of Device", d.class_of_device || ""],
-				["Basic UDI", d.basic_udi_di || ""],
-			);
-		}
-
-		(productData.product_information?.custom_fields || []).forEach((field) => {
-			infoRawRows.push([field.label, field.value]);
-		});
-		infoRows.push(...toTextRows(infoRawRows));
-
-		const complianceRows = toTextRows(
-			(productData.compliance_information?.data || []).map((item) => [
-				item.standard,
-				item.standard_description,
-			]),
+		layout.heading("Product information");
+		layout.table(
+			[{ label: "Field", weight: 0.28 }, { label: "Value", weight: 0.72 }],
+			infoRows.map(([label, value]) => [{ text: label, format: { bold: true } }, { text: value === undefined || value === null ? "" : String(value) }]),
 		);
 
-		const languageRows = toTextRows(
-			(productData.languages_information?.data || []).map((item) => [
-				item.code,
-				item.name,
-				item.country || "",
-			]),
+		const section = (title: string, columns: PdfColumn[], rows: PdfCell[][], emptyText: string) => {
+			layout.heading(title, rows.length);
+			layout.table(columns, rows, { emptyText });
+		};
+
+		section(
+			"Compliance information",
+			[{ label: "Standard", weight: 0.3 }, { label: "Description", weight: 0.7 }],
+			(productData.compliance_information?.data || []).map((item) => [{ text: item.standard }, { text: item.standard_description }]),
+			"No compliance standards added.",
 		);
 
-		const labelComponentsRows: TableRow[] = [];
-		(productData.label_components?.data || []).forEach((item) => {
-			appendDataAndImageRows(
-				labelComponentsRows,
-				[
-					toCleanString(item.component_number),
-					toCleanString(item.component_description),
-					Array.isArray(item.label_type) ? item.label_type.join(", ") : "",
-					toCleanString(item.dimensions),
-					toCleanString(item.component_type),
-					toCleanString(item.print_direction),
-				],
-				resolveImageUrl(item.image, item.key, signedUrlMap),
-			);
-		});
-
-		const symbolsRows: TableRow[] = [];
-		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Symbols") || []).forEach((item) => {
-			symbolsRows.push({
-				cells: [
-					{ imageUrl: resolveImageUrl(item.image, item.key, signedUrlMap) },
-					{ text: toCleanString(item.text) },
-					{ text: item.text_present === undefined ? "" : item.text_present ? "Yes" : "No" },
-					{ text: Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "" },
-				],
-			});
-		});
-
-		const schematicsRows: TableRow[] = [];
-		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Schematics") || []).forEach((item) => {
-			appendDataAndImageRows(
-				schematicsRows,
-				[
-					toCleanString(item.text),
-					Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "",
-					toCleanString(item.description),
-				],
-				resolveImageUrl(item.image, item.key, signedUrlMap),
-			);
-		});
-
-		const barcodesRows: TableRow[] = [];
-		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Barcodes") || []).forEach((item) => {
-			appendDataAndImageRows(
-				barcodesRows,
-				[
-					toCleanString(item.text),
-					Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "",
-					toCleanString(item.count ?? 1),
-					toCleanString(item.description),
-				],
-				resolveImageUrl(item.image, item.key, signedUrlMap),
-			);
-		});
-
-		const otherComponentsRows: TableRow[] = [];
-		(productData.symbols_graphics?.data?.filter((item) => item.entity === "Other Components") || []).forEach((item) => {
-			appendDataAndImageRows(
-				otherComponentsRows,
-				[
-					toCleanString(item.text),
-					Array.isArray(item.label_presence) ? item.label_presence.join(", ") : "",
-					toCleanString(item.description),
-				],
-				resolveImageUrl(item.image, item.key, signedUrlMap),
-			);
-		});
-
-		const labelTagsRows: TableRow[] = [];
-		(productData.label_tags?.data || []).forEach((item) => {
-			appendDataAndImageRows(
-				labelTagsRows,
-				[
-					toCleanString(item.name),
-					toCleanString(item.description),
-					toCleanString(item.type),
-				],
-				getPreferredLabelTagImageUrl(item, signedUrlMap),
-			);
-		});
-
-		const workbookSections = [
-			{ title: 'Product Specifications', source: productData.product_data?.data },
-			{ title: 'Operational Parameters', source: productData.operational_parameters?.data },
-		].flatMap(({ title, source }) => transformUniverExcelData(source, true).sheets.map(sheet => {
-			const colCount = Math.max(1, ...sheet.data.map(row => row.length));
-			const hasHeaders = (sheet.headerOffset ?? 1) > 0;
-			const widths = Array.from({ length: colCount }, (_, col) => sheet.columnWidths?.[col] ?? 150);
-			const totalWidth = widths.reduce((total, width) => total + width, 0);
-			const headers: TableHeader[] = Array.from({ length: colCount }, (_, col) => ({
-				label: hasHeaders ? toCleanString(sheet.data[0]?.[col]) || `Column ${col + 1}` : `Column ${col + 1}`,
-				widthPct: widths[col] / totalWidth,
-				format: hasHeaders ? sheet.formats?.[`0,${col}`] : undefined,
-			}));
-			const rows: TableRow[] = sheet.data.slice(hasHeaders ? 1 : 0).map((row, index) => {
-				const sourceRow = index + (hasHeaders ? 1 : 0);
-				return {
-					height: sheet.rowHeights?.[sourceRow] === undefined ? undefined : sheet.rowHeights[sourceRow] * 0.75,
-					cells: Array.from({ length: colCount }, (_, col) => ({ text: toCleanString(row[col]), format: sheet.formats?.[`${sourceRow},${col}`] })),
-				};
-			});
-			return { title: `${title} — ${sheet.name}`, headers, rows, headerHeight: hasHeaders && sheet.rowHeights?.[0] !== undefined ? sheet.rowHeights[0] * 0.75 : TABLE_HEADER_HEIGHT };
-		}));
-
-		const allRows = [
-			...labelComponentsRows,
-			...symbolsRows,
-			...schematicsRows,
-			...barcodesRows,
-			...otherComponentsRows,
-			...labelTagsRows,
-		];
-		const allImageUrls = allRows.flatMap((row) => [
-			row.imageUrl || "",
-			...row.cells.map((cell) => cell.imageUrl || ""),
-		]).filter(Boolean);
-		const embeddedAssetMap = await preloadEmbeddedAssets(pdfDoc, allImageUrls);
-
-		const pages: PDFPage[] = [];
-		let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-		pages.push(page);
-		let y = PAGE_HEIGHT - MARGIN - TOP_HEADER_HEIGHT;
-
-		const addNewPage = () => {
-			page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-			pages.push(page);
-			y = PAGE_HEIGHT - MARGIN - TOP_HEADER_HEIGHT;
-			return page;
-		};
-
-		const trimTextToWidth = (text: string, maxWidth: number, font: PDFFont, fontSize: number): string => {
-			const baseText = toCleanString(text);
-			if (!baseText) return "";
-
-			if (font.widthOfTextAtSize(baseText, fontSize) <= maxWidth) return baseText;
-
-			const suffix = font.widthOfTextAtSize("...", fontSize) <= maxWidth ? "..." : "";
-			let trimmed = baseText;
-			while (trimmed && font.widthOfTextAtSize(trimmed + suffix, fontSize) > maxWidth) trimmed = trimmed.slice(0, -1);
-			return trimmed + suffix;
-		};
-
-		const drawTextInCell = (
-			text: string,
-			x: number,
-			rowTopY: number,
-			cellWidth: number,
-			rowHeight: number,
-			isBold = false,
-			color = BODY_TEXT_COLOR,
-			format?: WorkbookCellFormat,
-		) => {
-			const bold = format?.bold ?? isBold;
-			const font = format?.italic ? (bold ? fontBoldItalic : fontItalic) : (bold ? fontBold : fontRegular);
-			const fontSize = [10, 12, 14, 16, 18, 20, 24].includes(format?.fontSize ?? 0) ? format!.fontSize! * 0.75 : 9;
-			const safeText = trimTextToWidth(text, Math.max(1, cellWidth - 8), font, fontSize);
-			const textWidth = font.widthOfTextAtSize(safeText, fontSize);
-			const textX = format?.alignment === "right" ? x + cellWidth - 4 - textWidth : format?.alignment === "center" ? x + (cellWidth - textWidth) / 2 : x + 4;
-			const textY = format?.verticalAlignment === "top" ? rowTopY - fontSize - 3 : format?.verticalAlignment === "bottom" ? rowTopY - rowHeight + 3 : rowTopY - rowHeight + (rowHeight - fontSize) / 2;
-			const textColor = workbookColor(format?.textColor) ?? color;
-
-			page.drawText(safeText, {
-				x: textX,
-				y: textY,
-				size: fontSize,
-				font,
-				color: textColor,
-			});
-			if (format?.underline && safeText) page.drawLine({ start: { x: textX, y: textY - 1 }, end: { x: textX + textWidth, y: textY - 1 }, thickness: 0.5, color: textColor });
-		};
-
-		const getImageRowHeight = (row: TableRow): number => {
-			if (!row.isImageRow || !row.imageUrl) return TABLE_ROW_HEIGHT;
-			const asset = embeddedAssetMap.get(row.imageUrl);
-			if (!asset?.image) return MIN_IMAGE_ROW_HEIGHT;
-
-			const availableWidth = Math.max(CONTENT_WIDTH - IMAGE_ROW_SIDE_PADDING * 2 - IMAGE_PADDING * 2, 1);
-			const scaledHeight = (asset.image.height * availableWidth) / Math.max(asset.image.width, 1);
-			const fullHeight = Math.ceil(scaledHeight + IMAGE_PADDING * 2);
-			return Math.max(MIN_IMAGE_ROW_HEIGHT, Math.min(MAX_IMAGE_ROW_HEIGHT, fullHeight));
-		};
-
-		const drawImageInRow = (
-			asset: EmbeddedAsset,
-			rowTopY: number,
-			rowHeight: number,
-			rowX = MARGIN,
-			rowWidth = CONTENT_WIDTH,
-		) => {
-			const rowBottomY = rowTopY - rowHeight;
-			const contentX = rowX + IMAGE_ROW_SIDE_PADDING;
-			const contentWidth = rowWidth - IMAGE_ROW_SIDE_PADDING * 2;
-
-			if (!asset.image) {
-				drawTextInCell(
-					asset.placeholderText || "Image unavailable",
-					contentX,
-					rowTopY,
-					contentWidth,
-					rowHeight,
-					false,
-					PLACEHOLDER_TEXT_COLOR,
-				);
-				return;
-			}
-
-			const availableWidth = Math.max(contentWidth - IMAGE_PADDING * 2, 1);
-			const availableHeight = Math.max(rowHeight - IMAGE_PADDING * 2, 1);
-			const widthScale = availableWidth / Math.max(asset.image.width, 1);
-			const heightScale = availableHeight / Math.max(asset.image.height, 1);
-			const scale = Math.min(widthScale, heightScale);
-			const drawWidth = asset.image.width * scale;
-			const drawHeight = asset.image.height * scale;
-			const drawX = contentX + (contentWidth - drawWidth) / 2;
-			const drawY = rowBottomY + (rowHeight - drawHeight) / 2;
-
-			page.drawImage(asset.image, {
-				x: drawX,
-				y: drawY,
-				width: drawWidth,
-				height: drawHeight,
-			});
-		};
-
-		const drawTable = (
-			title: string,
-			headers: TableHeader[],
-			rows: TableRow[],
-			startNewPage = false,
-			headerHeight = TABLE_HEADER_HEIGHT,
-		) => {
-			if (startNewPage && pages.length > 0) addNewPage();
-
-			if (y < MARGIN + BOTTOM_PADDING + 80) addNewPage();
-
-			page.drawText(title, {
-				x: MARGIN,
-				y,
-				size: 14,
-				font: fontBold,
-				color: rgb(0.2, 0.3, 0.6),
-			});
-			y -= SECTION_TITLE_SPACING;
-
-			const colWidths = headers.map((header) => header.widthPct * CONTENT_WIDTH);
-
-			const drawHeader = () => {
-				page.drawRectangle({
-					x: MARGIN,
-					y: y - headerHeight,
-					width: CONTENT_WIDTH,
-					height: headerHeight,
-					color: HEADER_BG_COLOR,
-					borderColor: BORDER_COLOR,
-					borderWidth: 1,
-				});
-
-				let currentX = MARGIN;
-				headers.forEach((header, index) => {
-					page.drawRectangle({
-						x: currentX,
-						y: y - headerHeight,
-						width: colWidths[index],
-						color: workbookColor(header.format?.bgColor),
-						height: headerHeight,
-						borderColor: BORDER_COLOR,
-						borderWidth: 0.5,
-					});
-
-					drawTextInCell(
-						header.label,
-						currentX,
-						y,
-						colWidths[index],
-						headerHeight,
-						true,
-						HEADER_TEXT_COLOR,
-						header.format,
-					);
-
-					currentX += colWidths[index];
-				});
-
-				y -= headerHeight;
-			};
-
-			drawHeader();
-
-			let dataRowCount = 0;
-			for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-				const row = rows[rowIndex];
-				const rowHeight = row.isImageRow
-					? getImageRowHeight(row)
-					: row.cells.some((cell) => cell.imageUrl) ? 60 : row.height ?? TABLE_ROW_HEIGHT;
-
-				const nextRow = rows[rowIndex + 1];
-				const isDataRowWithImageBelow = !row.isImageRow && Boolean(nextRow?.isImageRow);
-				const pairedImageHeight = isDataRowWithImageBelow ? getImageRowHeight(nextRow) : 0;
-				const requiredHeight = rowHeight + pairedImageHeight;
-
-				if (y < MARGIN + BOTTOM_PADDING + requiredHeight) {
-					addNewPage();
-					drawHeader();
-				}
-
-				if (row.isImageRow) {
-					page.drawRectangle({
-						x: MARGIN,
-						y: y - rowHeight,
-						width: CONTENT_WIDTH,
-						height: rowHeight,
-						borderColor: BORDER_COLOR,
-						borderWidth: 0.5,
-					});
-
-					const asset = row.imageUrl
-						? embeddedAssetMap.get(row.imageUrl) || { placeholderText: "Image unavailable" }
-						: { placeholderText: "Image unavailable" };
-					drawImageInRow(asset, y, rowHeight);
-				} else {
-					if (dataRowCount % 2 === 1) {
-						page.drawRectangle({
-							x: MARGIN,
-							y: y - rowHeight,
-							width: CONTENT_WIDTH,
-							height: rowHeight,
-							color: rgb(0.96, 0.96, 0.96),
-						});
-					}
-
-					const normalizedCells = normalizeTableRow(row, headers.length);
-					let currentX = MARGIN;
-					normalizedCells.forEach((cell, colIndex) => {
-						const cellWidth = colWidths[colIndex];
-						page.drawRectangle({
-							x: currentX,
-							y: y - rowHeight,
-							width: cellWidth,
-							height: rowHeight,
-							color: workbookColor(cell.format?.bgColor),
-							borderColor: BORDER_COLOR,
-							borderWidth: 0.5,
-						});
-
-						if (cell.imageUrl) {
-							drawImageInRow(
-								embeddedAssetMap.get(cell.imageUrl) || { placeholderText: "Image unavailable" },
-								y, rowHeight, currentX, cellWidth,
-							);
-						} else {
-							drawTextInCell(cell.text || "", currentX, y, cellWidth, rowHeight, false, BODY_TEXT_COLOR, cell.format);
-						}
-						currentX += cellWidth;
-					});
-					dataRowCount += 1;
-				}
-
-				y -= rowHeight;
-			}
-
-			y -= TABLE_BOTTOM_SPACING;
-		};
-
-		drawTable(
-			"Product Information",
-			[
-				{ label: "Field", widthPct: 0.3 },
-				{ label: "Value", widthPct: 0.7 },
-			],
-			infoRows,
-			false,
-		);
-
-		drawTable(
-			"Compliance Information",
-			[
-				{ label: "Standard", widthPct: 0.3 },
-				{ label: "Description", widthPct: 0.7 },
-			],
-			complianceRows,
-			true,
-		);
-
-		drawTable(
+		section(
 			"Languages",
-			[
-				{ label: "Code", widthPct: 0.18 },
-				{ label: "Language", widthPct: 0.38 },
-				{ label: "Country", widthPct: 0.44 },
-			],
-			languageRows,
-			true,
+			[{ label: "Code", weight: 0.14 }, { label: "Language", weight: 0.4 }, { label: "Country", weight: 0.46 }],
+			(productData.languages_information?.data || []).map((item) => [{ text: item.code }, { text: item.name }, { text: item.country }]),
+			"No languages added.",
 		);
 
-		drawTable(
-			"Label Components",
+		section(
+			"Label components",
 			[
-				{ label: "Component #", widthPct: 0.14 },
-				{ label: "Description", widthPct: 0.26 },
-				{ label: "Label Type", widthPct: 0.18 },
-				{ label: "Dimensions", widthPct: 0.14 },
-				{ label: "Component Type", widthPct: 0.16 },
-				{ label: "Print Direction", widthPct: 0.12 },
+				{ label: "Image", weight: 0.16, imageHeight: 90 },
+				{ label: "Component #", weight: 0.12 },
+				{ label: "Description", weight: 0.24 },
+				{ label: "Label type", weight: 0.13 },
+				{ label: "Dimensions", weight: 0.12 },
+				{ label: "Component type", weight: 0.12 },
+				{ label: "Print direction", weight: 0.11 },
 			],
-			labelComponentsRows,
-			true,
+			labelComponents.map((item) => [
+				imageCell(item),
+				{ text: item.component_number },
+				{ text: item.component_description },
+				{ text: listText(item.label_type) },
+				{ text: item.dimensions },
+				{ text: item.component_type },
+				{ text: item.print_direction },
+			]),
+			"No label components added.",
 		);
 
-		drawTable(
+		section(
 			"Symbols",
-			[
-				{ label: "Image", widthPct: 0.16 },
-				{ label: "Name", widthPct: 0.30 },
-				{ label: "Text Present", widthPct: 0.22 },
-				{ label: "Label Presence", widthPct: 0.32 },
-			],
-			symbolsRows,
-			true,
+			[{ label: "Symbol", weight: 0.1, imageHeight: 40, align: "center" }, { label: "Name", weight: 0.35 }, { label: "Text present", weight: 0.15 }, { label: "Label presence", weight: 0.4 }],
+			byEntity("Symbols").map((item) => [imageCell(item), { text: item.text }, { text: yesNo(item.text_present) }, { text: listText(item.label_presence) }]),
+			"No symbols added.",
 		);
 
-		drawTable(
+		section(
 			"Schematics",
-			[
-				{ label: "Name", widthPct: 0.22 },
-				{ label: "Label Presence", widthPct: 0.28 },
-				{ label: "Description", widthPct: 0.5 },
-			],
-			schematicsRows,
-			true,
+			[{ label: "Image", weight: 0.18, imageHeight: 90 }, { label: "Name", weight: 0.22 }, { label: "Label presence", weight: 0.25 }, { label: "Description", weight: 0.35 }],
+			byEntity("Schematics").map((item) => [imageCell(item), { text: item.text }, { text: listText(item.label_presence) }, { text: item.description }]),
+			"No schematics added.",
 		);
 
-		drawTable(
+		section(
 			"Barcodes",
-			[
-				{ label: "Type", widthPct: 0.24 },
-				{ label: "Label Presence", widthPct: 0.24 },
-				{ label: "Count", widthPct: 0.12 },
-				{ label: "Description", widthPct: 0.4 },
-			],
-			barcodesRows,
-			true,
+			[{ label: "Image", weight: 0.18, imageHeight: 90 }, { label: "Type", weight: 0.2 }, { label: "Label presence", weight: 0.2 }, { label: "Count", weight: 0.08, align: "right" }, { label: "Description", weight: 0.34 }],
+			byEntity("Barcodes").map((item) => [imageCell(item), { text: item.text }, { text: listText(item.label_presence) }, { text: String(item.count ?? 1) }, { text: item.description }]),
+			"No barcodes added.",
 		);
 
-		drawTable(
-			"Other Components",
-			[
-				{ label: "Name", widthPct: 0.24 },
-				{ label: "Label Presence", widthPct: 0.26 },
-				{ label: "Description", widthPct: 0.5 },
-			],
-			otherComponentsRows,
-			true,
+		section(
+			"Other components",
+			[{ label: "Image", weight: 0.18, imageHeight: 90 }, { label: "Name", weight: 0.22 }, { label: "Label presence", weight: 0.25 }, { label: "Description", weight: 0.35 }],
+			byEntity("Other Components").map((item) => [imageCell(item), { text: item.text }, { text: listText(item.label_presence) }, { text: item.description }]),
+			"No other components added.",
 		);
 
-		workbookSections.forEach(section => drawTable(section.title, section.headers, section.rows, true, section.headerHeight));
-		drawTable(
-			"Label Tags",
-			[
-				{ label: "Name", widthPct: 0.22 },
-				{ label: "Description", widthPct: 0.52 },
-				{ label: "Type", widthPct: 0.26 },
-			],
-			labelTagsRows,
-			true,
-		);
-
-		const totalPages = pages.length;
-		pages.forEach((p, index) => {
-			const pageNumberText = `${index + 1} of ${totalPages}`;
-			const headerLineY = PAGE_HEIGHT - MARGIN - HEADER_LINE_OFFSET;
-			const headerBandHeight = PAGE_HEIGHT - headerLineY;
-			const topMetaY = headerLineY + (headerBandHeight - HEADER_FONT_SIZE) / 2;
-			const pageNumberWidth = fontRegular.widthOfTextAtSize(pageNumberText, HEADER_FONT_SIZE);
-			const maxProductNameWidth = Math.max(120, PAGE_WIDTH - MARGIN * 2 - pageNumberWidth - 20);
-
-			let headerProductName = productName;
-			while (
-				headerProductName.length > 3 &&
-				fontRegular.widthOfTextAtSize(`${headerProductName}...`, HEADER_FONT_SIZE) > maxProductNameWidth
-			) {
-				headerProductName = headerProductName.slice(0, -1);
-			}
-			if (headerProductName !== productName) headerProductName = `${headerProductName}...`;
-
-			p.drawText(headerProductName, {
-				x: MARGIN,
-				y: topMetaY,
-				size: HEADER_FONT_SIZE,
-				font: fontRegular,
-				color: TOP_META_TEXT_COLOR,
-			});
-
-			p.drawText(pageNumberText, {
-				x: PAGE_WIDTH - MARGIN - pageNumberWidth,
-				y: topMetaY,
-				size: HEADER_FONT_SIZE,
-				font: fontRegular,
-				color: TOP_META_TEXT_COLOR,
-			});
-
-			p.drawLine({
-				start: { x: MARGIN, y: headerLineY },
-				end: { x: PAGE_WIDTH - MARGIN, y: headerLineY },
-				thickness: 0.5,
-				color: rgb(0.85, 0.85, 0.85),
+		workbooks.forEach(({ title, sheets }) => {
+			layout.heading(title);
+			if (!sheets.length) layout.table([{ label: "Data", weight: 1 }], [], { emptyText: `No ${title.toLowerCase()} added.` });
+			sheets.forEach((sheet) => {
+				const headerOffset = sheet.headerOffset ?? 1;
+				const colCount = Math.max(1, ...sheet.data.map((row) => row.length));
+				const widths = Array.from({ length: colCount }, (_, col) => Math.min(MAX_WORKBOOK_COLUMN_WIDTH, Math.max(MIN_WORKBOOK_COLUMN_WIDTH, (sheet.columnWidths?.[col] ?? 150) * 0.75)));
+				const typeRow = headerOffset > 1 ? sheet.data[1] : undefined;
+				const hasTypes = Boolean(typeRow?.some((value) => value !== null && value !== ""));
+				const bodyRows = sheet.data.slice(headerOffset);
+				const groups = groupWorkbookColumns(widths);
+				groups.forEach((group, groupIndex) => {
+					const start = group[groupIndex === 0 ? 0 : 1] ?? group[0];
+					const caption = groups.length > 1 ? `Columns ${columnToLetter(start)}–${columnToLetter(group[group.length - 1])} of ${colCount}` : `${bodyRows.length} ${bodyRows.length === 1 ? "row" : "rows"}`;
+					layout.subheading(sheet.name, caption);
+					layout.table(
+						group.map((col) => ({
+							label: String(sheet.data[0]?.[col] ?? "") || `Column ${columnToLetter(col)}`,
+							weight: widths[col],
+							format: headerOffset > 0 ? sheet.formats?.[`0,${col}`] : undefined,
+						})),
+						bodyRows.map((row, index) => group.map((col) => ({ text: row[col] === null || row[col] === undefined ? "" : String(row[col]), format: sheet.formats?.[`${index + headerOffset},${col}`] }))),
+						{
+							subHeader: hasTypes ? group.map((col) => ({ text: COLUMN_TYPE_LABELS[String(typeRow?.[col] ?? "")] ?? String(typeRow?.[col] ?? ""), format: sheet.formats?.[`1,${col}`] })) : undefined,
+							minRowHeights: bodyRows.map((_, index) => (sheet.rowHeights?.[index + headerOffset] ?? 0) * 0.75),
+							emptyText: "No rows in this sheet.",
+							hideHeader: headerOffset === 0,
+						},
+					);
+				});
 			});
 		});
 
-		const pdfBytes = await pdfDoc.save();
-		return Buffer.from(pdfBytes);
+		section(
+			"Label tags",
+			[{ label: "Image", weight: 0.18, imageHeight: 90 }, { label: "Name", weight: 0.22 }, { label: "Description", weight: 0.4 }, { label: "Type", weight: 0.2 }],
+			labelTags.map((item) => [imageCell(item), { text: item.name }, { text: item.description }, { text: item.type }]),
+			"No label tags added.",
+		);
+
+		return await layout.finish();
 	} catch (error) {
 		logError("PDF export failed", error);
 		return null;

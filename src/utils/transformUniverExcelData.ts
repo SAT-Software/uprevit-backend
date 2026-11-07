@@ -181,7 +181,7 @@ export default function transformUniverExcelData(data: any, displayDecimals = fa
  * @param {number} col - Zero-based column index (0 = A, 1 = B, 26 = AA)
  * @return {string} Excel-style column letter(s)
  */
-function columnToLetter(col: number): string {
+export function columnToLetter(col: number): string {
 	let letter = '';
 	let temp = col;
     

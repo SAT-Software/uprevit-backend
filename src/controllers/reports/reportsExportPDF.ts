@@ -10,6 +10,7 @@ import { EXPORT_LIMITS } from '../../types/reports';
 import { validateConditions, buildExportPipeline } from '../../utils/reports/queryBuilder';
 import { generateReportsPDFExport } from '../../utils/reports/exportReportsPDF';
 import { withTelemetry } from '../../utils/telemetry';
+import { getExportWorkspaceName } from '../../utils/exportFormatting';
 
 /**
  * @param {APIGatewayProxyEvent} event
@@ -60,7 +61,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const db = await getDb();
 		const products = (await db.collection<Product>('products').aggregate(pipeline).toArray()) as any[];
 
-		const pdfBuffer = await generateReportsPDFExport(products);
+		const pdfBuffer = await generateReportsPDFExport(products, { workspaceName: await getExportWorkspaceName(context.workspaceId), conditions: input.conditions, conditionLogic: input.conditionLogic });
 		if (!pdfBuffer) return ResponseWrapper.internalServerError('Failed to generate PDF file');
 
 		const timestamp = new Date().toISOString().split('T')[0];

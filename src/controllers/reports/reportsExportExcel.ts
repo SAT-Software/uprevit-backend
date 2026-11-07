@@ -10,6 +10,7 @@ import { EXPORT_LIMITS } from '../../types/reports';
 import { validateConditions, buildExportPipeline } from '../../utils/reports/queryBuilder';
 import { generateReportsExcelExport } from '../../utils/reports/exportReportsExcel';
 import { withTelemetry } from '../../utils/telemetry';
+import { getExportWorkspaceName } from '../../utils/exportFormatting';
 
 /**
  * @param {APIGatewayProxyEvent} event
@@ -60,7 +61,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const db = await getDb();
 		const products = (await db.collection<Product>('products').aggregate(pipeline).toArray()) as any[];
 
-		const excelBuffer = await generateReportsExcelExport(products);
+		const excelBuffer = await generateReportsExcelExport(products, { workspaceName: await getExportWorkspaceName(context.workspaceId), conditions: input.conditions, conditionLogic: input.conditionLogic });
 		if (!excelBuffer) return ResponseWrapper.internalServerError('Failed to generate Excel file');
 
 		const timestamp = new Date().toISOString().split('T')[0];
