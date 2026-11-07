@@ -5,7 +5,7 @@ import { getBillingAccountByWorkspaceId, normalizeLimits } from './billingAccoun
 import { resolveEffectiveLimits } from './effectiveLimits';
 import { bytesToGb, gbToBytes, resolveUsagePeriod } from './billingPeriod';
 import { countActiveExportJobs } from '../exportJobs';
-import { aggregateUsageForPeriod, countActiveWorkspaceSeats } from './usageRecording';
+import { aggregateUsageForPeriod, countActiveSeatsByClass, type SeatClass } from './usageRecording';
 
 type EnforceableUsageMetric = 'completed_export' | 'upload_bytes';
 
@@ -157,8 +157,29 @@ export const checkMetricLimit = async (
 	};
 };
 
+const findSeatLimitReason = async (
+	workspaceId: ObjectId,
+	seatClass: SeatClass,
+	additionalActiveSeats: number,
+): Promise<string | null> => {
+	if (seatClass === 'manager') return null;
+	const account = await getBillingAccountByWorkspaceId(workspaceId);
+	if (!account) return null;
+	const limits = await resolveEffectiveLimits(account);
+	if (!limits.enabled || limits.enforcementMode === 'overage') return null;
+
+	const activeSeats = await countActiveSeatsByClass(workspaceId);
+	if (seatClass === 'approver') {
+		return activeSeats.approver + additionalActiveSeats > limits.approverSeats
+			? 'Approver seat limit reached for this workspace'
+			: null;
+	}
+	return activeSeats.full + additionalActiveSeats > limits.seats ? 'Seat limit reached for this workspace' : null;
+};
+
 export const assertSeatActivationAllowed = async (
 	workspaceId: ObjectId,
+	seatClass: SeatClass,
 	additionalActiveSeats = 1,
 ): Promise<{ allowed: true } | { allowed: false; reason: string }> => {
 	const workspace = await getWorkspaceById(workspaceId);
@@ -170,40 +191,16 @@ export const assertSeatActivationAllowed = async (
 		return { allowed: false, reason: 'Workspace usage is frozen' };
 	}
 
-	const account = await getBillingAccountByWorkspaceId(workspaceId);
-	if (!account) return { allowed: true };
-
-	const limits = await resolveEffectiveLimits(account);
-	const activeSeats = await countActiveWorkspaceSeats(workspaceId);
-	const projectedActiveSeats = activeSeats + additionalActiveSeats;
-
-	if (!limits.enabled || limits.enforcementMode === 'overage') {
-		return { allowed: true };
-	}
-
-	if (projectedActiveSeats > limits.seats) {
-		return { allowed: false, reason: 'Seat limit reached for this workspace' };
-	}
-
-	return { allowed: true };
+	const reason = await findSeatLimitReason(workspaceId, seatClass, additionalActiveSeats);
+	return reason ? { allowed: false, reason } : { allowed: true };
 };
 
 export const verifySeatLimitAfterActivation = async (
 	workspaceId: ObjectId,
+	seatClass: SeatClass,
 ): Promise<{ allowed: true } | { allowed: false; reason: string }> => {
-	const account = await getBillingAccountByWorkspaceId(workspaceId);
-	if (!account) return { allowed: true };
-	const limits = await resolveEffectiveLimits(account);
-	if (!limits.enabled || limits.enforcementMode === 'overage') {
-		return { allowed: true };
-	}
-
-	const activeSeats = await countActiveWorkspaceSeats(workspaceId);
-	if (activeSeats > limits.seats) {
-		return { allowed: false, reason: 'Seat limit reached for this workspace' };
-	}
-
-	return { allowed: true };
+	const reason = await findSeatLimitReason(workspaceId, seatClass, 0);
+	return reason ? { allowed: false, reason } : { allowed: true };
 };
 
 export const checkUploadWouldExceedLimit = async (

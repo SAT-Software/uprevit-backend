@@ -28,6 +28,13 @@ export const getChargebeeSeatAddonItemPriceIds = (): string[] =>
 		process.env.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY,
 	);
 
+/** All configured Approver seat add-on item price IDs (monthly and yearly). */
+export const getChargebeeApproverSeatAddonItemPriceIds = (): string[] =>
+	parseChargebeeItemPriceIds(
+		process.env.CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY,
+		process.env.CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY,
+	);
+
 /** All configured SSO add-on item price IDs (monthly, yearly, and legacy single/comma-separated). */
 export const getChargebeeSsoAddonItemPriceIds = (): string[] =>
 	parseChargebeeItemPriceIds(

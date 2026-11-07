@@ -23,13 +23,14 @@ export type WorkspaceLimits = {
 	enabled: boolean;
 	enforcementMode: EnforcementMode;
 	seats: number;
+	approverSeats: number;
 	exports: number;
 	uploadGb: number;
 	ssoAllowed: boolean;
 };
 
 /** @deprecated Use WorkspaceLimits for limit values without enabled/enforcementMode. */
-export type UsageLimits = Pick<WorkspaceLimits, 'seats' | 'exports' | 'uploadGb' | 'ssoAllowed'>;
+export type UsageLimits = Pick<WorkspaceLimits, 'seats' | 'approverSeats' | 'exports' | 'uploadGb' | 'ssoAllowed'>;
 
 export type BillingAccountChargebee = {
 	customerId?: string;
@@ -74,6 +75,7 @@ export type LimitStatusMetric = {
 
 export type LimitStatus = {
 	seats: LimitStatusMetric;
+	approverSeats: LimitStatusMetric;
 	exports: LimitStatusMetric;
 	uploadGb: LimitStatusMetric;
 };

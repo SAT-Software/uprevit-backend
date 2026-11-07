@@ -19,6 +19,7 @@ import {
 	normalizeInviteEmail,
 } from './platformInviteUtils';
 import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from './billing/enforcement';
+import { seatClassForUserType } from './billing/usageRecording';
 import { recordAuditEvent } from './auditLogV2';
 import { notify } from './notifications';
 import { flagUnavailableAssignments, touchActiveWorkflows } from './workflowAssignments';
@@ -300,7 +301,8 @@ export const reactivateWorkspaceUser = async (
 	};
 	const { userType, isManager } = access;
 	const userId = existingUser._id;
-	const seatCheck = await assertSeatActivationAllowed(workspaceId, 1);
+	const seatClass = seatClassForUserType(userType);
+	const seatCheck = await assertSeatActivationAllowed(workspaceId, seatClass);
 	if (!seatCheck.allowed) {
 		throw new UserReactivationError(seatCheck.reason);
 	}
@@ -398,7 +400,7 @@ export const reactivateWorkspaceUser = async (
 			{ $addToSet: { userIds: userId } },
 		);
 
-		const postActivationCheck = await verifySeatLimitAfterActivation(workspaceId);
+		const postActivationCheck = await verifySeatLimitAfterActivation(workspaceId, seatClass);
 		if (!postActivationCheck.allowed) {
 			await rollbackDbActivation();
 			await rollbackCognito();

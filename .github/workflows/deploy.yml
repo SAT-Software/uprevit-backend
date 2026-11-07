@@ -73,6 +73,8 @@ jobs:
       CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: ${{ vars.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID }}
       CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: ${{ vars.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY }}
       CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: ${{ vars.CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY }}
+      CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: ${{ vars.CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY }}
+      CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: ${{ vars.CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY }}
       CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: ${{ vars.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID }}
       CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: ${{ vars.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY }}
       CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: ${{ vars.CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY }}
@@ -169,6 +171,8 @@ jobs:
               "ChargebeeSeatAddonItemPriceId": os.environ.get("CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID", ""),
               "ChargebeeSeatAddonItemPriceIdMonthly": os.environ.get("CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY", ""),
               "ChargebeeSeatAddonItemPriceIdYearly": os.environ.get("CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY", ""),
+              "ChargebeeApproverSeatAddonItemPriceIdMonthly": os.environ.get("CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY", ""),
+              "ChargebeeApproverSeatAddonItemPriceIdYearly": os.environ.get("CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY", ""),
               "ChargebeeSsoAddonItemPriceId": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID", ""),
               "ChargebeeSsoAddonItemPriceIdMonthly": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY", ""),
               "ChargebeeSsoAddonItemPriceIdYearly": os.environ.get("CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY", ""),

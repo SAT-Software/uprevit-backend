@@ -1,13 +1,13 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { canManageBilling, requireTenantContext } from '../../utils/tenantContext';
+import { requireTenantContext } from '../../utils/tenantContext';
 import { getWorkspaceInvoiceAccess } from '../../utils/billing/invoiceAccess';
 import { serializeInvoiceDetail } from '../../utils/billing/invoiceSerializers';
 import { withTelemetry } from '../../utils/telemetry';
 
 /**
- * Returns a single Chargebee invoice with full details for the workspace.
+ * Returns a single Chargebee invoice with full details for the workspace. Requires Manager access.
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Invoice detail payload
  */
@@ -17,7 +17,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (!tenantResult.ok) return tenantResult.response;
 
 		const { context } = tenantResult;
-		if (!canManageBilling(context)) {
+		if (!context.isManager) {
 			return ResponseWrapper.forbidden('Insufficient permissions');
 		}
 

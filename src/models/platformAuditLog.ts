@@ -16,6 +16,7 @@ export const PLATFORM_AUDIT_ACTIONS = [
 	'billing.account.view',
 	'billing.chargebee.view',
 	'billing.account.update',
+	'billing.invoice.record_payment',
 	'usage.adjustment.create',
 	'chargebee.customer.create',
 	'chargebee.usage.sync',

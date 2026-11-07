@@ -41,7 +41,7 @@ export const syncMemberCognitoGroups = async (email: string, access: MemberAcces
 };
 
 /**
- * Reads the access a workspace admin may assign: User, Approver or no base type, plus Manager. Admin is never accepted.
+ * Reads the access a workspace admin may assign to a member who is not an Admin: User, Approver or no base type, plus Manager. Admin is never accepted.
  * @param {unknown} userType Requested base type (`user`, `approver` or null)
  * @param {unknown} isManager Requested Manager flag
  * @return {MemberAccess | string} The access, or an error message
@@ -52,6 +52,14 @@ export const parseAssignableMemberAccess = (userType: unknown, isManager: unknow
 	if (!userType && !isManager) return 'Pick a User Type, Manager access, or both';
 	return { userType, isManager };
 };
+
+/**
+ * Reads the access a workspace admin may give another Admin: Admin stays, and only Manager access changes.
+ * @param {unknown} isManager Requested Manager flag
+ * @return {MemberAccess | string} The access, or an error message
+ */
+export const parseAdminMemberAccess = (isManager: unknown): MemberAccess | string =>
+	typeof isManager === 'boolean' ? { userType: 'admin', isManager } : 'isManager must be true or false';
 
 /**
  * Lists what keeps a member from losing edit access: Products they own or contribute to and active workflows they

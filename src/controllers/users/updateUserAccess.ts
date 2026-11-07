@@ -5,15 +5,17 @@ import { EDITOR_USER_TYPES, type User } from '../../models/user';
 import { updateAuditLog } from '../../utils/auditLog';
 import { getDb, withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
-import { findMemberAccessBlockers, parseAssignableMemberAccess, syncMemberCognitoGroups } from '../../utils/memberAccess';
+import { findMemberAccessBlockers, parseAdminMemberAccess, parseAssignableMemberAccess, syncMemberCognitoGroups, type MemberAccess } from '../../utils/memberAccess';
+import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from '../../utils/billing/enforcement';
+import { seatClassForUserType } from '../../utils/billing/usageRecording';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { isWorkspaceAdmin, requireTenantContext, tenantUserIdFilter } from '../../utils/tenantContext';
 import { withTelemetry } from '../../utils/telemetry';
 import { touchActiveWorkflows } from '../../utils/workflowAssignments';
 
 /**
- * Changes a member's base User Type (User, Approver or none) and Manager access. Admin access is changed only by
- * platform operators. Losing edit access is blocked while the member is on a Product team or initiates an active
+ * Changes a member's base User Type (User, Approver or none) and Manager access. Admins keep Admin access, which only
+ * platform operators change, and can only gain or lose Manager access. Losing edit access is blocked while the member is on a Product team or initiates an active
  * workflow, and losing every base type is blocked while they are an approver in one. With `dryRun: true` it only
  * returns those blockers without changing anything.
  * @param {APIGatewayProxyEvent} event - API Gateway Lambda Proxy Input Format
@@ -31,14 +33,18 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (!id || !ObjectId.isValid(id)) return ResponseWrapper.badRequest('A valid user id is required');
 
 		const input = JSON.parse(event.body || '{}');
-		const access = parseAssignableMemberAccess(input.userType, input.isManager);
-		if (typeof access === 'string') return ResponseWrapper.badRequest(access);
-
 		const db = await getDb();
 		const users = db.collection<User>('users');
 		const target = await users.findOne(tenantUserIdFilter(id, context.workspaceId));
 		if (!target || target.status === 'inactive') return ResponseWrapper.notFound('Member not found');
-		if (target.userType === 'admin') return ResponseWrapper.forbidden('Only platform operators can change Admin access');
+		if (target.userType === 'admin' && input.userType !== 'admin') {
+			return ResponseWrapper.forbidden('Only platform operators can change Admin access');
+		}
+
+		const access = target.userType === 'admin'
+			? parseAdminMemberAccess(input.isManager)
+			: parseAssignableMemberAccess(input.userType, input.isManager);
+		if (typeof access === 'string') return ResponseWrapper.badRequest(access);
 
 		const blockers = !access.userType || !EDITOR_USER_TYPES.includes(access.userType)
 			? await findMemberAccessBlockers(db, context.workspaceId, target._id!, access.userType)
@@ -47,12 +53,31 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (blockers.products.length > 0 || blockers.workflows.length > 0) {
 			return ResponseWrapper.conflict('Reassign this member\'s Products and workflows first', { blockers });
 		}
+		const seatClass = seatClassForUserType(access.userType);
+		const takesNewSeat = target.status === 'active' && seatClass !== seatClassForUserType(target.userType);
+		if (takesNewSeat) {
+			const seatCheck = await assertSeatActivationAllowed(context.workspaceId, seatClass);
+			if (!seatCheck.allowed) return ResponseWrapper.forbidden(seatCheck.reason);
+		}
 
 		await syncMemberCognitoGroups(target.email, access);
 		await withTransaction(async (txDb, session) => {
 			await txDb.collection<User>('users').updateOne({ _id: target._id }, { $set: access }, { session });
 			await touchActiveWorkflows(txDb, context.workspaceId, { 'assignments.userId': target._id }, session);
 		});
+
+		if (takesNewSeat) {
+			const postChangeCheck = await verifySeatLimitAfterActivation(context.workspaceId, seatClass);
+			if (!postChangeCheck.allowed) {
+				const previousAccess: MemberAccess = {
+					userType: target.userType === undefined ? 'user' : target.userType,
+					isManager: target.isManager === true,
+				};
+				const restored = await users.updateOne({ _id: target._id, ...access }, { $set: previousAccess });
+				if (restored.modifiedCount > 0) await syncMemberCognitoGroups(target.email, previousAccess);
+				return ResponseWrapper.forbidden(postChangeCheck.reason);
+			}
+		}
 
 		await updateAuditLog({
 			entity: 'user',

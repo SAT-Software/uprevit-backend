@@ -267,6 +267,24 @@ export const retrieveChargebeeInvoice = async (
 	return result.invoice;
 };
 
+export const recordChargebeeInvoicePayment = async (
+	invoiceId: string,
+	{ amount, referenceNumber }: { amount: number; referenceNumber?: string },
+): Promise<ChargebeeInvoice> => {
+	const result = await chargebeeRequest<ChargebeeEntityResponse<ChargebeeInvoice>>({
+		method: 'POST',
+		path: `/invoices/${encodeURIComponent(invoiceId)}/record_payment`,
+		body: {
+			'transaction[amount]': amount,
+			'transaction[payment_method]': 'bank_transfer',
+			'transaction[date]': Math.floor(Date.now() / 1000),
+			'transaction[reference_number]': referenceNumber,
+		},
+	});
+
+	return result.invoice;
+};
+
 export const retrieveChargebeeInvoicePdf = async (
 	invoiceId: string,
 ): Promise<ChargebeeDownload> => {

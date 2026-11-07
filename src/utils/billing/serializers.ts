@@ -5,7 +5,7 @@ import { bytesToGb, resolveUsagePeriod } from './billingPeriod';
 import { limitsToUsageLimits, normalizeLimits } from './billingAccounts';
 import { resolveEffectiveLimits } from './effectiveLimits';
 import { buildLimitStatus } from './limitStatus';
-import { aggregateUsageForPeriod, countActiveSeatsByClass } from './usageRecording';
+import { aggregateUsageForPeriod } from './usageRecording';
 
 export const serializeBillingAccount = (account: BillingAccount & { _id: ObjectId }) => {
 	const limits = normalizeLimits(account);
@@ -92,15 +92,15 @@ export const buildBillingSummary = async ({
 	workspaceId: ObjectId;
 }) => {
 	const { periodStart, periodEnd, source } = resolveUsagePeriod(account);
-	const [limits, usage, seatClasses] = await Promise.all([
+	const [limits, usage] = await Promise.all([
 		resolveEffectiveLimits(account),
 		aggregateUsageForPeriod({ workspaceId, periodStart, periodEnd }),
-		countActiveSeatsByClass(workspaceId),
 	]);
 	const uploadGb = bytesToGb(usage.uploadBytes);
 	const usageLimits = limitsToUsageLimits(limits);
 	const limitStatus = buildLimitStatus({
 		activeSeats: usage.activeSeats,
+		activeApproverSeats: usage.seatClasses.approver,
 		exports: usage.exports,
 		uploadGb,
 		usageLimits,
@@ -115,7 +115,7 @@ export const buildBillingSummary = async ({
 		},
 		usage: {
 			activeSeats: usage.activeSeats,
-			seatClasses,
+			seatClasses: usage.seatClasses,
 			exports: usage.exports,
 			uploadBytes: usage.uploadBytes,
 			uploadGb,

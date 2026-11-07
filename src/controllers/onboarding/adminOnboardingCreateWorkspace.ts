@@ -161,7 +161,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			});
 		}
 
-		const seatCheck = await assertSeatActivationAllowed(workspaceId, existingUser?.status === 'active' ? 0 : 1);
+		const seatCheck = await assertSeatActivationAllowed(workspaceId, 'full', existingUser?.status === 'active' ? 0 : 1);
 		if (!seatCheck.allowed) return ResponseWrapper.forbidden(seatCheck.reason);
 
 		// Publish workspace claims only after MongoDB membership is ready.
