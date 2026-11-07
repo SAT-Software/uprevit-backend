@@ -310,15 +310,16 @@ export async function createPdfLayout(title: string, workspaceName = '') {
 		const totalWeight = columns.reduce((sum, column) => sum + column.weight, 0) || 1;
 		const widths = columns.map((column) => (column.weight / totalWeight) * CONTENT_WIDTH);
 		const innerWidth = (index: number) => Math.max(1, widths[index] - CELL_PAD_X * 2);
-		const maxRowHeight = CONTENT_TOP - CONTENT_BOTTOM - 80;
+		const available = CONTENT_TOP - CONTENT_BOTTOM;
 
 		type Layout = { height: number; cells: Array<{ lines: string[]; subLines: string[]; size: number; font: PDFFont; image?: { width: number; height: number } }> };
 
-		const layoutRow = (cells: PdfCell[], header: boolean, minHeight = 0): Layout => {
+		const layoutRow = (cells: PdfCell[], header: boolean, cap: number, minHeight = 0): Layout => {
 			const laidOut = columns.map((column, index) => {
 				const cell = cells[index] ?? {};
 				const { size, font } = header ? { size: cell.format?.fontSize ? cellFont(cell, true).size : SMALL_SIZE + 0.5, font: cell.format?.bold === false ? regular : bold } : cellFont(cell);
-				const maxLines = header ? 4 : Math.max(1, Math.floor((maxRowHeight - CELL_PAD_Y * 2) / lineHeight(size)));
+				const fit = Math.max(1, Math.floor((cap - CELL_PAD_Y * 2) / lineHeight(size)));
+				const maxLines = header ? Math.min(4, fit) : fit;
 				const image = cell.image?.image;
 				if (image) {
 					const scale = Math.min(innerWidth(index) / image.width, (column.imageHeight ?? 90) / image.height, 1.5);
@@ -340,7 +341,7 @@ export async function createPdfLayout(title: string, workspaceName = '') {
 				}),
 				0,
 			);
-			return { height: Math.min(maxRowHeight, Math.max(header ? 20 : MIN_ROW_HEIGHT, minHeight, contentHeight + CELL_PAD_Y * 2)), cells: laidOut };
+			return { height: Math.min(cap, Math.max(header ? 20 : MIN_ROW_HEIGHT, minHeight, contentHeight + CELL_PAD_Y * 2)), cells: laidOut };
 		};
 
 		const drawRow = (cells: PdfCell[], layout: Layout, kind: 'header' | 'subheader' | 'body', zebra: boolean) => {
@@ -383,8 +384,8 @@ export async function createPdfLayout(title: string, workspaceName = '') {
 		};
 
 		const headerCells = columns.map((column) => ({ text: column.label, format: column.format }));
-		const headerLayout = layoutRow(headerCells, true);
-		const subHeaderLayout = options.subHeader ? layoutRow(options.subHeader, false) : undefined;
+		const headerLayout = layoutRow(headerCells, true, available / 4);
+		const subHeaderLayout = options.subHeader ? layoutRow(options.subHeader, false, available / 4) : undefined;
 		const headerHeight = options.hideHeader ? 0 : headerLayout.height + (subHeaderLayout?.height ?? 0);
 		const drawHeader = () => {
 			if (options.hideHeader) return;
@@ -392,7 +393,8 @@ export async function createPdfLayout(title: string, workspaceName = '') {
 			if (options.subHeader && subHeaderLayout) drawRow(options.subHeader, subHeaderLayout, 'subheader', false);
 		};
 
-		const firstLayout = rows[0] ? layoutRow(rows[0], false, options.minRowHeights?.[0]) : undefined;
+		const rowCap = available - headerHeight;
+		const firstLayout = rows[0] ? layoutRow(rows[0], false, rowCap, options.minRowHeights?.[0]) : undefined;
 		ensureSpace(headerHeight + (firstLayout?.height ?? MIN_ROW_HEIGHT));
 		drawHeader();
 		if (!rows.length) {
@@ -401,7 +403,7 @@ export async function createPdfLayout(title: string, workspaceName = '') {
 			page.drawRectangle({ x: MARGIN_X, y, width: CONTENT_WIDTH, height: MIN_ROW_HEIGHT, borderColor: COLORS.border, borderWidth: 0.5 });
 		}
 		rows.forEach((row, index) => {
-			const layout = index === 0 && firstLayout ? firstLayout : layoutRow(row, false, options.minRowHeights?.[index]);
+			const layout = index === 0 && firstLayout ? firstLayout : layoutRow(row, false, rowCap, options.minRowHeights?.[index]);
 			if (y - layout.height < CONTENT_BOTTOM) {
 				newPage();
 				drawHeader();
