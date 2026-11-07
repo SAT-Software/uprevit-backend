@@ -41,7 +41,7 @@ export const syncMemberCognitoGroups = async (email: string, access: MemberAcces
 };
 
 /**
- * Reads the access a workspace admin may assign: User, Approver or no base type, plus Manager. Admin is never accepted.
+ * Reads the access a workspace admin may assign to a member who is not an Admin: User, Approver or no base type, plus Manager. Admin is never accepted.
  * @param {unknown} userType Requested base type (`user`, `approver` or null)
  * @param {unknown} isManager Requested Manager flag
  * @return {MemberAccess | string} The access, or an error message

@@ -159,7 +159,7 @@ export const seatClassForUserType = (userType: User['userType']): SeatClass => {
 
 /**
  * Counts active members by Seat Class, which comes only from the base User Type: Admin or User is a Full Seat,
- * Approver an Approver Seat, and no base type (Manager only) a free Manager Seat.
+ * Approver an Approver Seat, and no base type (Manager only) a free Manager Seat. Members with no stored User Type count as Full Seats.
  * @param {ObjectId} workspaceId Workspace id
  * @return {Promise<SeatClassCounts>} Active members per Seat Class
  */

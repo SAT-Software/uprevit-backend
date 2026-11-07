@@ -7,7 +7,7 @@ import { serializeInvoiceDetail } from '../../utils/billing/invoiceSerializers';
 import { withTelemetry } from '../../utils/telemetry';
 
 /**
- * Returns a single Chargebee invoice with full details for the workspace.
+ * Returns a single Chargebee invoice with full details for the workspace. Requires Manager access.
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Invoice detail payload
  */

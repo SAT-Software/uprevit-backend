@@ -8,7 +8,7 @@ import { serializeInvoicePdfDownload } from '../../utils/billing/invoiceSerializ
 import { withTelemetry } from '../../utils/telemetry';
 
 /**
- * Returns a Chargebee invoice PDF download URL for a workspace invoice.
+ * Returns a Chargebee invoice PDF download URL for a workspace invoice. Requires Manager access.
  * @param {APIGatewayProxyEvent} event API Gateway request event
  * @return {Promise<APIGatewayProxyResult>} Invoice download payload
  */

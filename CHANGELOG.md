@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added a separate Approver seat limit (`usageLimits.approverSeats`), mirrored from the Chargebee Approver seat add-on set by `CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY` and `CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY`.
+- Added platform-admin `POST /platform-admin/workspaces/{workspaceId}/invoices/{invoiceId}/record-payment` to record an offline bank transfer for the amount due on a Chargebee invoice, audited as `billing.invoice.record_payment`.
+
 ### Updated
 
+- Seat limits are checked per Seat Class: Admins and Users use Full seats, Approvers use Approver seats, and Manager-only members are free. Activations are checked again after saving and rolled back if they go over the limit.
+- `usage.activeSeats` now counts Full seats only, and the new `usage.seatClasses` returns active members per Seat Class.
+- Billing details, invoice, and invoice PDF endpoints require Manager access.
+- Workspace admins can grant or remove Manager access on an Admin; other User Type changes for an Admin are still rejected.
+- `approverSeats`, like `seats`, comes from Chargebee and is rejected in the platform-admin billing account update.
 - `POST /products/import` no longer creates departments or projects; every product needs the `project_id` of an existing project.
 - `POST /products/import/check` takes `projects` (names or project numbers from the file) and matches each to an existing project by project number, then by name.
 
