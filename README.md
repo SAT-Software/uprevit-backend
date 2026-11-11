@@ -77,7 +77,7 @@ To run the application locally:
    npm run dev:infra
    ```
 
-   Infrastructure sync builds outside `src/`, and SAM builds are configured to run nonparallel because all functions share that source directory. The script restores local dev dependencies when sync exits, including after a failed sync. Use `npm run dev:infra:watch` only when you intentionally need to watch template changes.
+   Infrastructure sync installs `src` dependencies first, then builds in source with `src/Makefile`, so it never copies or changes `src/node_modules`. Use `npm run dev:infra:watch` only when you intentionally need to watch template changes.
 
    Make sure your local AWS SAM CLI version is `>= 1.104.0` before running these commands.
 

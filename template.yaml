@@ -148,6 +148,7 @@ Globals:
     Tracing: Active
     Environment:
       Variables:
+        NODE_OPTIONS: --enable-source-maps
         MONGODB_URI: !Ref MongoDbUri
         DB_NAME: !Ref DbName
         USER_POOL_ID: !Ref UserPoolId
