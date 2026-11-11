@@ -77,7 +77,7 @@ To run the application locally:
    npm run dev:infra
    ```
 
-   Infrastructure sync builds outside `src/`, and SAM builds are configured to run nonparallel because all functions share that source directory. The script restores local dev dependencies when sync exits, including after a failed sync. Use `npm run dev:infra:watch` only when you intentionally need to watch template changes.
+   Infrastructure sync installs `src` dependencies first, then builds in source with `src/Makefile`, so it never copies or changes `src/node_modules`. Use `npm run dev:infra:watch` only when you intentionally need to watch template changes.
 
    Make sure your local AWS SAM CLI version is `>= 1.104.0` before running these commands.
 
@@ -150,7 +150,7 @@ Build the application with the `sam build` command.
 uprevit-backend$ sam build
 ```
 
-The SAM CLI installs dependencies defined in `src/package.json`, compiles TypeScript with esbuild, creates a deployment package, and saves it in the `.aws-sam/build` folder.
+Install dependencies first with `npm run install:src`. SAM runs `src/Makefile`, which bundles each function with esbuild from `src/node_modules`, and saves the packages in the `.aws-sam/build` folder. When adding a function to `template.yaml`, set `BuildMethod: makefile` in its `Metadata` and add its entry point to `src/Makefile`.
 
 Test a single function by invoking it directly with a test event. An event is a JSON document that represents the input that the function receives from the event source. Test events are included in the `events` folder in this project.
 

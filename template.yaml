@@ -137,22 +137,6 @@ Parameters:
     Description: "Comma-separated frontend origins (no spaces) allowed to upload support screenshots, e.g. https://app.uprevit.com; empty blocks browser uploads"
     Default: ""
 
-# ──────────────────────────────────────────────────────────────────────────
-# TOP-LEVEL METADATA  – YAML anchor for the build recipe
-# ──────────────────────────────────────────────────────────────────────────
-Metadata:
-  # Common part that never changes
-  EsbuildBase: &EsbuildBase
-    BuildMethod: esbuild
-
-  # Common BuildProperties (minus EntryPoints)
-  EsbuildProps: &EsbuildProps
-    Minify: true
-    Target: es2020
-    Sourcemap: true
-    Loader:
-      - .ttf=binary
-
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
@@ -164,6 +148,7 @@ Globals:
     Tracing: Active
     Environment:
       Variables:
+        NODE_OPTIONS: --enable-source-maps
         MONGODB_URI: !Ref MongoDbUri
         DB_NAME: !Ref DbName
         USER_POOL_ID: !Ref UserPoolId
@@ -218,10 +203,7 @@ Resources:
             Path: /hello
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [app.ts]
+      BuildMethod: makefile
 
   HealthFunction:
     Type: AWS::Serverless::Function
@@ -237,10 +219,7 @@ Resources:
             Path: /health
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/health/getHealth.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # USERS
@@ -257,10 +236,7 @@ Resources:
             Path: /users
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/users/createUser.ts]
+      BuildMethod: makefile
 
   GetUserFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -280,10 +256,7 @@ Resources:
             Path: /users/{id}
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/users/getUser.ts]
+      BuildMethod: makefile
 
   UpdateUserFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -297,10 +270,7 @@ Resources:
             Path: /users
             Method: put
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/users/updateUser.ts]
+      BuildMethod: makefile
 
   DeleteUserFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -328,10 +298,7 @@ Resources:
             Path: /users/{id}
             Method: delete
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/users/deleteUser.ts]
+      BuildMethod: makefile
 
   UpdateUserAccessFunction:
     Type: AWS::Serverless::Function
@@ -352,10 +319,7 @@ Resources:
             Path: /users/{id}/access
             Method: patch
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/users/updateUserAccess.ts]
+      BuildMethod: makefile
 
   GetAllUsersByWorkspaceFunction:
     Type: AWS::Serverless::Function
@@ -375,10 +339,7 @@ Resources:
             Path: /users/workspace
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/users/getAllUsersByWorkspace.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # ONBOARDING
@@ -409,10 +370,7 @@ Resources:
             Path: /onboarding/admin/workspace
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/onboarding/adminOnboardingCreateWorkspace.ts]
+      BuildMethod: makefile
 
   InviteNewUserByAdminFunction:
     Type: AWS::Serverless::Function
@@ -436,10 +394,7 @@ Resources:
             Path: /invites/workspace/{workspaceId}
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/onboarding/InviteNewUserByAdmin.ts]
+      BuildMethod: makefile
 
   OnboardAndUpdateInvitedUserFunction:
     Type: AWS::Serverless::Function
@@ -461,10 +416,7 @@ Resources:
             Path: /onboarding/user
             Method: put
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/onboarding/onboardAndUpdateInvitedUser.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # WORKSPACES
@@ -481,10 +433,7 @@ Resources:
             Path: /workspace
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workspaces/createWorkspace.ts]
+      BuildMethod: makefile
 
   GetWorkspaceFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -504,10 +453,7 @@ Resources:
             Path: /workspace/{id}
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workspaces/getWorkspace.ts]
+      BuildMethod: makefile
 
   UpdateWorkspaceFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -521,10 +467,7 @@ Resources:
             Path: /workspace
             Method: put
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workspaces/updateWorkspace.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # DEPARTMENTS
@@ -541,10 +484,7 @@ Resources:
             Path: /departments
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/departments/createDepartment.ts]
+      BuildMethod: makefile
 
   GetDepartmentFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -564,10 +504,7 @@ Resources:
             Path: /departments/{id}
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/departments/getDepartment.ts]
+      BuildMethod: makefile
 
   GetAllDepartmentsFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-0-31.md#awsserverlessfunction
@@ -587,10 +524,7 @@ Resources:
             Path: /departments
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/departments/getAllDepartments.ts]
+      BuildMethod: makefile
 
   UpdateDepartmentFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -604,10 +538,7 @@ Resources:
             Path: /departments
             Method: put
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/departments/updateDepartment.ts]
+      BuildMethod: makefile
 
   ArchiveDepartmentFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -621,10 +552,7 @@ Resources:
             Path: /departments/{id}
             Method: patch
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/departments/archiveDepartment.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # PROJECTS
@@ -642,10 +570,7 @@ Resources:
             Path: /projects
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/projects/createProject.ts]
+      BuildMethod: makefile
 
   UpdateProjectFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -659,10 +584,7 @@ Resources:
             Path: /projects
             Method: put
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/projects/updateProject.ts]
+      BuildMethod: makefile
 
   GetAllProjectsFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -682,10 +604,7 @@ Resources:
             Path: /projects
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/projects/getAllProjects.ts]
+      BuildMethod: makefile
 
   GetProjectFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -705,10 +624,7 @@ Resources:
             Path: /projects/{id}
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/projects/getProject.ts]
+      BuildMethod: makefile
 
   ArchiveProjectFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -722,10 +638,7 @@ Resources:
             Path: /projects/{id}
             Method: patch
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/projects/archiveProject.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # PRODUCTS
@@ -743,10 +656,7 @@ Resources:
             Path: /products
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/createProduct.ts]
+      BuildMethod: makefile
 
   CheckProductImportFunction:
     Type: AWS::Serverless::Function
@@ -760,10 +670,7 @@ Resources:
             Path: /products/import/check
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/checkProductImport.ts]
+      BuildMethod: makefile
 
   ImportProductsFunction:
     Type: AWS::Serverless::Function
@@ -777,10 +684,7 @@ Resources:
             Path: /products/import
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/importProducts.ts]
+      BuildMethod: makefile
 
   GetAllProductsFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -800,10 +704,7 @@ Resources:
             Path: /products
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/getAllProducts.ts]
+      BuildMethod: makefile
 
   UpdateProductFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -823,10 +724,7 @@ Resources:
             Path: /products/{productId}
             Method: patch
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/updateProduct.ts]
+      BuildMethod: makefile
 
   UpdateProductTeamFunction:
     Type: AWS::Serverless::Function
@@ -846,10 +744,7 @@ Resources:
             Path: /products/{productId}/team
             Method: patch
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/updateProductTeam.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # NOTIFICATIONS
@@ -866,10 +761,7 @@ Resources:
             Path: /notifications
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/notifications/getNotifications.ts]
+      BuildMethod: makefile
 
   MarkNotificationsReadFunction:
     Type: AWS::Serverless::Function
@@ -883,10 +775,7 @@ Resources:
             Path: /notifications/read
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/notifications/markNotificationsRead.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # WORKFLOWS
@@ -903,10 +792,7 @@ Resources:
             Path: /workflows
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/createWorkflow.ts]
+      BuildMethod: makefile
 
   GetAllWorkflowsFunction:
     Type: AWS::Serverless::Function
@@ -920,10 +806,7 @@ Resources:
             Path: /workflows
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/getAllWorkflows.ts]
+      BuildMethod: makefile
 
   QueryWorkflowsFunction:
     Type: AWS::Serverless::Function
@@ -937,10 +820,7 @@ Resources:
             Path: /workflows/query
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/queryWorkflows.ts]
+      BuildMethod: makefile
 
   GetWorkflowFunction:
     Type: AWS::Serverless::Function
@@ -960,10 +840,7 @@ Resources:
             Path: /workflows/{workflowId}
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/getWorkflow.ts]
+      BuildMethod: makefile
 
   UpdateWorkflowFunction:
     Type: AWS::Serverless::Function
@@ -977,10 +854,7 @@ Resources:
             Path: /workflows/{workflowId}
             Method: patch
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/updateWorkflow.ts]
+      BuildMethod: makefile
 
   DeleteWorkflowFunction:
     Type: AWS::Serverless::Function
@@ -994,10 +868,7 @@ Resources:
             Path: /workflows/{workflowId}
             Method: delete
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/deleteWorkflow.ts]
+      BuildMethod: makefile
 
   GetWorkflowReadinessFunction:
     Type: AWS::Serverless::Function
@@ -1011,10 +882,7 @@ Resources:
             Path: /workflows/{workflowId}/readiness
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/getWorkflowReadiness.ts]
+      BuildMethod: makefile
 
   StartWorkflowFunction:
     Type: AWS::Serverless::Function
@@ -1034,10 +902,7 @@ Resources:
             Path: /workflows/{workflowId}/start
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/startWorkflow.ts]
+      BuildMethod: makefile
 
   DecideWorkflowAssignmentFunction:
     Type: AWS::Serverless::Function
@@ -1061,10 +926,7 @@ Resources:
             Path: /workflows/{workflowId}/assignments/{assignmentId}/decision
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/decideWorkflowAssignment.ts]
+      BuildMethod: makefile
 
   CancelWorkflowFunction:
     Type: AWS::Serverless::Function
@@ -1084,10 +946,7 @@ Resources:
             Path: /workflows/{workflowId}/cancel
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/cancelWorkflow.ts]
+      BuildMethod: makefile
 
   CompleteWorkflowFunction:
     Type: AWS::Serverless::Function
@@ -1107,10 +966,7 @@ Resources:
             Path: /workflows/{workflowId}/complete
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/completeWorkflow.ts]
+      BuildMethod: makefile
 
   GetWorkflowHistoryFunction:
     Type: AWS::Serverless::Function
@@ -1124,10 +980,7 @@ Resources:
             Path: /workflows/{workflowId}/history
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/getWorkflowHistory.ts]
+      BuildMethod: makefile
 
   GetWorkflowDiscussionFunction:
     Type: AWS::Serverless::Function
@@ -1147,10 +1000,7 @@ Resources:
             Path: /workflows/{workflowId}/discussion
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/getWorkflowDiscussion.ts]
+      BuildMethod: makefile
 
   AddWorkflowCommentFunction:
     Type: AWS::Serverless::Function
@@ -1170,10 +1020,7 @@ Resources:
             Path: /workflows/{workflowId}/discussion
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/addWorkflowComment.ts]
+      BuildMethod: makefile
 
   AddressWorkflowChangeRequestFunction:
     Type: AWS::Serverless::Function
@@ -1193,10 +1040,7 @@ Resources:
             Path: /workflows/{workflowId}/discussion/{itemId}/address
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/addressWorkflowChangeRequest.ts]
+      BuildMethod: makefile
 
   ReplaceWorkflowAssignmentFunction:
     Type: AWS::Serverless::Function
@@ -1216,10 +1060,7 @@ Resources:
             Path: /workflows/{workflowId}/assignments/{assignmentId}/replace
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/replaceWorkflowAssignment.ts]
+      BuildMethod: makefile
 
   SendWorkflowReminderFunction:
     Type: AWS::Serverless::Function
@@ -1239,10 +1080,7 @@ Resources:
             Path: /workflows/{workflowId}/reminders
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/workflows/sendWorkflowReminder.ts]
+      BuildMethod: makefile
 
   UpdateProductDataFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -1262,10 +1100,7 @@ Resources:
             Path: /products/productData
             Method: patch
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/updateProductData.ts]
+      BuildMethod: makefile
 
   GetProductDataFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -1289,10 +1124,7 @@ Resources:
             Path: /products/productData
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/getProductData.ts]
+      BuildMethod: makefile
 
   GetAllStandardSymbolsFunction:
     Type: AWS::Serverless::Function
@@ -1312,10 +1144,7 @@ Resources:
             Path: /standard-symbols
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/standardSymbols/getAllStandardSymbols.ts]
+      BuildMethod: makefile
 
   GetDocumentationVideoSignedUrlFunction:
     Type: AWS::Serverless::Function
@@ -1348,10 +1177,7 @@ Resources:
             Path: /docs/videos/{videoKey}/signed-url
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/docs/getDocumentationVideoSignedUrl.ts]
+      BuildMethod: makefile
 
   CreateProductVersionFunction:
     Type: AWS::Serverless::Function
@@ -1365,10 +1191,7 @@ Resources:
             Path: /products/{productId}/version
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/createProductVersion.ts]
+      BuildMethod: makefile
 
   GetAllProductVersionsFunction:
     Type: AWS::Serverless::Function
@@ -1382,10 +1205,7 @@ Resources:
             Path: /products/versions
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/getAllProductVersions.ts]
+      BuildMethod: makefile
 
   EnqueueProductExportFunction:
     Type: AWS::Serverless::Function
@@ -1415,10 +1235,7 @@ Resources:
             Path: /products/{productId}/exports
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/enqueueProductExport.ts]
+      BuildMethod: makefile
 
   GetProductExportJobsFunction:
     Type: AWS::Serverless::Function
@@ -1432,10 +1249,7 @@ Resources:
             Path: /products/exports/jobs
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/getProductExportJobs.ts]
+      BuildMethod: makefile
 
   GetProductExportJobFunction:
     Type: AWS::Serverless::Function
@@ -1449,10 +1263,7 @@ Resources:
             Path: /products/exports/jobs/{jobId}
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/getProductExportJob.ts]
+      BuildMethod: makefile
 
   DownloadProductExportJobFunction:
     Type: AWS::Serverless::Function
@@ -1472,10 +1283,7 @@ Resources:
             Path: /products/exports/jobs/{jobId}/download
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/products/downloadProductExportJob.ts]
+      BuildMethod: makefile
 
   ProductExportJobDLQ:
     Type: AWS::SQS::Queue
@@ -1534,10 +1342,7 @@ Resources:
             FunctionResponseTypes:
               - ReportBatchItemFailures
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/exports/processExportJob.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # AUDIT LOGS V2
@@ -1555,10 +1360,7 @@ Resources:
             Path: /audit-logs
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/auditLogs/getAuditLogs.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # BOOKMARKS
@@ -1576,10 +1378,7 @@ Resources:
             Path: /bookmarks/products
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/bookmarks/getAllProductBookmarkFolders.ts]
+      BuildMethod: makefile
 
   CreateProductBookmarkFunction:
     Type: AWS::Serverless::Function # More info about Function Resource:
@@ -1593,10 +1392,7 @@ Resources:
             Path: /bookmarks/products
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/bookmarks/createProductBookmarkFolder.ts]
+      BuildMethod: makefile
 
   UpdateProductBookmarkFolderFunction:
     Type: AWS::Serverless::Function # More info about Function Resource:
@@ -1610,10 +1406,7 @@ Resources:
             Path: /bookmarks/products/{folderId}
             Method: patch
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/bookmarks/updateProductBookmarkFolder.ts]
+      BuildMethod: makefile
 
   DeleteProductBookmarkFolderFunction:
     Type: AWS::Serverless::Function # More info about Function Resource:
@@ -1627,10 +1420,7 @@ Resources:
             Path: /bookmarks/products/{folderId}
             Method: delete
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/bookmarks/deleteProductBookmarkFolder.ts]
+      BuildMethod: makefile
 
   AddProductToBookmarkFolderFunction:
     Type: AWS::Serverless::Function
@@ -1644,10 +1434,7 @@ Resources:
             Path: /bookmarks/products/add/{folderId}
             Method: patch
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/bookmarks/addProductToBookmarkFolder.ts]
+      BuildMethod: makefile
 
   DeleteProductFromBookmarkFunction:
     Type: AWS::Serverless::Function
@@ -1661,10 +1448,7 @@ Resources:
             Path: /bookmarks/products/delete/{folderId}
             Method: patch
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/bookmarks/deleteProductFromBookmark.ts]
+      BuildMethod: makefile
 
   GetAllBookmarkedProductsFunction:
     Type: AWS::Serverless::Function
@@ -1684,10 +1468,7 @@ Resources:
             Path: /bookmarks/products/all
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/bookmarks/getAllBookmarkedProducts.ts]
+      BuildMethod: makefile
 
   GetProductsFromBookmarkFunction:
     Type: AWS::Serverless::Function
@@ -1701,10 +1482,7 @@ Resources:
             Path: /bookmarks/products/{folderId}
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/bookmarks/getProductsFromBookmark.ts]
+      BuildMethod: makefile
 
   GetBookmarkedSourceFileFoldersFunction:
     Type: AWS::Serverless::Function
@@ -1718,10 +1496,7 @@ Resources:
             Path: /bookmarks/source-files
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/bookmarks/getBookmarkedSourceFileFolders.ts]
+      BuildMethod: makefile
 
   ToggleBookmarkSourceFileFoldersFunction:
     Type: AWS::Serverless::Function
@@ -1735,10 +1510,7 @@ Resources:
             Path: /bookmarks/source-files
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/bookmarks/toggleBookmarkSourceFileFolders.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # DASHBOARD
@@ -1756,10 +1528,7 @@ Resources:
             Path: /dashboard
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/dashboard/getDashboardStats.ts]
+      BuildMethod: makefile
 
   GetDashboardActivityStatsFunction:
     Type: AWS::Serverless::Function
@@ -1773,10 +1542,7 @@ Resources:
             Path: /dashboard/activity
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/dashboard/getDashboardActivityStats.ts]
+      BuildMethod: makefile
 
   GetAnalyticsFunction:
     Type: AWS::Serverless::Function
@@ -1790,10 +1556,7 @@ Resources:
             Path: /analytics
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/analytics/getAnalytics.ts]
+      BuildMethod: makefile
 
   GetAnalyticsProductsFunction:
     Type: AWS::Serverless::Function
@@ -1807,10 +1570,7 @@ Resources:
             Path: /analytics/products
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/analytics/getAnalyticsProducts.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # SOURCE FILES
@@ -1827,10 +1587,7 @@ Resources:
             Path: /source-files
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/sourceFiles/createSourceFileAndFolder.ts]
+      BuildMethod: makefile
 
   GetAllSourceFilesFoldersFunction:
     Type: AWS::Serverless::Function
@@ -1844,10 +1601,7 @@ Resources:
             Path: /source-files
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/sourceFiles/getAllSourceFilesFolders.ts]
+      BuildMethod: makefile
 
   GetSourceFilesByParentFunction:
     Type: AWS::Serverless::Function
@@ -1867,10 +1621,7 @@ Resources:
             Path: /source-files/folder
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/sourceFiles/getSourceFilesByParent.ts]
+      BuildMethod: makefile
 
   GetCurrentFolderByIdFunction:
     Type: AWS::Serverless::Function
@@ -1890,10 +1641,7 @@ Resources:
             Path: /source-files/current-folder
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/sourceFiles/getCurrentFolderById.ts]
+      BuildMethod: makefile
 
   DeleteSourceFileFunction:
     Type: AWS::Serverless::Function
@@ -1913,10 +1661,7 @@ Resources:
             Path: /source-files/{id}
             Method: delete
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/sourceFiles/deleteSourceFileAndFolder.ts]
+      BuildMethod: makefile
 
   UpdateSourceFilesFolderFunction:
     Type: AWS::Serverless::Function
@@ -1930,10 +1675,7 @@ Resources:
             Path: /source-files/folder/{folderId}
             Method: patch
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/sourceFiles/updateSourceFilesFolder.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # REPORTS
@@ -1951,10 +1693,7 @@ Resources:
             Path: /reports/query
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/reports/reportsQuery.ts]
+      BuildMethod: makefile
 
   EnqueueReportExportFunction:
     Type: AWS::Serverless::Function
@@ -1984,10 +1723,7 @@ Resources:
             Path: /reports/exports
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/reports/enqueueReportExport.ts]
+      BuildMethod: makefile
 
   GetReportExportJobsFunction:
     Type: AWS::Serverless::Function
@@ -2001,10 +1737,7 @@ Resources:
             Path: /reports/exports/jobs
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/reports/getReportExportJobs.ts]
+      BuildMethod: makefile
 
   GetReportExportJobFunction:
     Type: AWS::Serverless::Function
@@ -2018,10 +1751,7 @@ Resources:
             Path: /reports/exports/jobs/{jobId}
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/reports/getReportExportJob.ts]
+      BuildMethod: makefile
 
   DownloadReportExportJobFunction:
     Type: AWS::Serverless::Function
@@ -2041,10 +1771,7 @@ Resources:
             Path: /reports/exports/jobs/{jobId}/download
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/reports/downloadReportExportJob.ts]
+      BuildMethod: makefile
 
   ReportsExportPDFFunction:
     Type: AWS::Serverless::Function
@@ -2059,10 +1786,7 @@ Resources:
             Path: /reports/export/pdf
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/reports/reportsExportPDF.ts]
+      BuildMethod: makefile
 
   ReportsExportExcelFunction:
     Type: AWS::Serverless::Function
@@ -2077,10 +1801,7 @@ Resources:
             Path: /reports/export/excel
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/reports/reportsExportExcel.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # PLATFORM ADMIN
@@ -2097,10 +1818,7 @@ Resources:
             Path: /platform-admin/session
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/getSession.ts]
+      BuildMethod: makefile
 
   PlatformAdminGetSummaryFunction:
     Type: AWS::Serverless::Function
@@ -2114,10 +1832,7 @@ Resources:
             Path: /platform-admin/summary
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/getSummary.ts]
+      BuildMethod: makefile
 
   PlatformAdminListWorkspacesFunction:
     Type: AWS::Serverless::Function
@@ -2131,10 +1846,7 @@ Resources:
             Path: /platform-admin/workspaces
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/listWorkspaces.ts]
+      BuildMethod: makefile
 
   PlatformAdminGetWorkspaceDetailFunction:
     Type: AWS::Serverless::Function
@@ -2148,10 +1860,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/getWorkspaceDetail.ts]
+      BuildMethod: makefile
 
   PlatformAdminListAuditLogsFunction:
     Type: AWS::Serverless::Function
@@ -2165,10 +1874,7 @@ Resources:
             Path: /platform-admin/audit-logs
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/listAuditLogs.ts]
+      BuildMethod: makefile
 
   PlatformAdminProvisionInviteFunction:
     Type: AWS::Serverless::Function
@@ -2191,10 +1897,7 @@ Resources:
             Path: /platform-admin/invites/provision
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/provisionInvite.ts]
+      BuildMethod: makefile
 
   PlatformAdminInviteWorkspaceAdminFunction:
     Type: AWS::Serverless::Function
@@ -2217,10 +1920,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/admins/invite
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/inviteWorkspaceAdmin.ts]
+      BuildMethod: makefile
 
   BillingGetSummaryFunction:
     Type: AWS::Serverless::Function
@@ -2234,10 +1934,7 @@ Resources:
             Path: /billing/summary
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/billing/getSummary.ts]
+      BuildMethod: makefile
 
   BillingUpdatePreferencesFunction:
     Type: AWS::Serverless::Function
@@ -2251,10 +1948,7 @@ Resources:
             Path: /billing/preferences
             Method: put
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/billing/updatePreferences.ts]
+      BuildMethod: makefile
 
   BillingGetChargebeeFunction:
     Type: AWS::Serverless::Function
@@ -2268,10 +1962,7 @@ Resources:
             Path: /billing/chargebee
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/billing/getBillingChargebee.ts]
+      BuildMethod: makefile
 
   BillingGetInvoiceFunction:
     Type: AWS::Serverless::Function
@@ -2285,10 +1976,7 @@ Resources:
             Path: /billing/invoices/{invoiceId}
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/billing/getBillingInvoice.ts]
+      BuildMethod: makefile
 
   BillingDownloadInvoiceFunction:
     Type: AWS::Serverless::Function
@@ -2302,10 +1990,7 @@ Resources:
             Path: /billing/invoices/{invoiceId}/download
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/billing/downloadBillingInvoice.ts]
+      BuildMethod: makefile
 
   ChargebeeWebhookFunction:
     Type: AWS::Serverless::Function
@@ -2319,10 +2004,7 @@ Resources:
             Path: /billing/webhooks/chargebee
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/billing/chargebeeWebhook.ts]
+      BuildMethod: makefile
 
   BillingRetryUsageEventSyncScheduledFunction:
     Type: AWS::Serverless::Function
@@ -2340,10 +2022,7 @@ Resources:
             Schedule: rate(10 minutes)
             Enabled: true
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/billing/retryUsageEventSyncScheduled.ts]
+      BuildMethod: makefile
 
   PlatformAdminGetBillingAccountFunction:
     Type: AWS::Serverless::Function
@@ -2357,10 +2036,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/billing-account
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/getBillingAccount.ts]
+      BuildMethod: makefile
 
   PlatformAdminUpdateBillingAccountFunction:
     Type: AWS::Serverless::Function
@@ -2374,10 +2050,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/billing-account
             Method: put
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/updateBillingAccount.ts]
+      BuildMethod: makefile
 
   PlatformAdminCreateBillingAccountFunction:
     Type: AWS::Serverless::Function
@@ -2391,10 +2064,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/billing-account
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/createBillingAccount.ts]
+      BuildMethod: makefile
 
   PlatformAdminCreateUsageAdjustmentFunction:
     Type: AWS::Serverless::Function
@@ -2408,10 +2078,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/usage-adjustments
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/createUsageAdjustment.ts]
+      BuildMethod: makefile
 
   PlatformAdminUpdateFreezesFunction:
     Type: AWS::Serverless::Function
@@ -2425,10 +2092,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/freezes
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/updateFreezes.ts]
+      BuildMethod: makefile
 
   PlatformAdminListUsageEventsFunction:
     Type: AWS::Serverless::Function
@@ -2442,10 +2106,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/usage-events
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/listUsageEvents.ts]
+      BuildMethod: makefile
 
   PlatformAdminRetryUsageEventSyncFunction:
     Type: AWS::Serverless::Function
@@ -2464,10 +2125,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/billing/retry-usage-sync
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/retryUsageEventSync.ts]
+      BuildMethod: makefile
 
   PlatformAdminCreateChargebeeCustomerFunction:
     Type: AWS::Serverless::Function
@@ -2481,10 +2139,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/chargebee/customer
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/createChargebeeCustomer.ts]
+      BuildMethod: makefile
 
   PlatformAdminLinkChargebeeSubscriptionFunction:
     Type: AWS::Serverless::Function
@@ -2498,10 +2153,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/chargebee/subscription/link
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/linkChargebeeSubscription.ts]
+      BuildMethod: makefile
 
   PlatformAdminGetBillingChargebeeFunction:
     Type: AWS::Serverless::Function
@@ -2515,10 +2167,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/chargebee
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/getBillingChargebee.ts]
+      BuildMethod: makefile
 
   PlatformAdminGetBillingInvoiceFunction:
     Type: AWS::Serverless::Function
@@ -2532,10 +2181,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/invoices/{invoiceId}
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/getBillingInvoice.ts]
+      BuildMethod: makefile
 
   PlatformAdminRecordInvoicePaymentFunction:
     Type: AWS::Serverless::Function
@@ -2549,10 +2195,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/invoices/{invoiceId}/record-payment
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/recordInvoicePayment.ts]
+      BuildMethod: makefile
 
   PlatformAdminDownloadBillingInvoiceFunction:
     Type: AWS::Serverless::Function
@@ -2566,10 +2209,7 @@ Resources:
             Path: /platform-admin/workspaces/{workspaceId}/invoices/{invoiceId}/download
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/platformAdmin/downloadBillingInvoice.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # SUPPORT
@@ -2646,10 +2286,7 @@ Resources:
             Path: /support/config
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/support/getSupportConfig.ts]
+      BuildMethod: makefile
 
   CreateSupportAttachmentFunction:
     Type: AWS::Serverless::Function
@@ -2672,10 +2309,7 @@ Resources:
             Path: /support/attachments
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/support/createSupportAttachment.ts]
+      BuildMethod: makefile
 
   CompleteSupportAttachmentFunction:
     Type: AWS::Serverless::Function
@@ -2699,10 +2333,7 @@ Resources:
             Path: /support/attachments/{id}/complete
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/support/completeSupportAttachment.ts]
+      BuildMethod: makefile
 
   GetSupportAttachmentFunction:
     Type: AWS::Serverless::Function
@@ -2739,10 +2370,7 @@ Resources:
             Path: /support/attachments/{id}
             Method: get
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/support/getSupportAttachment.ts]
+      BuildMethod: makefile
 
   # ──────────────────────────────────────────────────────────────────────────
   # S3 STORAGE
@@ -2767,10 +2395,7 @@ Resources:
             Path: /s3-storage/presign-upload
             Method: post
     Metadata:
-      <<: *EsbuildBase
-      BuildProperties:
-        <<: *EsbuildProps
-        EntryPoints: [controllers/s3Storage/presignUpload.ts]
+      BuildMethod: makefile
   # ──────────────────────────────────────────────────────────────────────────
   # MONITORING
   # ──────────────────────────────────────────────────────────────────────────
