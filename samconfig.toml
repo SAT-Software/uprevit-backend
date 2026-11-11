@@ -3,6 +3,7 @@ version = 0.1
 [default.build.parameters]
 parallel = false
 cached = true
+build_in_source = true
 
 [default.deploy.parameters]
 stack_name = "uprevit-test"

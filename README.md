@@ -150,7 +150,7 @@ Build the application with the `sam build` command.
 uprevit-backend$ sam build
 ```
 
-The SAM CLI installs dependencies defined in `src/package.json`, compiles TypeScript with esbuild, creates a deployment package, and saves it in the `.aws-sam/build` folder.
+Install dependencies first with `npm run install:src`. SAM runs `src/Makefile`, which bundles each function with esbuild from `src/node_modules`, and saves the packages in the `.aws-sam/build` folder. When adding a function to `template.yaml`, set `BuildMethod: makefile` in its `Metadata` and add its entry point to `src/Makefile`.
 
 Test a single function by invoking it directly with a test event. An event is a JSON document that represents the input that the function receives from the event source. Test events are included in the `events` folder in this project.
 

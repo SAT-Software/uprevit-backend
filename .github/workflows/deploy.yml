@@ -108,6 +108,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: src/package-lock.json
+
+      - name: Install dependencies
+        working-directory: src
+        run: npm ci --omit=dev
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -139,7 +145,7 @@ jobs:
           echo "MONGODB_URI=$mongo_uri" >> "$GITHUB_ENV"
 
       - name: Build SAM Application
-        run: sam build --parallel
+        run: sam build --parallel --build-in-source
 
       - name: Deploy SAM Application
         env:

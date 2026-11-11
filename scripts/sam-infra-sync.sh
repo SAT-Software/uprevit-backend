@@ -9,10 +9,8 @@ if [[ "${1:-}" == "--watch" ]]; then
   WATCH=true
 fi
 
-trap 'npm run install:src' EXIT
-
 SAM_ARGS=(
-  --no-build-in-source
+  --build-in-source
   --stack-name "$STACK_NAME"
   --region "$REGION"
 )
