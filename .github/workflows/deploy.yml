@@ -139,7 +139,7 @@ jobs:
           echo "MONGODB_URI=$mongo_uri" >> "$GITHUB_ENV"
 
       - name: Build SAM Application
-        run: sam build --use-container
+        run: sam build --parallel
 
       - name: Deploy SAM Application
         env:
