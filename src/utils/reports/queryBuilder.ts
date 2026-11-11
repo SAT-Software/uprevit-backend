@@ -1,4 +1,3 @@
-/* eslint-disable require-jsdoc */
 import { ObjectId, Document } from 'mongodb';
 import {
 	QueryCondition,

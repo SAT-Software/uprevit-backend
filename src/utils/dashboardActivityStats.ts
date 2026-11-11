@@ -1,4 +1,3 @@
-/* eslint-disable require-jsdoc */
 import { Db, ObjectId } from 'mongodb';
 import { AUDIT_LOG_V2_COLLECTION } from '../models/auditLogV2';
 

@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: src/package-lock.json
 
@@ -36,15 +36,7 @@ jobs:
         working-directory: src
         run: |
           echo "Running ESLint with zero warnings policy..."
-          npx eslint \
-            controllers/**/*.ts \
-            utils/**/*.ts \
-            models/*.ts \
-            types/**/*.ts \
-            db/*.ts \
-            app.ts \
-            --no-ignore \
-            --max-warnings 0
+          npm run lint -- --max-warnings 0
 
       - name: Run TypeScript type check
         working-directory: src
@@ -107,7 +99,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: src/package-lock.json
 
