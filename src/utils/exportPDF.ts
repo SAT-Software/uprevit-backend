@@ -5,6 +5,7 @@ import { logError } from "./logger";
 import { createPresignedGetUrlMap, createStandardSymbolPresignedGetUrlMap } from "./s3-storage";
 import { formatExportDate, listText, statusLabel, yesNo } from "./exportFormatting";
 import { CONTENT_WIDTH, PdfCell, PdfColumn, PdfImageAsset, createPdfLayout } from "./pdfLayout";
+import { WORKBOOK_TAB_SOURCES, type WorkbookTabTarget } from "./exportExcel";
 
 const IMAGE_EMBED_CONCURRENCY = 5;
 const MIN_WORKBOOK_COLUMN_WIDTH = 56;
@@ -215,6 +216,67 @@ const groupWorkbookColumns = (widths: number[]): number[][] => {
 	return groups;
 };
 
+type PdfWorkbookSection = { title: string; sheets: ReturnType<typeof transformUniverExcelData>["sheets"] };
+
+/**
+ * Renders documentation workbook tabs as PDF sections.
+ * @param {Awaited<ReturnType<typeof createPdfLayout>>} layout PDF layout
+ * @param {PdfWorkbookSection[]} workbooks Tabs to render
+ */
+const renderWorkbookSections = (layout: Awaited<ReturnType<typeof createPdfLayout>>, workbooks: PdfWorkbookSection[]) => {
+	workbooks.forEach(({ title, sheets }) => {
+		layout.heading(title);
+		if (!sheets.length) layout.table([{ label: "Data", weight: 1 }], [], { emptyText: `No ${title.toLowerCase()} added.` });
+		sheets.forEach((sheet) => {
+			const headerOffset = sheet.headerOffset ?? 1;
+			const colCount = Math.max(1, ...sheet.data.map((row) => row.length));
+			const widths = Array.from({ length: colCount }, (_, col) => Math.min(MAX_WORKBOOK_COLUMN_WIDTH, Math.max(MIN_WORKBOOK_COLUMN_WIDTH, (sheet.columnWidths?.[col] ?? 150) * 0.75)));
+			const typeRow = headerOffset > 1 ? sheet.data[1] : undefined;
+			const hasTypes = Boolean(typeRow?.some((value) => value !== null && value !== ""));
+			const bodyRows = sheet.data.slice(headerOffset);
+			const groups = groupWorkbookColumns(widths);
+			groups.forEach((group, groupIndex) => {
+				const start = group[groupIndex === 0 ? 0 : 1] ?? group[0];
+				const caption = groups.length > 1 ? `Columns ${columnToLetter(start)}–${columnToLetter(group[group.length - 1])} of ${colCount}` : `${bodyRows.length} ${bodyRows.length === 1 ? "row" : "rows"}`;
+				layout.subheading(sheet.name, caption);
+				layout.table(
+					group.map((col) => ({
+						label: String(sheet.data[0]?.[col] ?? "") || `Column ${columnToLetter(col)}`,
+						weight: widths[col],
+						format: headerOffset > 0 ? sheet.formats?.[`0,${col}`] : undefined,
+					})),
+					bodyRows.map((row, index) => group.map((col) => ({ text: row[col] === null || row[col] === undefined ? "" : String(row[col]), format: sheet.formats?.[`${index + headerOffset},${col}`] }))),
+					{
+						subHeader: hasTypes ? group.map((col) => ({ text: COLUMN_TYPE_LABELS[String(typeRow?.[col] ?? "")] ?? String(typeRow?.[col] ?? ""), format: sheet.formats?.[`1,${col}`] })) : undefined,
+						minRowHeights: bodyRows.map((_, index) => (sheet.rowHeights?.[index + headerOffset] ?? 0) * 0.75),
+						emptyText: "No rows in this sheet.",
+						hideHeader: headerOffset === 0,
+					},
+				);
+			});
+		});
+	});
+};
+
+/**
+ * Exports one documentation tab as a PDF.
+ * @param {Product} product Product version
+ * @param {WorkbookTabTarget} target Tab to export
+ * @param {string} workspaceName Workspace name for the header
+ * @return {Promise<Buffer | null>} PDF buffer, or null when generation fails
+ */
+export async function generateWorkbookTabPDFExport(product: Product, target: WorkbookTabTarget, workspaceName = "") {
+	try {
+		const layout = await createPdfLayout(product.product_name || "Untitled product", workspaceName);
+		const { title, source } = WORKBOOK_TAB_SOURCES[target];
+		renderWorkbookSections(layout, [{ title, sheets: transformUniverExcelData(source(product), true).sheets }]);
+		return await layout.finish();
+	} catch (error) {
+		logError("Workbook tab PDF export failed", error, { target });
+		return null;
+	}
+}
+
 /**
  * Generates a PDF export of product data.
  * Creates a branded multi-page PDF document with a summary, product information,
@@ -341,38 +403,7 @@ export async function generateProductPDFExport(productData: Product, workspaceNa
 			"No other components added.",
 		);
 
-		workbooks.forEach(({ title, sheets }) => {
-			layout.heading(title);
-			if (!sheets.length) layout.table([{ label: "Data", weight: 1 }], [], { emptyText: `No ${title.toLowerCase()} added.` });
-			sheets.forEach((sheet) => {
-				const headerOffset = sheet.headerOffset ?? 1;
-				const colCount = Math.max(1, ...sheet.data.map((row) => row.length));
-				const widths = Array.from({ length: colCount }, (_, col) => Math.min(MAX_WORKBOOK_COLUMN_WIDTH, Math.max(MIN_WORKBOOK_COLUMN_WIDTH, (sheet.columnWidths?.[col] ?? 150) * 0.75)));
-				const typeRow = headerOffset > 1 ? sheet.data[1] : undefined;
-				const hasTypes = Boolean(typeRow?.some((value) => value !== null && value !== ""));
-				const bodyRows = sheet.data.slice(headerOffset);
-				const groups = groupWorkbookColumns(widths);
-				groups.forEach((group, groupIndex) => {
-					const start = group[groupIndex === 0 ? 0 : 1] ?? group[0];
-					const caption = groups.length > 1 ? `Columns ${columnToLetter(start)}–${columnToLetter(group[group.length - 1])} of ${colCount}` : `${bodyRows.length} ${bodyRows.length === 1 ? "row" : "rows"}`;
-					layout.subheading(sheet.name, caption);
-					layout.table(
-						group.map((col) => ({
-							label: String(sheet.data[0]?.[col] ?? "") || `Column ${columnToLetter(col)}`,
-							weight: widths[col],
-							format: headerOffset > 0 ? sheet.formats?.[`0,${col}`] : undefined,
-						})),
-						bodyRows.map((row, index) => group.map((col) => ({ text: row[col] === null || row[col] === undefined ? "" : String(row[col]), format: sheet.formats?.[`${index + headerOffset},${col}`] }))),
-						{
-							subHeader: hasTypes ? group.map((col) => ({ text: COLUMN_TYPE_LABELS[String(typeRow?.[col] ?? "")] ?? String(typeRow?.[col] ?? ""), format: sheet.formats?.[`1,${col}`] })) : undefined,
-							minRowHeights: bodyRows.map((_, index) => (sheet.rowHeights?.[index + headerOffset] ?? 0) * 0.75),
-							emptyText: "No rows in this sheet.",
-							hideHeader: headerOffset === 0,
-						},
-					);
-				});
-			});
-		});
+		renderWorkbookSections(layout, workbooks);
 
 		section(
 			"Label tags",

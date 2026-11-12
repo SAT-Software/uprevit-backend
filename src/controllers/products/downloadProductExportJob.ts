@@ -3,7 +3,7 @@ import { ObjectId } from 'mongodb';
 import { authenticateRequest } from '../../utils/authUtils';
 import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
 import { logError } from '../../utils/logger';
-import { getProductExportJobByIdForUser } from '../../utils/productExportJobs';
+import { getProductExportJobByIdForUser, PRODUCT_EXPORT_TARGETS } from '../../utils/productExportJobs';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { createExportPresignedGetUrl } from '../../utils/s3-storage';
 import { validateAllObjectIds } from '../../utils/validationUtils';
@@ -41,7 +41,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			jobId: new ObjectId(jobId),
 			workspaceId: userContext.workspaceId,
 			requestedBySub: cognitoSub,
-			target: 'product',
+			target: PRODUCT_EXPORT_TARGETS,
 		});
 
 		if (!job) {

@@ -7,6 +7,7 @@ import { logError } from '../../utils/logger';
 import {
 	isProductExportStatus,
 	listProductExportJobsForUser,
+	PRODUCT_EXPORT_TARGETS,
 } from '../../utils/productExportJobs';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
@@ -58,7 +59,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const { jobs, pagination, hasActiveJobs, activeJobsCount } = await listProductExportJobsForUser({
 			requestedBySub: cognitoSub,
 			workspaceId: userContext.workspaceId,
-			target: 'product',
+			target: PRODUCT_EXPORT_TARGETS,
 			targetId,
 			statuses,
 			page,
