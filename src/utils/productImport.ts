@@ -1,5 +1,6 @@
 import { type Db, ObjectId } from 'mongodb';
 import type { Product } from '../models/product';
+import { logError } from './logger';
 import { computeCompleteCount } from './productLifecycle';
 
 export const MAX_IMPORT_PRODUCTS = 50;
@@ -42,7 +43,7 @@ const IMPORT_LOCK_MS = 5 * 60 * 1000;
  * Lets one import or product create per workspace run at a time, so concurrent requests can't both create the same plan number.
  * A lock left by a crashed request expires on its own.
  * The `expires_at` condition is what makes a held lock fail with a duplicate key; a filter on `_id` alone would take it over.
- * IMPORT_LOCK_MS must stay longer than the ImportProductsFunction timeout in template.yaml.
+ * IMPORT_LOCK_MS must stay longer than the ImportProductsFunction and CreateProductFunction timeouts in template.yaml.
  * @param {Db} db Database
  * @param {ObjectId} workspaceId Workspace
  * @return {Promise<boolean>} False when another import holds the lock
@@ -63,7 +64,8 @@ export const acquireImportLock = async (db: Db, workspaceId: ObjectId): Promise<
 };
 
 export const releaseImportLock = (db: Db, workspaceId: ObjectId) =>
-	db.collection<{ _id: ObjectId }>(IMPORT_LOCKS_COLLECTION).deleteOne({ _id: workspaceId });
+	db.collection<{ _id: ObjectId }>(IMPORT_LOCKS_COLLECTION).deleteOne({ _id: workspaceId })
+		.catch((error) => logError('Failed to release product import lock', error, { workspaceId: workspaceId.toString() }));
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
