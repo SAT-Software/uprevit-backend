@@ -1,4 +1,4 @@
-import type { Worksheet } from "exceljs";
+import type { Workbook, Worksheet } from "exceljs";
 import { Product } from "../models/product";
 import { applyStandardStyling } from "./exportExcelStyling";
 import transformUniverExcelData from "./transformUniverExcelData";
@@ -437,6 +437,63 @@ const attachSheetImages = ({
 };
 
 /**
+ * Adds one documentation workbook tab to an Excel workbook, keeping the layout note the importer reads.
+ * @param {Workbook} workbook Workbook
+ * @param {string} title Sheet title
+ * @param {unknown} source Tab workbook data
+ */
+export const appendWorkbookSheet = (workbook: Workbook, title: string, source: unknown): void => {
+	const transformed = transformUniverExcelData(source);
+	const sheets = transformed.sheets.length ? transformed.sheets : [{ name: 'Sheet1', data: [], merges: [] }];
+	for (const sheetData of sheets) {
+		const base = (sheets.length === 1 && sheetData.name === "Sheet1" ? title : `${title} - ${sheetData.name}`).replace(/[\\/?:*\[\]]/g, ' ').slice(0, 31).replace(/^'+|'+$/g, '') || 'Sheet';
+		let name = base;
+		let suffix = 2;
+		while (workbook.worksheets.some((sheet: Worksheet) => sheet.name.toLowerCase() === name.toLowerCase())) {
+			const tail = ` (${suffix++})`;
+			name = base.slice(0, 31 - tail.length).replace(/^'+|'+$/g, '') + tail;
+		}
+		const sheet = workbook.addWorksheet(name, { pageSetup: { paperSize: 9, orientation: 'landscape' } });
+		sheetData.data.forEach(row => sheet.addRow(row));
+		sheetData.merges.forEach(merge => sheet.mergeCells(merge));
+		applyStandardStyling(sheet);
+		applyWorkbookCellFormats(sheet, sheetData.formats);
+		applyWorkbookSizing(sheet, sheetData);
+		const firstCell = sheet.getCell('A1');
+		const existingNote = firstCell.note;
+		const noteTexts = typeof existingNote === 'string' ? [{ text: existingNote }] : existingNote?.texts ?? [];
+		firstCell.note = { texts: [...noteTexts, { text: '\nuprevit:layout:v1:' + ('headerOffset' in sheetData ? sheetData.headerOffset ?? 0 : 0) }] };
+	}
+};
+
+export type WorkbookTabTarget = 'product_specifications' | 'operational_parameters';
+
+export const WORKBOOK_TAB_SOURCES: Record<WorkbookTabTarget, { title: string; source: (product: Product) => unknown }> = {
+	product_specifications: { title: 'Product Specifications', source: (product) => product.product_data?.data },
+	operational_parameters: { title: 'Operational Parameters', source: (product) => product.operational_parameters?.data },
+};
+
+/**
+ * Exports one documentation tab as a workbook.
+ * @param {Product} product Product version
+ * @param {WorkbookTabTarget} target Tab to export
+ * @return {Promise<Buffer | null>} Workbook buffer, or null when generation fails
+ */
+export async function generateWorkbookTabExcelExport(product: Product, target: WorkbookTabTarget) {
+	try {
+		const workbook = new ExcelJS.Workbook();
+		workbook.creator = 'Uprevit';
+		workbook.created = new Date();
+		const { title, source } = WORKBOOK_TAB_SOURCES[target];
+		appendWorkbookSheet(workbook, title, source(product));
+		return Buffer.from(await workbook.xlsx.writeBuffer());
+	} catch (error) {
+		logError('Workbook tab Excel export failed', error, { target });
+		return null;
+	}
+}
+
+/**
  * Generates an Excel export of product data.
  * Creates a multi-sheet workbook with separate sheets for product information,
  * compliance, label components, symbols, barcodes, specifications, and more.
@@ -688,31 +745,8 @@ export async function generateProductExcelExport(productData: Product) {
 		mergeSheetImageRows(otherComponentsSheet, otherComponentsImageRows);
 		otherComponentsSheet.getRow(1).font = { bold: true };
 
-		const appendWorkbook = (title: string, source: unknown) => {
-			const transformed = transformUniverExcelData(source);
-			const sheets = transformed.sheets.length ? transformed.sheets : [{ name: 'Sheet1', data: [], merges: [] }];
-			for (const sheetData of sheets) {
-				const base = (sheets.length === 1 && sheetData.name === "Sheet1" ? title : `${title} - ${sheetData.name}`).replace(/[\\/?:*\[\]]/g, ' ').slice(0, 31).replace(/^'+|'+$/g, '') || 'Sheet';
-				let name = base;
-				let suffix = 2;
-				while (workbook.worksheets.some((sheet: Worksheet) => sheet.name.toLowerCase() === name.toLowerCase())) {
-					const tail = ` (${suffix++})`;
-					name = base.slice(0, 31 - tail.length).replace(/^'+|'+$/g, '') + tail;
-				}
-				const sheet = workbook.addWorksheet(name, { pageSetup: { paperSize: 9, orientation: 'landscape' } });
-				sheetData.data.forEach(row => sheet.addRow(row));
-				sheetData.merges.forEach(merge => sheet.mergeCells(merge));
-				applyStandardStyling(sheet);
-				applyWorkbookCellFormats(sheet, sheetData.formats);
-				applyWorkbookSizing(sheet, sheetData);
-				const firstCell = sheet.getCell('A1');
-				const existingNote = firstCell.note;
-				const noteTexts = typeof existingNote === 'string' ? [{ text: existingNote }] : existingNote?.texts ?? [];
-				firstCell.note = { texts: [...noteTexts, { text: '\nuprevit:layout:v1:' + ('headerOffset' in sheetData ? sheetData.headerOffset ?? 0 : 0) }] };
-			}
-		};
-		appendWorkbook('Product Specifications', productData.product_data?.data);
-		appendWorkbook('Operational Data', productData.operational_parameters?.data);
+		appendWorkbookSheet(workbook, 'Product Specifications', productData.product_data?.data);
+		appendWorkbookSheet(workbook, 'Operational Data', productData.operational_parameters?.data);
 
 		const labelTagsSheet = workbook.addWorksheet("Label Tags", {
 			pageSetup: { paperSize: 9, orientation: "landscape" },

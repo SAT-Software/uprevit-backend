@@ -12,6 +12,8 @@ import { enqueueExportJobMessage } from '../../utils/exportQueue';
 import { logError } from '../../utils/logger';
 import {
 	createQueuedProductExportJob,
+	isProductExportTarget,
+	PRODUCT_EXPORT_TARGETS,
 } from '../../utils/productExportJobs';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateAllObjectIds } from '../../utils/validationUtils';
@@ -48,9 +50,14 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			return ResponseWrapper.badRequest('Request body must be a JSON object');
 		}
 
-		const body = parsedBody as { format?: unknown };
+		const body = parsedBody as { format?: unknown; target?: unknown };
 		if (typeof body.format !== 'string' || !EXPORT_JOB_FORMATS.includes(body.format as ExportJobFormat)) {
 			return ResponseWrapper.badRequest(`Request body must include 'format' and must be one of: ${EXPORT_JOB_FORMATS.join(', ')}`);
+		}
+
+		const target = body.target ?? 'product';
+		if (!isProductExportTarget(target)) {
+			return ResponseWrapper.badRequest(`target must be one of: ${PRODUCT_EXPORT_TARGETS.join(', ')}`);
 		}
 
 		format = body.format as ExportJobFormat;
@@ -99,13 +106,14 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			requestedBySub: cognitoSub,
 			requestedByUserId: userContext.userId,
 			format,
+			target,
 		});
 
 		try {
 			await enqueueExportJobMessage({
 				schemaVersion: 1,
 				jobId: job._id.toString(),
-				target: 'product',
+				target,
 				targetId: productObjectId.toString(),
 				workspaceId: product.workspace_id.toString(),
 				requestedBySub: cognitoSub,

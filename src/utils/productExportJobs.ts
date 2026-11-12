@@ -18,8 +18,16 @@ export const ensureProductExportJobIndexes = ensureExportJobIndexes;
 
 export const isProductExportStatus = isExportStatus;
 
+export type ProductExportTarget = 'product' | 'product_specifications' | 'operational_parameters';
+
+export const PRODUCT_EXPORT_TARGETS: ProductExportTarget[] = ['product', 'product_specifications', 'operational_parameters'];
+
+export const isProductExportTarget = (value: unknown): value is ProductExportTarget =>
+	PRODUCT_EXPORT_TARGETS.some((target) => target === value);
+
 export const createQueuedProductExportJob = async ({
 	productId,
+	target = 'product',
 	workspaceId,
 	requestedBySub,
 	requestedByUserId,
@@ -32,9 +40,10 @@ export const createQueuedProductExportJob = async ({
 	requestedByUserId?: ObjectId;
 	format: ExportJobFormat;
 	expiresAt?: Date;
+	target?: ProductExportTarget;
 }): Promise<ExportJobDocument> => {
 	return createQueuedExportJob({
-		target: 'product',
+		target,
 		targetId: productId,
 		workspaceId,
 		requestedBySub,
@@ -59,7 +68,7 @@ export const getProductExportJobByIdForUser = async ({
 	jobId: ObjectId;
 	workspaceId: ObjectId;
 	requestedBySub: string;
-	target?: ExportJobTarget;
+	target?: ExportJobTarget | ExportJobTarget[];
 }): Promise<ExportJobDocument | null> => {
 	return getExportJobByIdForUser({
 		jobId,
@@ -80,7 +89,7 @@ export const listProductExportJobsForUser = async ({
 }: {
 	requestedBySub: string;
 	workspaceId?: ObjectId;
-	target?: ExportJobTarget;
+	target?: ExportJobTarget | ExportJobTarget[];
 	targetId?: ObjectId;
 	statuses?: ExportJobStatus[];
 	page?: number;

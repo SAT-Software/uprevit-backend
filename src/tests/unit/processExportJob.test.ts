@@ -14,10 +14,12 @@ jest.mock('../../utils/db', () => ({
 
 jest.mock('../../utils/exportPDF', () => ({
 	generateProductPDFExport: jest.fn(),
+	generateWorkbookTabPDFExport: jest.fn(),
 }));
 
 jest.mock('../../utils/exportExcel', () => ({
 	generateProductExcelExport: jest.fn(),
+	generateWorkbookTabExcelExport: jest.fn(),
 }));
 
 jest.mock('../../utils/reports/exportReportsPDF', () => ({
@@ -227,5 +229,43 @@ describe('processExportJob', () => {
 		expect(result).toEqual({ batchItemFailures: [] });
 		expect(exportJobs.recordUsageForCompletedExportJob).toHaveBeenCalledWith(jobId);
 		expect(generateProductPDFExport).not.toHaveBeenCalled();
+	});
+
+	it('exports a single specification tab with a suffixed file name', async () => {
+		const jobId = new ObjectId();
+		const workspaceId = new ObjectId();
+		const productId = new ObjectId();
+		const exportExcelUtils = jest.requireMock('../../utils/exportExcel') as any;
+
+		markExportJobProcessing.mockResolvedValue({ _id: jobId, target: 'product_specifications', targetId: productId, workspaceId });
+		getDb.mockResolvedValue({
+			collection: jest.fn().mockReturnValue({
+				findOne: jest.fn(async () => ({ _id: productId, workspace_id: workspaceId, product_plan_number: 'ABC123', version: 3 })),
+			}),
+		});
+		exportExcelUtils.generateWorkbookTabExcelExport.mockResolvedValue(Buffer.from('tab-xlsx'));
+
+		const result = await lambdaHandler({
+			Records: [{
+				messageId: 'msg-tab',
+				body: JSON.stringify({
+					schemaVersion: 1,
+					jobId: jobId.toString(),
+					target: 'product_specifications',
+					targetId: productId.toString(),
+					workspaceId: workspaceId.toString(),
+					requestedBySub: 'user-sub',
+					format: 'excel',
+					queuedAt: '2026-03-08T10:00:00.000Z',
+				}),
+				attributes: { ApproximateReceiveCount: '1' },
+			}],
+		} as any);
+
+		expect(result).toEqual({ batchItemFailures: [] });
+		expect(exportExcelUtils.generateWorkbookTabExcelExport).toHaveBeenCalledWith(expect.objectContaining({ _id: productId }), 'product_specifications');
+		expect(uploadExportObjectByKey).toHaveBeenCalledWith(expect.objectContaining({
+			key: expect.stringContaining('Product_ABC123_v3_Specifications.xlsx'),
+		}));
 	});
 });

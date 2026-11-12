@@ -306,7 +306,7 @@ export const getExportJobByIdForUser = async ({
 	jobId: ObjectId;
 	workspaceId: ObjectId;
 	requestedBySub: string;
-	target?: ExportJobTarget;
+	target?: ExportJobTarget | ExportJobTarget[];
 }): Promise<ExportJobDocument | null> => {
 	const collection = await getCollection();
 
@@ -314,7 +314,7 @@ export const getExportJobByIdForUser = async ({
 		_id: ObjectId;
 		workspaceId: ObjectId;
 		requestedBySub: string;
-		target?: ExportJobTarget;
+		target?: ExportJobTarget | { $in: ExportJobTarget[] };
 	} = {
 		_id: jobId,
 		workspaceId,
@@ -322,7 +322,7 @@ export const getExportJobByIdForUser = async ({
 	};
 
 	if (target) {
-		query.target = target;
+		query.target = Array.isArray(target) ? { $in: target } : target;
 	}
 
 	return collection.findOne(query);
@@ -339,7 +339,7 @@ export const listExportJobsForUser = async ({
 }: {
 	requestedBySub: string;
 	workspaceId?: ObjectId;
-	target?: ExportJobTarget;
+	target?: ExportJobTarget | ExportJobTarget[];
 	targetId?: ObjectId;
 	statuses?: ExportJobStatus[];
 	page?: number;
@@ -363,7 +363,7 @@ export const listExportJobsForUser = async ({
 	const query: {
 		requestedBySub: string;
 		workspaceId?: ObjectId;
-		target?: ExportJobTarget;
+		target?: ExportJobTarget | { $in: ExportJobTarget[] };
 		targetId?: ObjectId;
 		status?: { $in: ExportJobStatus[] };
 	} = {
@@ -375,7 +375,7 @@ export const listExportJobsForUser = async ({
 	}
 
 	if (target) {
-		query.target = target;
+		query.target = Array.isArray(target) ? { $in: target } : target;
 	}
 
 	if (targetId) {
@@ -389,7 +389,7 @@ export const listExportJobsForUser = async ({
 	const activeJobsQuery: {
 		requestedBySub: string;
 		workspaceId?: ObjectId;
-		target?: ExportJobTarget;
+		target?: ExportJobTarget | { $in: ExportJobTarget[] };
 		targetId?: ObjectId;
 		status: { $in: ExportJobStatus[] };
 	} = {
@@ -402,7 +402,7 @@ export const listExportJobsForUser = async ({
 	}
 
 	if (target) {
-		activeJobsQuery.target = target;
+		activeJobsQuery.target = Array.isArray(target) ? { $in: target } : target;
 	}
 
 	if (targetId) {

@@ -5,9 +5,9 @@ import type { Product } from '../../models/product';
 import type { ExportQueueMessage } from '../../types/export-job';
 import { EXPORT_LIMITS, type PersistedReportExportRequest } from '../../types/reports';
 import { getDb } from '../../utils/db';
-import { generateProductExcelExport } from '../../utils/exportExcel';
+import { generateProductExcelExport, generateWorkbookTabExcelExport, type WorkbookTabTarget } from '../../utils/exportExcel';
 import { getExportWorkspaceName } from '../../utils/exportFormatting';
-import { generateProductPDFExport } from '../../utils/exportPDF';
+import { generateProductPDFExport, generateWorkbookTabPDFExport } from '../../utils/exportPDF';
 import {
 	markExportJobCompleted,
 	markExportJobFailed,
@@ -15,6 +15,7 @@ import {
 	recordUsageForCompletedExportJob,
 } from '../../utils/exportJobs';
 import { logError, logInfo, logWarn } from '../../utils/logger';
+import { isProductExportTarget, type ProductExportTarget } from '../../utils/productExportJobs';
 import { emitMonitoringMetric } from '../../utils/metrics';
 import { generateReportsExcelExport } from '../../utils/reports/exportReportsExcel';
 import { generateReportsPDFExport } from '../../utils/reports/exportReportsPDF';
@@ -147,10 +148,16 @@ const parseQueueMessage = (record: SQSRecord): ProcessableExportQueueMessage => 
 	};
 };
 
-const buildExportFileName = (product: Product, format: 'pdf' | 'excel'): string => {
+const WORKBOOK_TAB_FILE_SUFFIX: Record<WorkbookTabTarget, string> = {
+	product_specifications: 'Specifications',
+	operational_parameters: 'OperationalParameters',
+};
+
+const buildExportFileName = (product: Product, format: 'pdf' | 'excel', target: ProductExportTarget = 'product'): string => {
 	const extension = format === 'pdf' ? 'pdf' : 'xlsx';
 	const safePlanNumber = (product.product_plan_number || 'product').replace(/[^a-zA-Z0-9._-]/g, '_');
-	return `Product_${safePlanNumber}_v${product.version}.${extension}`;
+	const suffix = target === 'product' ? '' : `_${WORKBOOK_TAB_FILE_SUFFIX[target]}`;
+	return `Product_${safePlanNumber}_v${product.version}${suffix}.${extension}`;
 };
 
 const buildReportExportFileName = (format: 'pdf' | 'excel', date: Date = new Date()): string => {
@@ -167,13 +174,16 @@ const buildExportContentType = (format: 'pdf' | 'excel'): string => {
 const generateProductArtifact = async ({
 	product,
 	format,
+	target,
 }: {
 	product: Product;
 	format: 'pdf' | 'excel';
+	target: ProductExportTarget;
 }): Promise<ExportArtifact> => {
-	const rawBuffer = format === 'pdf'
-		? await generateProductPDFExport(product, await getExportWorkspaceName(product.workspace_id))
-		: await generateProductExcelExport(product);
+	const workspaceName = format === 'pdf' ? await getExportWorkspaceName(product.workspace_id) : '';
+	const rawBuffer = target === 'product'
+		? await (format === 'pdf' ? generateProductPDFExport(product, workspaceName) : generateProductExcelExport(product))
+		: await (format === 'pdf' ? generateWorkbookTabPDFExport(product, target, workspaceName) : generateWorkbookTabExcelExport(product, target));
 
 	if (!rawBuffer) {
 		throw new Error('Failed to generate export file');
@@ -182,7 +192,7 @@ const generateProductArtifact = async ({
 	const buffer = Buffer.isBuffer(rawBuffer) ? rawBuffer : Buffer.from(rawBuffer);
 	return {
 		buffer,
-		fileName: buildExportFileName(product, format),
+		fileName: buildExportFileName(product, format, target),
 		contentType: buildExportContentType(format),
 	};
 };
@@ -261,7 +271,7 @@ export const lambdaHandler = withTelemetry(async (event: SQSEvent): Promise<SQSB
 			let artifact: ExportArtifact;
 			let s3Key: string;
 
-			if (processingJob.target === 'product') {
+			if (isProductExportTarget(processingJob.target)) {
 				const targetId = processingJob.targetId ?? (parsedMessage.targetId ? new ObjectId(parsedMessage.targetId) : undefined);
 				if (!targetId) {
 					throw new NonRetryableExportJobError('Product export job is missing target product id');
@@ -280,6 +290,7 @@ export const lambdaHandler = withTelemetry(async (event: SQSEvent): Promise<SQSB
 				artifact = await generateProductArtifact({
 					product,
 					format: parsedMessage.format,
+					target: processingJob.target,
 				});
 				s3Key = `${EXPORTS_PREFIX}/products/${processingJob.workspaceId.toString()}/${jobId.toString()}/${artifact.fileName}`;
 			} else if (processingJob.target === 'report') {
