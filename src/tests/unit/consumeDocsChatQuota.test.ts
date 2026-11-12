@@ -29,7 +29,7 @@ describe('consumeDocsChatQuota', () => {
 			counts.set(filter._id, count);
 			return { _id: filter._id, count };
 		});
-		dbModule.getDb.mockResolvedValue({ collection: jest.fn(() => ({ findOneAndUpdate })) });
+		dbModule.getDb.mockResolvedValue({ collection: jest.fn(() => ({ findOneAndUpdate, createIndex: jest.fn(async () => 'expiresAt_1') })) });
 		tenantContext.requireTenantContext.mockResolvedValue({
 			ok: true,
 			context: { userId: new ObjectId(), workspaceId: new ObjectId() },
