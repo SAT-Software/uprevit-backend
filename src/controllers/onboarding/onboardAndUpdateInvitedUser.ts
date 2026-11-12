@@ -5,8 +5,7 @@ import { requireTenantContext } from "../../utils/tenantContext";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
 import { validateMissingFields } from "../../utils/validationUtils";
-import { updateAuditLog } from "../../utils/auditLog";
-import { AuditLogAction } from "../../models/auditLog";
+import { recordAuditEvent } from '../../utils/auditLogV2';
 import type { User } from '../../models/user';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 import { assertSeatActivationAllowed, verifySeatLimitAfterActivation } from '../../utils/billing/enforcement';
@@ -26,7 +25,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
 
-		const { context } = tenantResult;
+		const { context, auth } = tenantResult;
 
 		if (!event.body) return ResponseWrapper.badRequest("Request body is required.");
 
@@ -104,13 +103,26 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 			cognitoSyncError = error;
 		}
 
-		await updateAuditLog({
-			entity: 'user',
-			entityId: context.userId.toString(),
-			action: AuditLogAction.UPDATE,
-			actionAt: new Date(),
-			active: true,
-			actionBy: input.name,
+		await recordAuditEvent({
+			workspaceId: context.workspaceId.toString(),
+			scope: { type: 'workspace', id: context.workspaceId.toString() },
+			entity: { type: 'user', id: context.userId.toString() },
+			action: 'update',
+			eventKey: 'member.profile.completed',
+			visibility: 'admin',
+			where: { module: 'users' },
+			auth: auth.payload,
+			before: { ...existingUser },
+			after: {
+				...existingUser,
+				name: input.name,
+				profileAvatar: normalizedAvatar,
+				designation: input.designation || '',
+				location: input.location || '',
+				status: 'active',
+			},
+			changedPaths: ['name', 'profileAvatar', 'designation', 'location', 'status'],
+			meta: { memberName: input.name, memberEmail: existingUser.email },
 		});
 
 		await recordCommittedUploadIfNew({

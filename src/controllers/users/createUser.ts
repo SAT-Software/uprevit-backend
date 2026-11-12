@@ -1,8 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { User } from '../../models/user';
-import { AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
@@ -21,7 +20,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
 
-		const { context } = tenantResult;
+		const { context, auth } = tenantResult;
 
 		if (!isWorkspaceAdmin(context.cognitoGroups)) {
 			return ResponseWrapper.forbidden('Insufficient permissions');
@@ -57,13 +56,16 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			status: 'invited',
 		});
 
-		await updateAuditLog({
-			entity: 'user',
-			entityId: user.insertedId.toString(),
-			action: AuditLogAction.CREATE,
-			actionBy: context.userId.toString(),
-			actionAt: new Date(),
-			active: true,
+		await recordAuditEvent({
+			workspaceId: context.workspaceId.toString(),
+			scope: { type: 'workspace', id: context.workspaceId.toString() },
+			entity: { type: 'user', id: user.insertedId.toString() },
+			action: 'create',
+			eventKey: 'member.invited',
+			visibility: 'admin',
+			where: { module: 'users' },
+			auth: auth.payload,
+			meta: { memberName: input.name, memberEmail: input.email },
 		});
 
 		await recordCommittedUploadIfNew({

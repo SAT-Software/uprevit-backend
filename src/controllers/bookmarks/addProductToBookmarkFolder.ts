@@ -9,8 +9,6 @@ import type { Product } from "../../models/product";
 import { ObjectId } from "mongodb";
 import { productLineageFilter } from "../../utils/productLifecycle";
 import { moveBookmarksToVersion } from "../../utils/bookmarks";
-import { updateAuditLog } from "../../utils/auditLog";
-import { AuditLogAction } from "../../models/auditLog";
 import { withTelemetry } from '../../utils/telemetry';
 
 /**
@@ -23,7 +21,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
 
-		const { context, auth } = tenantResult;
+		const { context } = tenantResult;
 
 		const folderIdParam = event.pathParameters?.folderId;
 		if (!folderIdParam) return ResponseWrapper.badRequest("Folder ID is missing from path parameters.");
@@ -78,15 +76,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		const current = await products.findOne({ ...productLineageFilter(product), is_latest: true }, { projection: { _id: 1 } });
 		if (current && !current._id.equals(productId)) await moveBookmarksToVersion(db, productId, current._id);
-
-		await updateAuditLog({
-			entity: "product_bookmark_folder",
-			entityId: folderId.toString(),
-			action: AuditLogAction.UPDATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		});
 
 		return ResponseWrapper.success({
 			message: "Product added to bookmark folder successfully.",

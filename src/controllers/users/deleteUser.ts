@@ -1,7 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
-import { AuditLog, AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 import { logError } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
@@ -52,16 +51,17 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			auth: auth.payload,
 		});
 
-		const auditRecord: AuditLog = {
-			entity: 'user',
-			entityId: event.pathParameters.id,
-			action: AuditLogAction.DELETE,
-			actionBy: context.userId.toString(),
-			actionAt: new Date(),
-			active: true,
-		};
-
-		await updateAuditLog(auditRecord);
+		await recordAuditEvent({
+			workspaceId: context.workspaceId.toString(),
+			scope: { type: 'workspace', id: context.workspaceId.toString() },
+			entity: { type: 'user', id: event.pathParameters.id },
+			action: 'delete',
+			eventKey: 'member.removed',
+			visibility: 'admin',
+			where: { module: 'users' },
+			auth: auth.payload,
+			meta: { memberName: deactivatedUser.name, memberEmail: deactivatedUser.email },
+		});
 
 		return ResponseWrapper.success({
 			message: 'User removed from workspace successfully',

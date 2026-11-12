@@ -6,8 +6,6 @@ import { validateAllObjectIds } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
 import { UserBookmarks } from "../../models/bookmarks";
 import { ObjectId } from "mongodb";
-import { updateAuditLog } from "../../utils/auditLog";
-import { AuditLogAction } from "../../models/auditLog";
 import { withTelemetry } from '../../utils/telemetry';
 
 /**
@@ -20,7 +18,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
 
-		const { context, auth } = tenantResult;
+		const { context } = tenantResult;
 
 		const folderId = event.pathParameters?.folderId;
 		if(!folderId) return ResponseWrapper.badRequest('Folder ID is missing from path parameters.');
@@ -47,15 +45,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		);
 
 		if (result.matchedCount === 0) return ResponseWrapper.notFound('Product bookmark folder not found.');
-
-		await updateAuditLog({
-			entity: 'product_bookmark_folder',
-			entityId: folderId,
-			action: AuditLogAction.DELETE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		});
 
 		return ResponseWrapper.success({
 			message: 'Product bookmark folder deleted successfully.',

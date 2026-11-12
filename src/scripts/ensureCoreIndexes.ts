@@ -21,6 +21,7 @@ const CORE_INDEXES: Record<string, CoreIndex[]> = {
 		{ workspace_id: 1, type: 1 },
 		{ key: { workspace_id: 1, key: 1 }, unique: true, partialFilterExpression: { type: 'file', key: { $type: 'string' } } },
 	],
+	auditLogV2: [{ workspaceId: 1, occurredAt: -1 }],
 };
 
 export const ensureCoreIndexes = async (db: Db, dryRun: boolean) => {

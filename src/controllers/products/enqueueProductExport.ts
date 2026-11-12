@@ -2,7 +2,6 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
 import {
 	EXPORT_JOB_COLLECTION,
-	EXPORT_JOB_FORMATS,
 	type ExportJobFormat,
 } from '../../models/exportJob';
 import type { Product } from '../../models/product';
@@ -21,6 +20,8 @@ import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
 import { canEditWorkspaceData, READ_ONLY_MESSAGE } from '../../utils/tenantContext';
 import { assertUsageActionAllowed } from '../../utils/billing/enforcement';
 import { withTelemetry } from '../../utils/telemetry';
+
+const PRODUCT_EXPORT_FORMATS: ExportJobFormat[] = ['pdf', 'excel'];
 
 /**
  * Queues a product export job from request body format.
@@ -51,8 +52,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		}
 
 		const body = parsedBody as { format?: unknown; target?: unknown };
-		if (typeof body.format !== 'string' || !EXPORT_JOB_FORMATS.includes(body.format as ExportJobFormat)) {
-			return ResponseWrapper.badRequest(`Request body must include 'format' and must be one of: ${EXPORT_JOB_FORMATS.join(', ')}`);
+		if (typeof body.format !== 'string' || !PRODUCT_EXPORT_FORMATS.includes(body.format as ExportJobFormat)) {
+			return ResponseWrapper.badRequest(`Request body must include 'format' and must be one of: ${PRODUCT_EXPORT_FORMATS.join(', ')}`);
 		}
 
 		const target = body.target ?? 'product';

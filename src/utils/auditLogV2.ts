@@ -24,7 +24,7 @@ type ResolvedActorProfile = {
 const actorProfileCache = new Map<string, ResolvedActorProfile | null>();
 
 type AuditWhere = {
-	module: 'products' | 'projects' | 'departments' | 'source-files' | 'archive' | 'workflows';
+	module: 'products' | 'projects' | 'departments' | 'source-files' | 'archive' | 'workflows' | 'users' | 'workspace';
 	tab?: string;
 	parentId?: string;
 };
@@ -209,6 +209,7 @@ const ensureAuditLogV2Indexes = async () => {
 		collection.createIndex({ 'scope.type': 1, 'scope.id': 1, action: 1, occurredAt: -1 }),
 		collection.createIndex({ workspaceId: 1, action: 1, occurredAt: -1 }),
 		collection.createIndex({ workspaceId: 1, visibility: 1, occurredAt: -1 }),
+		collection.createIndex({ workspaceId: 1, occurredAt: -1 }),
 		collection.createIndex({ 'entity.type': 1, 'entity.id': 1, occurredAt: -1 }),
 		collection.createIndex({ 'legacy.source': 1, 'legacy.legacyId': 1 }, { unique: true, sparse: true }),
 	]);
