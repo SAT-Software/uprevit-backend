@@ -2,6 +2,10 @@ import { ObjectId } from 'mongodb';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
 
+process.env.AWS_REGION = 'us-east-1';
+process.env.UPLOADS_BUCKET = 'uploads-bucket';
+process.env.EXPORTS_BUCKET = 'exports-bucket';
+
 jest.mock('../../utils/db', () => ({
 	getDb: jest.fn(),
 }));
@@ -60,6 +64,9 @@ const buildEvent = (body: Record<string, unknown>): APIGatewayProxyEvent => ({
 } as APIGatewayProxyEvent);
 
 describe('createSourceFileAndFolder', () => {
+	let findOne: jest.Mock<(filter: Record<string, unknown>) => Promise<unknown>>;
+	let insertOne: jest.Mock<(doc: Record<string, unknown>) => Promise<unknown>>;
+
 	beforeEach(() => {
 		jest.clearAllMocks();
 
@@ -73,23 +80,67 @@ describe('createSourceFileAndFolder', () => {
 			limits: { enabled: true },
 		});
 
+		findOne = jest.fn(async () => null);
+		insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
 		dbModule.getDb.mockResolvedValue({
-			collection: jest.fn(() => ({
-				findOne: jest.fn(async () => null),
-				insertOne: jest.fn(async () => ({ insertedId: new ObjectId() })),
-			})),
+			collection: jest.fn(() => ({ findOne, insertOne })),
 		});
 	});
+
+	const validKey = () => `uploads/${workspaceId.toString()}/source-files/spec.pdf`;
 
 	it('requires sizeBytes for file uploads when metering is enabled', async () => {
 		const response = await lambdaHandler(buildEvent({
 			name: 'spec.pdf',
 			type: 'file',
-			key: 'uploads/ws/source-files/spec.pdf',
+			key: validKey(),
 		}));
 
 		expect(response.statusCode).toBe(400);
 		const body = JSON.parse(response.body);
 		expect(body.message).toContain('sizeBytes');
+	});
+
+	it.each([
+		['another workspace', { key: `uploads/${new ObjectId().toString()}/source-files/x.pdf` }],
+		['outside source-files', { key: `uploads/${workspaceId.toString()}/workspace/logo.png` }],
+		['url only', { url: 'https://example.com/x.pdf' }],
+	])('rejects a file key from %s', async (_label, keyFields) => {
+		const response = await lambdaHandler(buildEvent({ name: 'x.pdf', type: 'file', sizeBytes: 10, ...keyFields }));
+
+		expect(response.statusCode).toBe(400);
+		expect(insertOne).not.toHaveBeenCalled();
+	});
+
+	it('stores the key and never a client url', async () => {
+		const response = await lambdaHandler(buildEvent({
+			name: 'spec.pdf',
+			type: 'file',
+			key: validKey(),
+			url: 'https://example.com/pixel.png',
+			sizeBytes: 10,
+		}));
+
+		expect(response.statusCode).toBe(201);
+		const inserted = insertOne.mock.calls[0][0];
+		expect(inserted.key).toBe(validKey());
+		expect(inserted).not.toHaveProperty('url');
+	});
+
+	it('rejects a key that is already registered', async () => {
+		findOne.mockImplementation(async (filter) => ('key' in filter ? { _id: new ObjectId() } : null));
+
+		const response = await lambdaHandler(buildEvent({ name: 'spec.pdf', type: 'file', key: validKey(), sizeBytes: 10 }));
+
+		expect(response.statusCode).toBe(409);
+		expect(insertOne).not.toHaveBeenCalled();
+	});
+
+	it('returns a conflict when a concurrent request registered the key first', async () => {
+		insertOne.mockRejectedValue({ code: 11000 });
+
+		const response = await lambdaHandler(buildEvent({ name: 'spec.pdf', type: 'file', key: validKey(), sizeBytes: 10 }));
+
+		expect(response.statusCode).toBe(409);
 	});
 });

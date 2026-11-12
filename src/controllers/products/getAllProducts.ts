@@ -10,6 +10,9 @@ import { addProductReleaseInfo, buildProductStatusMatch, productSummaryProjectio
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 import { productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
 import { withTelemetry } from '../../utils/telemetry';
+import { escapeRegex } from '../../utils/regex';
+
+const MAX_FILTER_LENGTH = 200;
 
 const ALLOWED_SORT_FIELDS = [
 	'product_name',
@@ -128,12 +131,15 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const { isArchive: isArchiveOnlyStatus, match: statusMatch } = buildProductStatusMatch(statusFilter);
 		Object.assign(filter, statusMatch);
 
-		// General filter parameter for text search
 		if (filterParam) {
+			if (filterParam.length > MAX_FILTER_LENGTH) {
+				return ResponseWrapper.badRequest(`filter must not exceed ${MAX_FILTER_LENGTH} characters.`);
+			}
+			const pattern = escapeRegex(filterParam);
 			filter.$or = [
-				{ product_name: { $regex: filterParam, $options: 'i' } },
-				{ product_plan_number: { $regex: filterParam, $options: 'i' } },
-				{ product_description: { $regex: filterParam, $options: 'i' } },
+				{ product_name: { $regex: pattern, $options: 'i' } },
+				{ product_plan_number: { $regex: pattern, $options: 'i' } },
+				{ product_description: { $regex: pattern, $options: 'i' } },
 			];
 		}
 

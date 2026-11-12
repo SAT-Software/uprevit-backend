@@ -59,6 +59,8 @@ type CreatePresignedUploadOptions = {
 export const workflowAttachmentKeyPrefix = (workspaceId: string, workflowId: string, userId: string) =>
 	`uploads/${workspaceId}/workflow/${workflowId}/${userId}/`;
 
+export const sourceFileKeyPrefix = (workspaceId: string | ObjectId) => `uploads/${workspaceId.toString()}/source-files/`;
+
 const sanitizeFilename = (filename: string): string => filename.replace(/[^a-zA-Z0-9._-]/g, "_");
 
 const buildUniqueFilename = (filename: string): string => `${crypto.randomUUID()}-${sanitizeFilename(filename)}`;
@@ -79,7 +81,7 @@ export const buildUploadKey = ({
 	}
 
 	if (uploadScope === "source-files" && workspaceId) {
-		return `uploads/${workspaceId}/source-files/${uniqueFilename}`;
+		return `${sourceFileKeyPrefix(workspaceId)}${uniqueFilename}`;
 	}
 
 	if (uploadScope === "product-assets" && workspaceId && productId) {

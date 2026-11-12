@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { ResponseWrapper } from "../../utils/responseWrapper";
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { getDb } from "../../utils/db";
 import { validateAllObjectIds } from "../../utils/validationUtils";
@@ -9,7 +9,7 @@ import { SourceFile } from "../../models/sourceFiles";
 import { recordAuditEvent } from "../../utils/auditLogV2";
 import type { AuditLogV2Change } from "../../models/auditLogV2";
 import { resolveWorkspaceProductName } from "../../utils/sourceFilesAudit";
-import { deleteObjectByKey } from "../../utils/s3-storage";
+import { deleteObjectByKey, isTenantUploadKeyAllowed } from "../../utils/s3-storage";
 import { withTelemetry } from '../../utils/telemetry';
 
 /**
@@ -76,9 +76,16 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const filesToDelete = await sourceFilesCollection
 			.find({ _id: { $in: idsToDelete }, workspace_id: context.workspaceId, type: 'file' })
 			.toArray();
-		const keysToDelete = filesToDelete
-			.map((item) => (typeof item.key === 'string' ? item.key.trim() : ''))
-			.filter((key) => key.length > 0);
+		const keysToDelete: string[] = [];
+		for (const item of filesToDelete) {
+			const key = typeof item.key === 'string' ? item.key.trim() : '';
+			if (!key) continue;
+			if (isTenantUploadKeyAllowed(key, { workspaceId: context.workspaceId })) {
+				keysToDelete.push(key);
+			} else {
+				logWarn('Skipped deleting source file object outside the workspace', { sourceFileId: item._id.toString() });
+			}
+		}
 
 		for (const key of [...new Set(keysToDelete)]) {
 			try {
