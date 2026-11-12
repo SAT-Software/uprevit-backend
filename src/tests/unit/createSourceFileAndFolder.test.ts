@@ -135,4 +135,12 @@ describe('createSourceFileAndFolder', () => {
 		expect(response.statusCode).toBe(409);
 		expect(insertOne).not.toHaveBeenCalled();
 	});
+
+	it('returns a conflict when a concurrent request registered the key first', async () => {
+		insertOne.mockRejectedValue({ code: 11000 });
+
+		const response = await lambdaHandler(buildEvent({ name: 'spec.pdf', type: 'file', key: validKey(), sizeBytes: 10 }));
+
+		expect(response.statusCode).toBe(409);
+	});
 });

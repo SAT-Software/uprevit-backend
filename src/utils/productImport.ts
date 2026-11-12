@@ -39,7 +39,7 @@ const IMPORT_LOCKS_COLLECTION = 'product_import_locks';
 const IMPORT_LOCK_MS = 5 * 60 * 1000;
 
 /**
- * Lets one import request per workspace run at a time, so concurrent requests can't both create the same plan number.
+ * Lets one import or product create per workspace run at a time, so concurrent requests can't both create the same plan number.
  * A lock left by a crashed request expires on its own.
  * The `expires_at` condition is what makes a held lock fail with a duplicate key; a filter on `_id` alone would take it over.
  * IMPORT_LOCK_MS must stay longer than the ImportProductsFunction timeout in template.yaml.

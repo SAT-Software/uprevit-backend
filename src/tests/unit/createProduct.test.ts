@@ -52,6 +52,7 @@ const productInput = (planNumber: unknown) => ({
 describe('createProduct plan number check', () => {
 	let findOne: jest.Mock<(filter: Record<string, any>) => Promise<unknown>>;
 	let insertOne: jest.Mock<() => Promise<unknown>>;
+	let updateOne: jest.Mock<() => Promise<unknown>>;
 
 	beforeEach(() => {
 		jest.clearAllMocks();
@@ -62,7 +63,10 @@ describe('createProduct plan number check', () => {
 		});
 		findOne = jest.fn(async () => null);
 		insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
-		dbModule.getDb.mockResolvedValue({ collection: jest.fn(() => ({ findOne, insertOne })) });
+		updateOne = jest.fn(async () => ({ acknowledged: true }));
+		dbModule.getDb.mockResolvedValue({
+			collection: jest.fn(() => ({ findOne, insertOne, updateOne, deleteOne: jest.fn(async () => ({ deletedCount: 1 })) })),
+		});
 	});
 
 	it('checks duplicates in the caller workspace, case-insensitively', async () => {
@@ -90,5 +94,15 @@ describe('createProduct plan number check', () => {
 
 		expect(response.statusCode).toBe(400);
 		expect(findOne).not.toHaveBeenCalled();
+	});
+
+	it('rejects a create while another create or import holds the workspace lock', async () => {
+		updateOne.mockRejectedValue({ code: 11000 });
+
+		const response = await lambdaHandler(buildEvent(productInput('ABC-1')));
+
+		expect(response.statusCode).toBe(409);
+		expect(findOne).not.toHaveBeenCalled();
+		expect(insertOne).not.toHaveBeenCalled();
 	});
 });

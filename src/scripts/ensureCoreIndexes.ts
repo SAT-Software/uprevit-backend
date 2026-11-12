@@ -1,5 +1,4 @@
-/* eslint-disable require-jsdoc */
-import { Db, MongoClient, ServerApiVersion } from 'mongodb';
+import { Db, IndexDescription, MongoClient, ServerApiVersion } from 'mongodb';
 
 /**
  * Creates the indexes behind tenant resolution, list pages and dashboard counts.
@@ -8,12 +7,20 @@ import { Db, MongoClient, ServerApiVersion } from 'mongodb';
  * Usage: MONGODB_URI=... DB_NAME=... npm run ensure:core-indexes -- [--dry-run]
  */
 
-const CORE_INDEXES: Record<string, Record<string, 1 | -1>[]> = {
+type CoreIndex = Record<string, 1 | -1> | IndexDescription;
+
+const toIndexDescription = (index: CoreIndex): IndexDescription =>
+	typeof index.key === 'object' ? index as IndexDescription : { key: index as Record<string, 1 | -1> };
+
+const CORE_INDEXES: Record<string, CoreIndex[]> = {
 	users: [{ cognitoSub: 1 }, { workspaceId: 1 }],
 	products: [{ workspace_id: 1, is_latest: 1 }, { product_lineage_id: 1, version: -1 }, { project_id: 1 }],
 	departments: [{ workspace_id: 1, isArchived: 1 }],
 	projects: [{ workspace_id: 1, isArchived: 1 }],
-	sourceFiles: [{ workspace_id: 1, type: 1 }],
+	sourceFiles: [
+		{ workspace_id: 1, type: 1 },
+		{ key: { workspace_id: 1, key: 1 }, unique: true, partialFilterExpression: { type: 'file', key: { $type: 'string' } } },
+	],
 };
 
 export const ensureCoreIndexes = async (db: Db, dryRun: boolean) => {
@@ -22,10 +29,10 @@ export const ensureCoreIndexes = async (db: Db, dryRun: boolean) => {
 		const collection = db.collection(collectionName);
 		const indexes = await collection.indexes().catch((error) => (error?.code === 26 ? [] : Promise.reject(error)));
 		const existing = new Set(indexes.map((index) => JSON.stringify(index.key)));
-		const missing = keys.filter((key) => !existing.has(JSON.stringify(key)));
-		for (const key of missing) console.log(`${dryRun ? 'Would create' : 'Creating'} ${collectionName} ${JSON.stringify(key)}`);
+		const missing = keys.map(toIndexDescription).filter(({ key }) => !existing.has(JSON.stringify(key)));
+		for (const { key } of missing) console.log(`${dryRun ? 'Would create' : 'Creating'} ${collectionName} ${JSON.stringify(key)}`);
 		if (!dryRun && missing.length > 0) {
-			await collection.createIndexes(missing.map((key) => ({ key })));
+			await collection.createIndexes(missing);
 		}
 		created += missing.length;
 	}

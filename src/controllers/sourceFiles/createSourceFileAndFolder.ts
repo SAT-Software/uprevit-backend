@@ -128,7 +128,14 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			}),
 		};
 
-		await sourceFilesCollection.insertOne(newSourceFile);
+		try {
+			await sourceFilesCollection.insertOne(newSourceFile);
+		} catch (error) {
+			if ((error as { code?: number }).code === 11000) {
+				return ResponseWrapper.conflict('This upload is already registered as a source file.');
+			}
+			throw error;
+		}
 
 		if (newSourceFile.type === 'file' && sizeBytes && newSourceFile.key) {
 			await recordCommittedUploadBytes({

@@ -12,6 +12,7 @@ import { findActiveWorkspaceMember } from '../../utils/productAccess';
 import { computeCompleteCount } from '../../utils/productLifecycle';
 import { withTelemetry } from '../../utils/telemetry';
 import { escapeRegex } from '../../utils/regex';
+import { acquireImportLock, releaseImportLock } from '../../utils/productImport';
 
 /**
  * Create a product
@@ -65,116 +66,124 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const departmentObjectId = new ObjectId(input.department_id);
 		const workspaceObjectId = context.workspaceId;
 
-		const existingProduct = await db.collection<Product>('products').findOne(
-			{ workspace_id: workspaceObjectId, product_plan_number: { $regex: `^${escapeRegex(planNumber)}$`, $options: 'i' } },
-			{ projection: { _id: 1 } },
-		);
-
-		if (existingProduct) {
-			return ResponseWrapper.conflict('Product plan number already exists');
+		if (!(await acquireImportLock(db, workspaceObjectId))) {
+			return ResponseWrapper.conflict('Another product is being created in this workspace. Try again in a moment.');
 		}
 
-		let ownerUserId = context.userId;
-		if (input.owner_user_id !== undefined && input.owner_user_id !== context.userId.toString()) {
-			const owner = await findActiveWorkspaceMember(db, workspaceObjectId, input.owner_user_id, EDITOR_USER_TYPES);
-			if (!owner?._id) return ResponseWrapper.badRequest('Product Owner must be an active Admin or User in this workspace');
-			ownerUserId = owner._id;
-		}
+		try {
+			const existingProduct = await db.collection<Product>('products').findOne(
+				{ workspace_id: workspaceObjectId, product_plan_number: { $regex: `^${escapeRegex(planNumber)}$`, $options: 'i' } },
+				{ projection: { _id: 1 } },
+			);
 
-		const productObjectId = new ObjectId();
-		const productData = {
-			_id: productObjectId,
-			product_lineage_id: productObjectId,
-			is_archived: false,
-			owner_user_id: ownerUserId,
-			contributor_user_ids: [],
-			project_id: projectObjectId,
-			workspace_id: workspaceObjectId,
-			department_id: departmentObjectId,
-			product_plan_number: planNumber,
-			product_name: input.product_name,
-			product_description: input.product_description,
-			version: input.version,
-			is_latest: true,
-			parent_id: null,
-			target_date: input.target_date || null,
-			actual_completion_date: input.actual_completion_date || null,
-			status: 'draft' as const,
-			content_revision: 0,
-			product_information: input.product_information || {
-				data: {
-					_id: new ObjectId(),
-					market_geography: '',
-					country_of_origin: '',
-					oem_contract_manufacturer: '',
-					commercial_clinical: '',
-					manufacturing_location: '',
-					class_of_device: '',
-					basic_udi_di: '',
-					custom_fields: [],
-				},
-				tab_completed: false,
-			},
-			compliance_information: input.compliance_information || {
-				data: [],
-				tab_completed: false,
-			},
-			languages_information: input.languages_information || {
-				data: [],
-			},
-			label_components: input.label_components || {
-				data: [],
-				tab_completed: false,
-			},
-			symbols_graphics: input.symbols_graphics || { data: [], tab_completed: false },
-			product_data: input.product_data || {
-				data: {
-					_id: new ObjectId(),
-					workbook_data: {},
-				},
-				tab_completed: false,
-			},
-			operational_parameters: input.operational_parameters || {
-				data: {
-					_id: new ObjectId(),
-					workbook_data: {},
-				},
-				tab_completed: false,
-			},
-			label_tags: input.label_tags || {
-				data: [],
-				tab_completed: false,
-			},
-		};
+			if (existingProduct) {
+				return ResponseWrapper.conflict('Product plan number already exists');
+			}
 
-		const product = await db.collection<Product>('products').insertOne({ ...productData, complete_count: computeCompleteCount(productData) });
+			let ownerUserId = context.userId;
+			if (input.owner_user_id !== undefined && input.owner_user_id !== context.userId.toString()) {
+				const owner = await findActiveWorkspaceMember(db, workspaceObjectId, input.owner_user_id, EDITOR_USER_TYPES);
+				if (!owner?._id) return ResponseWrapper.badRequest('Product Owner must be an active Admin or User in this workspace');
+				ownerUserId = owner._id;
+			}
 
-		await recordAuditEvent({
-			workspaceId: workspaceObjectId.toString(),
-			scope: { type: 'product', id: product.insertedId.toString() },
-			entity: { type: 'product', id: product.insertedId.toString() },
-			action: 'create',
-			eventKey: 'product.created',
-			visibility: 'all',
-			where: { module: 'products' },
-			auth: auth.payload,
-			after: {
+			const productObjectId = new ObjectId();
+			const productData = {
+				_id: productObjectId,
+				product_lineage_id: productObjectId,
+				is_archived: false,
+				owner_user_id: ownerUserId,
+				contributor_user_ids: [],
+				project_id: projectObjectId,
+				workspace_id: workspaceObjectId,
+				department_id: departmentObjectId,
 				product_plan_number: planNumber,
 				product_name: input.product_name,
 				product_description: input.product_description,
-				status: productData.status,
 				version: input.version,
-			},
-			changedPaths: ['product_plan_number', 'product_name', 'product_description', 'status', 'version'],
-			meta: {
-				productName: input.product_name,
-			},
-		});
+				is_latest: true,
+				parent_id: null,
+				target_date: input.target_date || null,
+				actual_completion_date: input.actual_completion_date || null,
+				status: 'draft' as const,
+				content_revision: 0,
+				product_information: input.product_information || {
+					data: {
+						_id: new ObjectId(),
+						market_geography: '',
+						country_of_origin: '',
+						oem_contract_manufacturer: '',
+						commercial_clinical: '',
+						manufacturing_location: '',
+						class_of_device: '',
+						basic_udi_di: '',
+						custom_fields: [],
+					},
+					tab_completed: false,
+				},
+				compliance_information: input.compliance_information || {
+					data: [],
+					tab_completed: false,
+				},
+				languages_information: input.languages_information || {
+					data: [],
+				},
+				label_components: input.label_components || {
+					data: [],
+					tab_completed: false,
+				},
+				symbols_graphics: input.symbols_graphics || { data: [], tab_completed: false },
+				product_data: input.product_data || {
+					data: {
+						_id: new ObjectId(),
+						workbook_data: {},
+					},
+					tab_completed: false,
+				},
+				operational_parameters: input.operational_parameters || {
+					data: {
+						_id: new ObjectId(),
+						workbook_data: {},
+					},
+					tab_completed: false,
+				},
+				label_tags: input.label_tags || {
+					data: [],
+					tab_completed: false,
+				},
+			};
 
-		return ResponseWrapper.created({
-			message: 'Product created successfully',
-			product: product,
-		});
+			const product = await db.collection<Product>('products').insertOne({ ...productData, complete_count: computeCompleteCount(productData) });
+
+			await recordAuditEvent({
+				workspaceId: workspaceObjectId.toString(),
+				scope: { type: 'product', id: product.insertedId.toString() },
+				entity: { type: 'product', id: product.insertedId.toString() },
+				action: 'create',
+				eventKey: 'product.created',
+				visibility: 'all',
+				where: { module: 'products' },
+				auth: auth.payload,
+				after: {
+					product_plan_number: planNumber,
+					product_name: input.product_name,
+					product_description: input.product_description,
+					status: productData.status,
+					version: input.version,
+				},
+				changedPaths: ['product_plan_number', 'product_name', 'product_description', 'status', 'version'],
+				meta: {
+					productName: input.product_name,
+				},
+			});
+
+			return ResponseWrapper.created({
+				message: 'Product created successfully',
+				product: product,
+			});
+		} finally {
+			await releaseImportLock(db, workspaceObjectId);
+		}
 	} catch (err) {
 		logError('Create product handler failed', err, { userId });
 		return ResponseWrapper.internalServerError('Failed to create product');
