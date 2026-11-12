@@ -1,9 +1,0 @@
-node_modules
-.aws-sam
-.eslintrc.json
-template.yaml
-jest.config.ts
-.prettierrc.js
-tsconfig.json
-.npmignore
-.gitignore

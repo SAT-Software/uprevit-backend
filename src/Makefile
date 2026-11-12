@@ -1,5 +1,5 @@
 ESBUILD := node_modules/.bin/esbuild
-ESBUILD_FLAGS := --bundle --platform=node --format=cjs --target=es2020 --minify --sourcemap --loader:.ttf=binary --outbase=.
+ESBUILD_FLAGS := --bundle --platform=node --format=cjs --target=node24 --minify --sourcemap --loader:.ttf=binary --outbase=.
 
 build-%:
 	$(if $(ENTRY),,$(error No ENTRY set for $* in src/Makefile))
