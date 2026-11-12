@@ -327,9 +327,10 @@ export const lambdaHandler = withTelemetry(async (event: SQSEvent): Promise<SQSB
 			}
 
 			if (parsedMessage?.jobId && shouldStopRetry && ObjectId.isValid(parsedMessage.jobId)) {
-				await markExportJobFailed({
-					jobId: new ObjectId(parsedMessage.jobId),
-					errorMessage: toFailureMessage(error),
+				const failedJobId = new ObjectId(parsedMessage.jobId);
+				await markExportJobFailed({ jobId: failedJobId, errorMessage: toFailureMessage(error) });
+				await recordUsageForCompletedExportJob(failedJobId).catch((billingError) => {
+					logError('Failed to bill completed export job', billingError, { jobId: parsedMessage?.jobId });
 				});
 			}
 

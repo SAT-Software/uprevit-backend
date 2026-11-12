@@ -93,6 +93,14 @@ describe('markExportJobCompleted', () => {
 		expect(usageRecording.recordCompletedExport).not.toHaveBeenCalled();
 	});
 
+	it('does not bill a job that is not completed', async () => {
+		findOne.mockResolvedValue(null);
+
+		await recordUsageForCompletedExportJob(jobId);
+
+		expect(usageRecording.recordCompletedExport).not.toHaveBeenCalled();
+	});
+
 	it('bills a completed job when a retry finds it already completed', async () => {
 		findOne.mockResolvedValue({ _id: jobId, workspaceId, completedAt: new Date() });
 

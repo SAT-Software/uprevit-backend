@@ -202,4 +202,30 @@ describe('processExportJob', () => {
 			contentType: 'application/pdf',
 		});
 	});
+
+	it('bills an already completed job instead of reprocessing it', async () => {
+		const jobId = new ObjectId();
+		markExportJobProcessing.mockResolvedValue(null);
+
+		const result = await lambdaHandler({
+			Records: [{
+				messageId: 'msg-3',
+				body: JSON.stringify({
+					schemaVersion: 1,
+					jobId: jobId.toString(),
+					target: 'product',
+					targetId: new ObjectId().toString(),
+					workspaceId: new ObjectId().toString(),
+					requestedBySub: 'user-sub',
+					format: 'pdf',
+					queuedAt: '2026-03-08T10:00:00.000Z',
+				}),
+				attributes: { ApproximateReceiveCount: '2' },
+			}],
+		} as any);
+
+		expect(result).toEqual({ batchItemFailures: [] });
+		expect(exportJobs.recordUsageForCompletedExportJob).toHaveBeenCalledWith(jobId);
+		expect(generateProductPDFExport).not.toHaveBeenCalled();
+	});
 });
