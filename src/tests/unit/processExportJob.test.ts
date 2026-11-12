@@ -123,6 +123,7 @@ describe('processExportJob', () => {
 		});
 		expect(markExportJobCompleted).toHaveBeenCalledWith({
 			jobId,
+			workspaceId,
 			s3Key: expect.stringContaining(`/products/${workspaceId.toString()}/${jobId.toString()}/Product_ABC_123_v2.pdf`),
 			fileName: 'Product_ABC_123_v2.pdf',
 			contentType: 'application/pdf',
@@ -194,6 +195,7 @@ describe('processExportJob', () => {
 		});
 		expect(markExportJobCompleted).toHaveBeenCalledWith({
 			jobId,
+			workspaceId,
 			s3Key: expect.stringContaining(`/reports/${workspaceId.toString()}/${jobId.toString()}/Products_Report_`),
 			fileName: expect.stringMatching(/^Products_Report_\d{4}-\d{2}-\d{2}\.pdf$/),
 			contentType: 'application/pdf',

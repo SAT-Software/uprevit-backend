@@ -12,6 +12,7 @@ import type { ChargebeeSubscription } from '../../utils/billing/chargebeeClient'
 import {
 	applyChargebeeSubscriptionMirror,
 	claimChargebeeWebhook,
+	completeChargebeeWebhookClaim,
 	findBillingAccountByChargebeeCustomerId,
 	findBillingAccountByChargebeeSubscriptionId,
 	releaseChargebeeWebhookClaim,
@@ -112,6 +113,9 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (claim === 'duplicate') {
 			return ResponseWrapper.success({ message: 'Webhook already processed' });
 		}
+		if (claim === 'in_progress') {
+			return ResponseWrapper.conflict('Webhook is being processed; retry later');
+		}
 
 		const content = payload.content ?? {};
 		const subscription = subscriptionFromContent(content);
@@ -150,6 +154,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			}
 		}
 
+		await completeChargebeeWebhookClaim(eventId);
 		return ResponseWrapper.success({ message: 'Webhook processed' });
 	} catch (error) {
 		if (eventId) {

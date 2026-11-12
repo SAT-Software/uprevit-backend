@@ -1,5 +1,5 @@
-import { describe, expect, it } from '@jest/globals';
-import { isChargebeeDuplicateCustomerError } from '../../utils/billing/chargebeeClient';
+import { describe, expect, it, jest } from '@jest/globals';
+import { isChargebeeDuplicateCustomerError, retrieveChargebeeCustomer } from '../../utils/billing/chargebeeClient';
 
 describe('chargebeeClient', () => {
 	describe('isChargebeeDuplicateCustomerError', () => {
@@ -22,5 +22,26 @@ describe('chargebeeClient', () => {
 			expect(isChargebeeDuplicateCustomerError(new Error('Network timeout'))).toBe(false);
 			expect(isChargebeeDuplicateCustomerError('not-an-error')).toBe(false);
 		});
+	});
+
+	it('sends every request with a timeout signal', async () => {
+		process.env.CHARGEBEE_SITE = 'test-site';
+		process.env.CHARGEBEE_API_KEY = 'test-key';
+		const timeoutSpy = jest.spyOn(AbortSignal, 'timeout');
+		const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
+			new Response(JSON.stringify({ customer: { id: 'cus_1' } }), { status: 200 }),
+		);
+
+		try {
+			await retrieveChargebeeCustomer('cus_1');
+			const init = fetchSpy.mock.calls[0][1] as RequestInit;
+			expect(init.signal).toBeInstanceOf(AbortSignal);
+			expect(timeoutSpy).toHaveBeenCalledWith(10_000);
+		} finally {
+			fetchSpy.mockRestore();
+			timeoutSpy.mockRestore();
+			delete process.env.CHARGEBEE_SITE;
+			delete process.env.CHARGEBEE_API_KEY;
+		}
 	});
 });

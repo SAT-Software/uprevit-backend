@@ -43,23 +43,38 @@ const isDuplicateKeyError = (error: unknown): boolean =>
 	&& 'code' in error
 	&& (error as { code?: number }).code === 11000;
 
+const WEBHOOK_CLAIM_LEASE_MS = 5 * 60 * 1000;
+
 export const claimChargebeeWebhook = async (
 	eventId: string,
 	eventType: string,
-): Promise<'claimed' | 'duplicate'> => {
+	now: Date = new Date(),
+): Promise<'claimed' | 'duplicate' | 'in_progress'> => {
 	await ensureChargebeeWebhookIndexes();
-	const db = await getDb();
+	const collection = (await getDb()).collection(CHARGEBEE_WEBHOOK_EVENTS_COLLECTION);
 	try {
-		await db.collection(CHARGEBEE_WEBHOOK_EVENTS_COLLECTION).insertOne({
-			eventId,
-			eventType,
-			processedAt: new Date(),
-		});
+		await collection.insertOne({ eventId, eventType, status: 'processing', claimedAt: now });
 		return 'claimed';
 	} catch (error) {
-		if (isDuplicateKeyError(error)) return 'duplicate';
-		throw error;
+		if (!isDuplicateKeyError(error)) throw error;
 	}
+
+	const reclaimed = await collection.findOneAndUpdate(
+		{ eventId, status: 'processing', claimedAt: { $lt: new Date(now.getTime() - WEBHOOK_CLAIM_LEASE_MS) } },
+		{ $set: { claimedAt: now } },
+	);
+	if (reclaimed) return 'claimed';
+
+	const existing = await collection.findOne({ eventId }, { projection: { status: 1 } });
+	return existing?.status === 'processing' ? 'in_progress' : 'duplicate';
+};
+
+export const completeChargebeeWebhookClaim = async (eventId: string): Promise<void> => {
+	const db = await getDb();
+	await db.collection(CHARGEBEE_WEBHOOK_EVENTS_COLLECTION).updateOne(
+		{ eventId },
+		{ $set: { status: 'processed', processedAt: new Date() } },
+	);
 };
 
 export const releaseChargebeeWebhookClaim = async (eventId: string): Promise<void> => {

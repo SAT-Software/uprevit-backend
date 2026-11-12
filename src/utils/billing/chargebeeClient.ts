@@ -13,6 +13,8 @@ type ChargebeeEntityResponse<T> = {
 	[key: string]: T;
 };
 
+const CHARGEBEE_REQUEST_TIMEOUT_MS = 10_000;
+
 const getBaseUrl = (): string => {
 	const site = getChargebeeSite();
 	if (!site) throw new Error('Chargebee is not configured');
@@ -65,6 +67,7 @@ const chargebeeRequest = async <T>({
 			...(body ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
 		},
 		body: body ? encodeForm(body) : undefined,
+		signal: AbortSignal.timeout(CHARGEBEE_REQUEST_TIMEOUT_MS),
 	});
 
 	if (!response.ok) {

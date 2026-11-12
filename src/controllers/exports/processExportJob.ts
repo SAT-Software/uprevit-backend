@@ -303,6 +303,7 @@ export const lambdaHandler = withTelemetry(async (event: SQSEvent): Promise<SQSB
 
 			await markExportJobCompleted({
 				jobId,
+				workspaceId: processingJob.workspaceId,
 				s3Key,
 				fileName: artifact.fileName,
 				contentType: artifact.contentType,
