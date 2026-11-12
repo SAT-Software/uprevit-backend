@@ -13,6 +13,10 @@ jest.mock('../../utils/s3-storage', () => ({
 const dbModule = jest.requireMock('../../utils/db') as any;
 const s3Storage = jest.requireMock('../../utils/s3-storage') as any;
 
+const groupUsage = (events: { metric: string; quantity: number }[]) => Object.entries(
+	events.reduce<Record<string, number>>((totals, event) => ({ ...totals, [event.metric]: (totals[event.metric] ?? 0) + event.quantity }), {}),
+).map(([_id, total]) => ({ _id, total }));
+
 const defaultCollectionFallback = () => ({
 	countDocuments: jest.fn(async () => 0),
 	aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 0 }]) })),
@@ -208,7 +212,7 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'usageEvents') {
 					return {
-						find: jest.fn(() => ({ toArray: jest.fn(async () => [{ metric: 'completed_export', quantity: 999 }]) })),
+						aggregate: jest.fn(() => ({ toArray: jest.fn(async () => groupUsage([{ metric: 'completed_export', quantity: 999 }])) })),
 						createIndex: jest.fn(async () => undefined),
 					};
 				}
@@ -246,11 +250,11 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'usageEvents') {
 					return {
-						find: jest.fn(() => ({
-							toArray: jest.fn(async () => [
+						aggregate: jest.fn(() => ({
+							toArray: jest.fn(async () => groupUsage([
 								{ metric: 'completed_export', quantity: 1 },
 								{ metric: 'upload_bytes', quantity: 0 },
-							]),
+							])),
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -296,10 +300,10 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'usageEvents') {
 					return {
-						find: jest.fn(() => ({
-							toArray: jest.fn(async () => [
+						aggregate: jest.fn(() => ({
+							toArray: jest.fn(async () => groupUsage([
 								{ metric: 'completed_export', quantity: 5 },
-							]),
+							])),
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -345,10 +349,10 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'usageEvents') {
 					return {
-						find: jest.fn(() => ({
-							toArray: jest.fn(async () => [
+						aggregate: jest.fn(() => ({
+							toArray: jest.fn(async () => groupUsage([
 								{ metric: 'completed_export', quantity: 3 },
-							]),
+							])),
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -400,10 +404,10 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'usageEvents') {
 					return {
-						find: jest.fn(() => ({
-							toArray: jest.fn(async () => [
+						aggregate: jest.fn(() => ({
+							toArray: jest.fn(async () => groupUsage([
 								{ metric: 'activated_seat_month', quantity: 2 },
-							]),
+							])),
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -619,8 +623,8 @@ describe('metric enforcement', () => {
 				}
 				if (name === 'usageEvents') {
 					return {
-						find: jest.fn(() => ({
-							toArray: jest.fn(async () => [{ metric: 'completed_export', quantity: 1 }]),
+						aggregate: jest.fn(() => ({
+							toArray: jest.fn(async () => groupUsage([{ metric: 'completed_export', quantity: 1 }])),
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -785,10 +789,10 @@ describe('upload commit helpers', () => {
 				if (name === 'usageEvents') {
 					return {
 						findOne: jest.fn(async () => null),
-						find: jest.fn(() => ({
-							toArray: jest.fn(async () => [
+						aggregate: jest.fn(() => ({
+							toArray: jest.fn(async () => groupUsage([
 								{ metric: 'upload_bytes', quantity: gbToBytes(0.001) - 1 },
-							]),
+							])),
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -883,11 +887,11 @@ describe('billing summaries', () => {
 			collection: jest.fn((name: string) => {
 				if (name === 'usageEvents') {
 					return {
-						find: jest.fn(() => ({
-							toArray: jest.fn(async () => [
+						aggregate: jest.fn(() => ({
+							toArray: jest.fn(async () => groupUsage([
 								{ metric: 'activated_seat_month', quantity: 99 },
 								{ metric: 'completed_export', quantity: 2 },
-							]),
+							])),
 						})),
 						createIndex: jest.fn(async () => undefined),
 					};
@@ -921,28 +925,18 @@ describe('billing summaries', () => {
 		const stalePeriodStart = new Date('2025-01-01T00:00:00.000Z');
 		const stalePeriodEnd = new Date('2025-12-31T23:59:59.999Z');
 
+		const usageAggregate = jest.fn((_pipeline: unknown[]) => ({
+			toArray: jest.fn(async () => [
+				{ _id: 'completed_export', total: 5 },
+				{ _id: 'upload_bytes', total: 2048 },
+				{ _id: 'ignored_metric', total: 999 },
+			]),
+		}));
 		dbModule.getDb.mockResolvedValue({
 			collection: jest.fn((name: string) => {
 				if (name === 'usageEvents') {
 					return {
-						find: jest.fn(() => ({
-							toArray: jest.fn(async () => [
-								{
-									metric: 'completed_export',
-									quantity: 5,
-									billingPeriodStart: stalePeriodStart,
-									billingPeriodEnd: stalePeriodEnd,
-									occurredAt: new Date('2026-06-15T00:00:00.000Z'),
-								},
-								{
-									metric: 'upload_bytes',
-									quantity: 2048,
-									billingPeriodStart: stalePeriodStart,
-									billingPeriodEnd: stalePeriodEnd,
-									occurredAt: new Date('2026-06-16T00:00:00.000Z'),
-								},
-							]),
-						})),
+						aggregate: usageAggregate,
 						createIndex: jest.fn(async () => undefined),
 					};
 				}
@@ -962,5 +956,17 @@ describe('billing summaries', () => {
 
 		expect(totals.exports).toBe(5);
 		expect(totals.uploadBytes).toBe(2048);
+		expect(usageAggregate).toHaveBeenCalledWith([
+			{
+				$match: {
+					workspaceId,
+					$or: [
+						{ billingPeriodStart: periodStart, billingPeriodEnd: periodEnd },
+						{ occurredAt: { $gte: periodStart, $lte: periodEnd } },
+					],
+				},
+			},
+			{ $group: { _id: '$metric', total: { $sum: '$quantity' } } },
+		]);
 	});
 });

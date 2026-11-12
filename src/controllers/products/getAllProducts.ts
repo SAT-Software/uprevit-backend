@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
-import { ObjectId } from 'mongodb';
+import { Document, ObjectId } from 'mongodb';
 import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
@@ -227,25 +227,23 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		const sortObj: { [key: string]: 1 | -1 } = {};
 		sortObj[sort] = order === 'desc' ? -1 : 1;
-		pipeline.push({ $sort: sortObj });
+		pipeline.push({
+			$facet: {
+				rows: [{ $sort: sortObj }, { $skip: skip }, { $limit: limit }],
+				total: [{ $count: 'total' }],
+			},
+		});
 
-		// Add pagination
-		pipeline.push({ $skip: skip });
-		pipeline.push({ $limit: limit });
-
-		// Get total count for pagination
-		const countPipeline = pipeline.slice(0, -3).concat({ $count: 'total' });
-
-		const [products, countResult] = await Promise.all([
-			db.collection<Product>('products').aggregate(pipeline).toArray(),
-			db.collection<Product>('products').aggregate(countPipeline).toArray(),
-		]);
+		const [pageResult] = await db.collection<Product>('products')
+			.aggregate<{ rows: Document[]; total: { total: number }[] }>(pipeline)
+			.toArray();
+		const products = pageResult?.rows ?? [];
+		const totalCount = pageResult?.total?.[0]?.total ?? 0;
 
 		const productsWithTeam = await addProductReleaseInfo(db, context.workspaceId, await signProductTeamAvatars(products, {
 			workspaceId: context.workspaceId,
 			pendingOwnerId: context.cognitoSub,
 		}));
-		const totalCount = countResult.length > 0 ? countResult[0].total : 0;
 		const totalPages = Math.ceil(totalCount / limit);
 
 		return ResponseWrapper.success({

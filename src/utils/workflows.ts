@@ -130,14 +130,22 @@ export type TeamMember = Pick<User, 'name' | 'email' | 'profileAvatar'> & { _id:
  * @param {Product} product Latest version with `owner_user_id` and `contributor_user_ids`
  * @return {Promise<TeamMember[]>} Owner first, then contributors
  */
-export const getProductTeam = async (db: Db, workspaceId: ObjectId, product: Pick<Product, 'owner_user_id' | 'contributor_user_ids'>) => {
-	const ids = [product.owner_user_id, ...(product.contributor_user_ids ?? [])].filter((id): id is ObjectId => !!id);
-	if (ids.length === 0) return [];
+export const getProductTeams = async (
+	db: Db,
+	workspaceId: ObjectId,
+	products: Pick<Product, 'owner_user_id' | 'contributor_user_ids'>[],
+): Promise<TeamMember[][]> => {
+	const teamIds = products.map((product) => new Set(
+		[product.owner_user_id, ...(product.contributor_user_ids ?? [])].filter((id): id is ObjectId => !!id).map((id) => id.toString()),
+	));
+	const allIds = [...new Set(teamIds.flatMap((ids) => [...ids]))].map((id) => new ObjectId(id));
+	if (allIds.length === 0) return products.map(() => []);
 
 	const users = await db.collection<User>('users')
-		.find({ _id: { $in: ids }, workspaceId, status: 'active' }, { projection: { name: 1, email: 1, profileAvatar: 1 } })
+		.find({ _id: { $in: allIds }, workspaceId, status: 'active' }, { projection: { name: 1, email: 1, profileAvatar: 1 } })
 		.toArray();
-	return users
+	return products.map((product, index) => users
+		.filter((user) => teamIds[index].has(user._id!.toString()))
 		.map((user): TeamMember => ({
 			_id: user._id!,
 			name: user.name,
@@ -145,8 +153,11 @@ export const getProductTeam = async (db: Db, workspaceId: ObjectId, product: Pic
 			profileAvatar: user.profileAvatar,
 			relationship: product.owner_user_id?.equals(user._id!) ? 'product_owner' : 'product_contributor',
 		}))
-		.sort((a, b) => Number(b.relationship === 'product_owner') - Number(a.relationship === 'product_owner'));
+		.sort((a, b) => Number(b.relationship === 'product_owner') - Number(a.relationship === 'product_owner')));
 };
+
+export const getProductTeam = async (db: Db, workspaceId: ObjectId, product: Pick<Product, 'owner_user_id' | 'contributor_user_ids'>) =>
+	(await getProductTeams(db, workspaceId, [product]))[0];
 
 /**
  * Loads the current state of a workflow's Products: the included version, the lineage's latest version,
