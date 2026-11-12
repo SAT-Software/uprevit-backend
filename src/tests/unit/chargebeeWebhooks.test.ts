@@ -506,6 +506,12 @@ describe('claimChargebeeWebhook', () => {
 		);
 	});
 
+	it('returns in_progress when the claim row disappeared mid-retry', async () => {
+		mockCollection({ findOne: jest.fn<() => Promise<unknown>>().mockResolvedValue(null) });
+
+		await expect(claimChargebeeWebhook('evt_1', 'invoice_generated')).resolves.toBe('in_progress');
+	});
+
 	it('returns in_progress while a live lease is held', async () => {
 		mockCollection({ findOne: jest.fn<() => Promise<unknown>>().mockResolvedValue({ status: 'processing' }) });
 

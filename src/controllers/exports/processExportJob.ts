@@ -12,6 +12,7 @@ import {
 	markExportJobCompleted,
 	markExportJobFailed,
 	markExportJobProcessing,
+	recordUsageForCompletedExportJob,
 } from '../../utils/exportJobs';
 import { logError, logInfo, logWarn } from '../../utils/logger';
 import { emitMonitoringMetric } from '../../utils/metrics';
@@ -249,6 +250,7 @@ export const lambdaHandler = withTelemetry(async (event: SQSEvent): Promise<SQSB
 			});
 
 			if (!processingJob) {
+				await recordUsageForCompletedExportJob(jobId);
 				logWarn('Skipping export queue record because job is not claimable', {
 					messageId: record.messageId,
 					jobId: parsedMessage.jobId,

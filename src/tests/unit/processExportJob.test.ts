@@ -5,6 +5,7 @@ jest.mock('../../utils/exportJobs', () => ({
 	markExportJobCompleted: jest.fn(),
 	markExportJobFailed: jest.fn(),
 	markExportJobProcessing: jest.fn(),
+	recordUsageForCompletedExportJob: jest.fn(),
 }));
 
 jest.mock('../../utils/db', () => ({

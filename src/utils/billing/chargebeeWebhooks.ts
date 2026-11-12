@@ -66,7 +66,7 @@ export const claimChargebeeWebhook = async (
 	if (reclaimed) return 'claimed';
 
 	const existing = await collection.findOne({ eventId }, { projection: { status: 1 } });
-	return existing?.status === 'processing' ? 'in_progress' : 'duplicate';
+	return !existing || existing.status === 'processing' ? 'in_progress' : 'duplicate';
 };
 
 export const completeChargebeeWebhookClaim = async (eventId: string): Promise<void> => {

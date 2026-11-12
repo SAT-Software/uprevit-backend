@@ -21,7 +21,13 @@ jest.mock('../../utils/billing/usageRecording', () => ({
 }));
 
 const usageRecording = jest.requireMock('../../utils/billing/usageRecording') as any;
-const { countActiveExportJobs, getExportJobById, getExportJobByIdForUser, markExportJobCompleted } = require('../../utils/exportJobs');
+const {
+	countActiveExportJobs,
+	getExportJobById,
+	getExportJobByIdForUser,
+	markExportJobCompleted,
+	recordUsageForCompletedExportJob,
+} = require('../../utils/exportJobs');
 
 describe('export job lookups', () => {
 	const jobId = new ObjectId();
@@ -68,22 +74,32 @@ describe('markExportJobCompleted', () => {
 		jest.clearAllMocks();
 	});
 
-	it('records usage before completing the job', async () => {
+	it('records usage after the job is completed', async () => {
 		usageRecording.recordCompletedExport.mockResolvedValue(undefined);
 		findOneAndUpdate.mockResolvedValue({ _id: jobId });
 
 		await markExportJobCompleted(input);
 
 		expect(usageRecording.recordCompletedExport).toHaveBeenCalledWith(expect.objectContaining({ workspaceId, jobId }));
-		expect(usageRecording.recordCompletedExport.mock.invocationCallOrder[0])
-			.toBeLessThan(findOneAndUpdate.mock.invocationCallOrder[0]);
+		expect(findOneAndUpdate.mock.invocationCallOrder[0])
+			.toBeLessThan(usageRecording.recordCompletedExport.mock.invocationCallOrder[0]);
 	});
 
-	it('leaves the job incomplete when usage recording fails', async () => {
-		usageRecording.recordCompletedExport.mockRejectedValue(new Error('db down'));
+	it('does not bill a job that could not be completed', async () => {
+		findOneAndUpdate.mockResolvedValue(null);
 
-		await expect(markExportJobCompleted(input)).rejects.toThrow('db down');
-		expect(findOneAndUpdate).not.toHaveBeenCalled();
+		await markExportJobCompleted(input);
+
+		expect(usageRecording.recordCompletedExport).not.toHaveBeenCalled();
+	});
+
+	it('bills a completed job when a retry finds it already completed', async () => {
+		findOne.mockResolvedValue({ _id: jobId, workspaceId, completedAt: new Date() });
+
+		await recordUsageForCompletedExportJob(jobId);
+
+		expect(findOne).toHaveBeenCalledWith({ _id: jobId, status: 'completed' }, expect.anything());
+		expect(usageRecording.recordCompletedExport).toHaveBeenCalledWith(expect.objectContaining({ workspaceId, jobId }));
 	});
 });
 

@@ -199,8 +199,6 @@ export const markExportJobCompleted = async ({
 	const collection = await getCollection();
 	const now = completedAt ?? new Date();
 
-	await recordCompletedExport({ workspaceId, jobId, occurredAt: now });
-
 	const completedJob = await collection.findOneAndUpdate(
 		{
 			_id: jobId,
@@ -223,7 +221,17 @@ export const markExportJobCompleted = async ({
 		{ returnDocument: 'after' },
 	);
 
+	if (completedJob) await recordCompletedExport({ workspaceId, jobId, occurredAt: now });
+
 	return completedJob;
+};
+
+export const recordUsageForCompletedExportJob = async (jobId: ObjectId): Promise<void> => {
+	const collection = await getCollection();
+	const job = await collection.findOne({ _id: jobId, status: 'completed' }, { projection: { workspaceId: 1, completedAt: 1 } });
+	if (job?.workspaceId) {
+		await recordCompletedExport({ workspaceId: job.workspaceId, jobId, occurredAt: job.completedAt ?? new Date() });
+	}
 };
 
 export const markExportJobFailed = async ({
