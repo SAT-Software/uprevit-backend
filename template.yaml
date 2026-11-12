@@ -191,20 +191,6 @@ Conditions:
   HasMonitoringAlerts: !Not [!Equals [!Ref MonitoringAlertEmail, ""]]
 
 Resources:
-  HelloWorldFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Properties:
-      CodeUri: src/
-      Handler: app.lambdaHandler
-      Events:
-        HelloWorld:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-          Properties:
-            Path: /hello
-            Method: get
-    Metadata:
-      BuildMethod: makefile
-
   HealthFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -421,20 +407,6 @@ Resources:
   # ──────────────────────────────────────────────────────────────────────────
   # WORKSPACES
   # ──────────────────────────────────────────────────────────────────────────
-  CreateWorkspaceFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
-    Properties:
-      CodeUri: src/
-      Handler: controllers/workspaces/createWorkspace.lambdaHandler
-      Events:
-        CreateWorkspace:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
-          Properties:
-            Path: /workspace
-            Method: post
-    Metadata:
-      BuildMethod: makefile
-
   GetWorkspaceFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:

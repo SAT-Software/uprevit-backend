@@ -5,6 +5,7 @@ import { getDb } from "../../utils/db";
 import { StandardSymbol } from "../../models/standardSymbols";
 import { createStandardSymbolPresignedGetUrlMap } from "../../utils/s3-storage";
 import { withTelemetry } from '../../utils/telemetry';
+import { logError } from '../../utils/logger';
 
 /**
  * Get all standard symbols
@@ -42,7 +43,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		return ResponseWrapper.success({message: 'All Symbols fetched successfully', result})
 	} catch (error) {
+		logError('Get all standard symbols handler failed', error);
 		return ResponseWrapper.internalServerError('Failed to get all the standard symbols data')
-        
 	}
 })   
