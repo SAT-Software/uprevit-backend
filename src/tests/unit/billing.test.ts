@@ -905,17 +905,18 @@ describe('billing summaries', () => {
 		const stalePeriodStart = new Date('2025-01-01T00:00:00.000Z');
 		const stalePeriodEnd = new Date('2025-12-31T23:59:59.999Z');
 
+		const usageAggregate = jest.fn((_pipeline: unknown[]) => ({
+			toArray: jest.fn(async () => [
+				{ _id: 'completed_export', total: 5 },
+				{ _id: 'upload_bytes', total: 2048 },
+				{ _id: 'ignored_metric', total: 999 },
+			]),
+		}));
 		dbModule.getDb.mockResolvedValue({
 			collection: jest.fn((name: string) => {
 				if (name === 'usageEvents') {
 					return {
-						aggregate: jest.fn(() => ({
-							toArray: jest.fn(async () => [
-								{ _id: 'completed_export', total: 5 },
-								{ _id: 'upload_bytes', total: 2048 },
-								{ _id: 'ignored_metric', total: 999 },
-							]),
-						})),
+						aggregate: usageAggregate,
 						createIndex: jest.fn(async () => undefined),
 					};
 				}
@@ -935,5 +936,17 @@ describe('billing summaries', () => {
 
 		expect(totals.exports).toBe(5);
 		expect(totals.uploadBytes).toBe(2048);
+		expect(usageAggregate).toHaveBeenCalledWith([
+			{
+				$match: {
+					workspaceId,
+					$or: [
+						{ billingPeriodStart: periodStart, billingPeriodEnd: periodEnd },
+						{ occurredAt: { $gte: periodStart, $lte: periodEnd } },
+					],
+				},
+			},
+			{ $group: { _id: '$metric', total: { $sum: '$quantity' } } },
+		]);
 	});
 });
