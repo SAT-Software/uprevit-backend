@@ -1,7 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { getDb, withTransaction } from "../../utils/db";
 import type { Workspace } from "../../models/workspace";
-import { AuditLogAction } from "../../models/auditLog";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
 import { validateMissingFields } from "../../utils/validationUtils";
@@ -14,6 +13,7 @@ import { assertSeatActivationAllowed } from '../../utils/billing/enforcement';
 import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 import { MongoServerError, ObjectId } from 'mongodb';
 import { withTelemetry } from '../../utils/telemetry';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 
 type WorkspaceOnboarding = {
 	_id: string;
@@ -122,10 +122,28 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 				await txDb.collection<User>('users').insertOne({
 					_id: userId, name: adminName, email: normalizedEmail, userType: 'admin', cognitoSub, workspaceId, status: 'inactive',
 				}, { session });
-				await txDb.collection('audit_log').insertMany([
-					{ entity: 'workspace', entityId: workspaceId.toString(), action: AuditLogAction.CREATE, actionBy: userId.toString(), actionAt: new Date(), active: true },
-					{ entity: 'user', entityId: userId.toString(), action: AuditLogAction.CREATE, actionBy: userId.toString(), actionAt: new Date(), active: true },
-				], { session });
+			});
+			await recordAuditEvent({
+				workspaceId: workspaceId.toString(),
+				scope: { type: 'workspace', id: workspaceId.toString() },
+				entity: { type: 'workspace', id: workspaceId.toString() },
+				action: 'create',
+				eventKey: 'workspace.created',
+				visibility: 'admin',
+				where: { module: 'workspace' },
+				auth: auth.payload,
+				meta: { workspaceName: input.workspaceName },
+			});
+			await recordAuditEvent({
+				workspaceId: workspaceId.toString(),
+				scope: { type: 'workspace', id: workspaceId.toString() },
+				entity: { type: 'user', id: userId.toString() },
+				action: 'create',
+				eventKey: 'member.created',
+				visibility: 'admin',
+				where: { module: 'users' },
+				auth: auth.payload,
+				meta: { memberName: adminName, memberEmail: normalizedEmail },
 			});
 		}
 

@@ -1,8 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
-import { AuditLogAction } from '../../models/auditLog';
 import { EDITOR_USER_TYPES, type User } from '../../models/user';
-import { updateAuditLog } from '../../utils/auditLog';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 import { getDb, withTransaction } from '../../utils/db';
 import { logError } from '../../utils/logger';
 import { findMemberAccessBlockers, parseAdminMemberAccess, parseAssignableMemberAccess, syncMemberCognitoGroups, type MemberAccess } from '../../utils/memberAccess';
@@ -26,7 +25,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
 
-		const { context } = tenantResult;
+		const { context, auth } = tenantResult;
 		if (!isWorkspaceAdmin(context.cognitoGroups)) return ResponseWrapper.forbidden('Insufficient permissions');
 
 		const id = event.pathParameters?.id;
@@ -79,13 +78,19 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			}
 		}
 
-		await updateAuditLog({
-			entity: 'user',
-			entityId: id,
-			action: AuditLogAction.UPDATE,
-			actionBy: context.userId.toString(),
-			actionAt: new Date(),
-			active: true,
+		await recordAuditEvent({
+			workspaceId: context.workspaceId.toString(),
+			scope: { type: 'workspace', id: context.workspaceId.toString() },
+			entity: { type: 'user', id },
+			action: 'update',
+			eventKey: 'member.access.changed',
+			visibility: 'admin',
+			where: { module: 'users' },
+			auth: auth.payload,
+			before: { userType: target.userType, isManager: target.isManager },
+			after: { userType: access.userType, isManager: access.isManager },
+			changedPaths: ['userType', 'isManager'],
+			meta: { memberName: target.name, memberEmail: target.email },
 		});
 
 		return ResponseWrapper.success({ message: 'Member access updated', user: { ...target, ...access } });

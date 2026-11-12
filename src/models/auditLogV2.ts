@@ -2,10 +2,10 @@ import { ObjectId } from 'mongodb';
 
 export const AUDIT_LOG_V2_COLLECTION = 'auditLogV2';
 
-export const AUDIT_SCOPE_TYPES = ['product', 'project', 'department', 'source-files', 'archive', 'workflow'] as const;
+export const AUDIT_SCOPE_TYPES = ['product', 'project', 'department', 'source-files', 'archive', 'workflow', 'workspace'] as const;
 export type AuditScopeType = typeof AUDIT_SCOPE_TYPES[number];
 
-export const AUDIT_ENTITY_TYPES = ['product', 'project', 'department', 'source_file', 'source_folder', 'workflow'] as const;
+export const AUDIT_ENTITY_TYPES = ['product', 'project', 'department', 'source_file', 'source_folder', 'workflow', 'user', 'workspace'] as const;
 export type AuditEntityType = typeof AUDIT_ENTITY_TYPES[number];
 
 export const AUDIT_ACTIONS = ['create', 'update', 'delete', 'move', 'archive', 'restore', 'submit', 'link', 'unlink'] as const;
@@ -43,7 +43,7 @@ export type AuditLogV2 = {
 		role?: 'admin' | 'user';
 	};
 	where: {
-		module: 'products' | 'projects' | 'departments' | 'source-files' | 'archive' | 'workflows';
+		module: 'products' | 'projects' | 'departments' | 'source-files' | 'archive' | 'workflows' | 'users' | 'workspace';
 		tab?: string;
 		parentId?: string;
 	};
@@ -55,4 +55,13 @@ export type AuditLogV2 = {
 		legacyId?: string;
 		isBackfilled?: boolean;
 	};
+};
+
+export type AuditLogExportFilters = {
+	search?: string;
+	actions?: AuditAction[];
+	entityType?: AuditEntityType;
+	actorUserId?: string;
+	from?: string;
+	to?: string;
 };

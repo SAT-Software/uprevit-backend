@@ -57,6 +57,8 @@ const subjectForScope = (eventKey: string) => {
 	if (eventKey.startsWith('product.')) return 'product';
 	if (eventKey.startsWith('source_files.')) return 'source item';
 	if (eventKey.startsWith('workflow.')) return 'workflow';
+	if (eventKey.startsWith('member.')) return 'member';
+	if (eventKey.startsWith('workspace.')) return 'workspace';
 	return 'record';
 };
 
@@ -251,6 +253,22 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 		return `deleted workflow draft${number ? ` ${number}` : ''}${name ? ` "${name}"` : ''}`;
 	},
 	'source_files.file.deleted': ({ meta }) => `deleted file${pickText(meta, ['fileName', 'name']) ? ` "${pickText(meta, ['fileName', 'name'])}"` : ''}`,
+	'workspace.created': ({ meta }) => {
+		const name = pickText(meta, ['workspaceName', 'name']);
+		return `created workspace${name ? ` "${name}"` : ''}`;
+	},
+	'workspace.updated': ({ changes, meta }) => {
+		const name = pickText(meta, ['workspaceName', 'name']);
+		return `updated workspace settings${name ? ` for "${name}"` : ''}${listChangedFields(changes)}`;
+	},
+	'member.created': ({ meta }) => `added ${pickText(meta, ['memberName', 'memberEmail']) ?? 'a member'} to the workspace`,
+	'member.invited': ({ meta }) => `invited ${pickText(meta, ['memberName', 'memberEmail']) ?? 'a member'} to the workspace`,
+	'member.reactivated': ({ meta }) => `re-invited ${pickText(meta, ['memberName', 'memberEmail']) ?? 'a member'} to the workspace`,
+	'member.profile.updated': ({ meta }) => `updated the profile of ${pickText(meta, ['memberName', 'memberEmail']) ?? 'a member'}`,
+	'member.profile.completed': ({ meta }) => `${pickText(meta, ['memberName', 'memberEmail']) ?? 'a member'} completed their profile`,
+	'member.access.changed': ({ meta, changes }) =>
+		`changed access for ${pickText(meta, ['memberName', 'memberEmail']) ?? 'a member'}${listChangedFields(changes)}`,
+	'member.removed': ({ meta }) => `removed ${pickText(meta, ['memberName', 'memberEmail']) ?? 'a member'} from the workspace`,
 };
 
 export const buildAuditEventSummary = (context: SummaryContext): string => {

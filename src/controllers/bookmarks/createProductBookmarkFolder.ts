@@ -6,8 +6,6 @@ import { validateMissingFields } from "../../utils/validationUtils";
 import { getDb } from "../../utils/db";
 import { ProductBookmarkFolder, UserBookmarks } from "../../models/bookmarks";
 import { ObjectId } from "mongodb";
-import { updateAuditLog } from "../../utils/auditLog";
-import { AuditLogAction } from "../../models/auditLog";
 import { withTelemetry } from '../../utils/telemetry';
 
 /**
@@ -20,7 +18,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
 
-		const { context, auth } = tenantResult;
+		const { context } = tenantResult;
 
 		if(!event.body) return ResponseWrapper.badRequest('Request body is missing.');
 
@@ -69,15 +67,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			},
 			{ upsert: true }
 		);
-
-		await updateAuditLog({
-			entity: 'product_bookmark_folder',
-			entityId: newProductBookmarkFolder._id.toString(),
-			action: AuditLogAction.CREATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		});
 
 		return ResponseWrapper.created({
 			message: 'Product bookmark folder created successfully.',

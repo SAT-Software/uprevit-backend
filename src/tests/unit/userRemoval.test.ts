@@ -16,10 +16,6 @@ jest.mock('../../utils/authUtils', () => ({
 	authenticateRequest: jest.fn(),
 }));
 
-jest.mock('../../utils/auditLog', () => ({
-	updateAuditLog: jest.fn(),
-}));
-
 jest.mock('../../utils/billing/enforcement', () => ({
 	assertWorkspaceAccessAllowed: jest.fn(async () => ({ allowed: true })),
 	assertSeatActivationAllowed: jest.fn(async () => ({ allowed: true })),

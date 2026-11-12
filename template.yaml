@@ -1398,6 +1398,56 @@ Resources:
     Metadata:
       BuildMethod: makefile
 
+  EnqueueAuditLogExportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/auditLogs/enqueueAuditLogExport.lambdaHandler
+      Environment:
+        Variables:
+          EXPORT_JOB_QUEUE_URL: !If [HasExportJobQueueUrl, !Ref ExportJobQueueUrl, !Ref ProductExportJobQueue]
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !If
+                - HasExportJobQueueUrl
+                - !Sub
+                  - arn:${AWS::Partition}:sqs:${QueueRegion}:${QueueAccountId}:${QueueName}
+                  - QueueRegion: !Select [1, !Split [".", !Select [2, !Split ["/", !Ref ExportJobQueueUrl]]]]
+                    QueueAccountId: !Select [3, !Split ["/", !Ref ExportJobQueueUrl]]
+                    QueueName: !Select [4, !Split ["/", !Ref ExportJobQueueUrl]]
+                - !GetAtt ProductExportJobQueue.Arn
+      Events:
+        EnqueueAuditLogExport:
+          Type: Api
+          Properties:
+            Path: /audit-logs/exports
+            Method: post
+    Metadata:
+      BuildMethod: makefile
+
+  GetAuditLogExportJobsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/auditLogs/getAuditLogExportJobs.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${ExportsBucket}/*"
+      Events:
+        GetAuditLogExportJobs:
+          Type: Api
+          Properties:
+            Path: /audit-logs/exports/jobs
+            Method: get
+    Metadata:
+      BuildMethod: makefile
+
   # ──────────────────────────────────────────────────────────────────────────
   # BOOKMARKS
   # ──────────────────────────────────────────────────────────────────────────

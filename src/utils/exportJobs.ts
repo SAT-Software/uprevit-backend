@@ -8,6 +8,7 @@ import {
 	type ExportJobStatus,
 	type ExportJobTarget,
 } from '../models/exportJob';
+import type { AuditLogExportFilters } from '../models/auditLogV2';
 import type { PersistedReportExportRequest } from '../types/reports';
 import { getDb } from './db';
 import { recordCompletedExport } from './billing/usageRecording';
@@ -94,6 +95,7 @@ export const createQueuedExportJob = async ({
 	requestedByUserId,
 	format,
 	reportParams,
+	auditLogFilters,
 	expiresAt,
 }: {
 	target: ExportJobTarget;
@@ -103,6 +105,7 @@ export const createQueuedExportJob = async ({
 	requestedByUserId?: ObjectId;
 	format: ExportJobFormat;
 	reportParams?: PersistedReportExportRequest;
+	auditLogFilters?: AuditLogExportFilters;
 	expiresAt?: Date;
 }): Promise<ExportJobDocument> => {
 	await ensureExportJobIndexes();
@@ -122,6 +125,7 @@ export const createQueuedExportJob = async ({
 		expiresAt: expiresAt ?? buildExportExpiryDate(now),
 		...(targetId ? { targetId } : {}),
 		...(reportParams ? { reportParams } : {}),
+		...(auditLogFilters ? { auditLogFilters } : {}),
 	};
 
 	const insertResult = await collection.insertOne(payload);

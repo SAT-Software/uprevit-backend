@@ -1,6 +1,6 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
-import { EXPORT_JOB_COLLECTION, EXPORT_JOB_FORMATS, type ExportJobFormat } from '../../models/exportJob';
+import { EXPORT_JOB_COLLECTION, type ExportJobFormat } from '../../models/exportJob';
 import { authenticateRequest } from '../../utils/authUtils';
 import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
 import { canEditWorkspaceData, READ_ONLY_MESSAGE } from '../../utils/tenantContext';
@@ -15,6 +15,8 @@ import type { PersistedReportExportRequest, QueryCondition } from '../../types/r
 import { ALLOWED_SORT_FIELDS } from '../../types/reports';
 import { assertUsageActionAllowed } from '../../utils/billing/enforcement';
 import { withTelemetry } from '../../utils/telemetry';
+
+const REPORT_EXPORT_FORMATS: ExportJobFormat[] = ['pdf', 'excel'];
 
 type RequestBody = {
 	workspaceId?: string;
@@ -62,8 +64,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const objectIdValidation = validateObjectIds({ workspaceId: body.workspaceId! });
 		if (objectIdValidation) return objectIdValidation;
 
-		if (typeof body.format !== 'string' || !EXPORT_JOB_FORMATS.includes(body.format as ExportJobFormat)) {
-			return ResponseWrapper.badRequest(`Request body must include 'format' and must be one of: ${EXPORT_JOB_FORMATS.join(', ')}`);
+		if (typeof body.format !== 'string' || !REPORT_EXPORT_FORMATS.includes(body.format as ExportJobFormat)) {
+			return ResponseWrapper.badRequest(`Request body must include 'format' and must be one of: ${REPORT_EXPORT_FORMATS.join(', ')}`);
 		}
 
 		format = body.format as ExportJobFormat;

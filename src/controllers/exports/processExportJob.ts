@@ -1,9 +1,11 @@
 import { SQSBatchResponse, SQSEvent, SQSRecord } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
 import { EXPORT_JOB_FORMATS, EXPORT_JOB_TARGETS, type ExportJobFormat, type ExportJobTarget } from '../../models/exportJob';
+import type { AuditLogExportFilters } from '../../models/auditLogV2';
 import type { Product } from '../../models/product';
 import type { ExportQueueMessage } from '../../types/export-job';
 import { EXPORT_LIMITS, type PersistedReportExportRequest } from '../../types/reports';
+import { buildAuditLogCsv, loadAuditLogExportRows } from '../../utils/auditLogExport';
 import { getDb } from '../../utils/db';
 import { generateProductExcelExport, generateWorkbookTabExcelExport, type WorkbookTabTarget } from '../../utils/exportExcel';
 import { getExportWorkspaceName } from '../../utils/exportFormatting';
@@ -171,6 +173,16 @@ const buildExportContentType = (format: 'pdf' | 'excel'): string => {
 	return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 };
 
+const AUDIT_EXPORT_FILE_PREFIX = 'Audit_Log';
+
+const buildAuditLogExportFileName = (date: Date = new Date()): string =>
+	`${AUDIT_EXPORT_FILE_PREFIX}_${date.toISOString().split('T')[0]}.csv`;
+
+const toDocumentFormat = (format: ExportJobFormat): 'pdf' | 'excel' => {
+	if (format === 'csv') throw new NonRetryableExportJobError('CSV is only supported for audit log exports');
+	return format;
+};
+
 const generateProductArtifact = async ({
 	product,
 	format,
@@ -237,6 +249,25 @@ const generateReportArtifact = async ({
 	};
 };
 
+const generateAuditLogArtifact = async ({
+	filters,
+	workspaceId,
+}: {
+	filters: AuditLogExportFilters;
+	workspaceId: ObjectId;
+}): Promise<ExportArtifact> => {
+	const { logs, totalCount, truncated } = await loadAuditLogExportRows({ workspaceId, filters });
+	if (truncated) {
+		logInfo('Audit log export truncated to the row cap', { workspaceId: workspaceId.toString(), totalCount, exported: logs.length });
+	}
+
+	return {
+		buffer: buildAuditLogCsv(logs),
+		fileName: buildAuditLogExportFileName(),
+		contentType: 'text/csv; charset=utf-8',
+	};
+};
+
 /**
  * Processes queued export jobs from SQS.
  * @param {SQSEvent} event - SQS event payload
@@ -289,7 +320,7 @@ export const lambdaHandler = withTelemetry(async (event: SQSEvent): Promise<SQSB
 
 				artifact = await generateProductArtifact({
 					product,
-					format: parsedMessage.format,
+					format: toDocumentFormat(parsedMessage.format),
 					target: processingJob.target,
 				});
 				s3Key = `${EXPORTS_PREFIX}/products/${processingJob.workspaceId.toString()}/${jobId.toString()}/${artifact.fileName}`;
@@ -301,9 +332,19 @@ export const lambdaHandler = withTelemetry(async (event: SQSEvent): Promise<SQSB
 				artifact = await generateReportArtifact({
 					reportParams: processingJob.reportParams,
 					workspaceId: processingJob.workspaceId,
-					format: parsedMessage.format,
+					format: toDocumentFormat(parsedMessage.format),
 				});
 				s3Key = `${EXPORTS_PREFIX}/reports/${processingJob.workspaceId.toString()}/${jobId.toString()}/${artifact.fileName}`;
+			} else if (processingJob.target === 'audit_log') {
+				if (!processingJob.auditLogFilters) {
+					throw new NonRetryableExportJobError('Audit log export job is missing filters');
+				}
+
+				artifact = await generateAuditLogArtifact({
+					filters: processingJob.auditLogFilters,
+					workspaceId: processingJob.workspaceId,
+				});
+				s3Key = `${EXPORTS_PREFIX}/audit-logs/${processingJob.workspaceId.toString()}/${jobId.toString()}/${artifact.fileName}`;
 			} else {
 				throw new NonRetryableExportJobError('Unsupported export job target');
 			}

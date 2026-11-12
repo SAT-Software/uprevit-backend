@@ -2,8 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { getDb } from '../../utils/db';
 import { Workspace } from '../../models/workspace';
 import { WORKFLOW_COMPLETION_MODES } from '../../models/workflow';
-import { AuditLog, AuditLogAction } from '../../models/auditLog';
-import { updateAuditLog } from '../../utils/auditLog';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
@@ -126,16 +125,20 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			},
 		);
 
-		const auditRecord: AuditLog = {
-			entity: 'workspace',
-			entityId: context.workspaceId.toString(),
-			action: AuditLogAction.UPDATE,
-			actionBy: auth.payload?.name?.toString()!,
-			actionAt: new Date(),
-			active: true,
-		};
-
-		await updateAuditLog(auditRecord);
+		await recordAuditEvent({
+			workspaceId: context.workspaceId.toString(),
+			scope: { type: 'workspace', id: context.workspaceId.toString() },
+			entity: { type: 'workspace', id: context.workspaceId.toString() },
+			action: 'update',
+			eventKey: 'workspace.updated',
+			visibility: 'admin',
+			where: { module: 'workspace' },
+			auth: auth.payload,
+			before: { ...workspaceRecord },
+			after: { ...workspaceRecord, ...updateFields },
+			changedPaths: Object.keys(updateFields),
+			meta: { workspaceName: updateFields.workspaceName ?? workspaceRecord.workspaceName },
+		});
 
 		await recordCommittedUploadIfNew({
 			workspaceId: context.workspaceId,
