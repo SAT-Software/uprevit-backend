@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 import { USAGE_EVENTS_COLLECTION } from '../../models/billing';
 import type { UsageEvent } from '../../models/billing';
 import { getDb } from '../db';
+import { headUploadObject } from '../s3-storage';
 import { getBillingAccountByWorkspaceId } from './billingAccounts';
 import { resolveUsagePeriod } from './billingPeriod';
 import { checkUploadWouldExceedLimit } from './enforcement';
@@ -18,6 +19,9 @@ export const normalizeSizeBytes = (value: unknown): number | undefined => {
 
 	return Math.floor(value);
 };
+
+export const readUploadSizeBytes = async (key: string): Promise<number | undefined> =>
+	normalizeSizeBytes((await headUploadObject(key.trim()))?.sizeBytes);
 
 export const isNewUploadKey = (previousKey: string | undefined, newKey: string): boolean => {
 	const normalizedNew = newKey.trim();
@@ -81,24 +85,22 @@ export const recordCommittedUploadIfNew = async ({
 	workspaceId,
 	previousKey,
 	newKey,
-	sizeBytes,
 	metadata,
 }: {
 	workspaceId: ObjectId;
 	previousKey?: string;
 	newKey: string;
-	sizeBytes: unknown;
 	metadata?: Record<string, unknown>;
 }): Promise<void> => {
 	if (!isNewUploadKey(previousKey, newKey)) return;
 
-	const normalizedBytes = normalizeSizeBytes(sizeBytes);
-	if (!normalizedBytes) return;
+	const sizeBytes = await readUploadSizeBytes(newKey);
+	if (!sizeBytes) return;
 
 	await recordCommittedUploadBytes({
 		workspaceId,
 		uploadKey: newKey.trim(),
-		sizeBytes: normalizedBytes,
+		sizeBytes,
 		metadata,
 	});
 };
@@ -162,7 +164,7 @@ export const sumNewUploadCommitBytes = async (
 		const existing = await events.findOne({ idempotencyKey: uploadIdempotencyKey(commit.key) });
 		if (existing) continue;
 
-		totalBytes += commit.sizeBytes;
+		totalBytes += (await readUploadSizeBytes(commit.key)) ?? 0;
 	}
 
 	return totalBytes;
@@ -194,10 +196,13 @@ export const recordUploadCommitsFromPayload = async (
 		if (seen.has(commit.key)) continue;
 		seen.add(commit.key);
 
+		const sizeBytes = await readUploadSizeBytes(commit.key);
+		if (!sizeBytes) continue;
+
 		await recordCommittedUploadBytes({
 			workspaceId,
 			uploadKey: commit.key,
-			sizeBytes: commit.sizeBytes,
+			sizeBytes,
 		});
 	}
 };

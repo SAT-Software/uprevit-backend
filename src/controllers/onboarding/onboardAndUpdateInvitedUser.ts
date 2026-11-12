@@ -117,7 +117,6 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 			workspaceId: context.workspaceId,
 			previousKey: typeof existingUser?.profileAvatar === 'string' ? existingUser.profileAvatar : '',
 			newKey: normalizedAvatar,
-			sizeBytes: input.profileAvatarSizeBytes ?? input.sizeBytes,
 			metadata: { assetType: 'profile_avatar' },
 		});
 

@@ -2,6 +2,7 @@ import { CopyObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCom
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ObjectId } from "mongodb";
 import crypto from "node:crypto";
+import { WORKFLOW_ATTACHMENT_MAX_BYTES } from "../models/workflowDiscussion";
 
 export type TenantUploadSigningOptions = {
 	workspaceId: string | ObjectId;
@@ -47,6 +48,13 @@ export const client = new S3Client({ region });
 
 export type UploadScope = "workspace-assets" | "product-assets" | "source-files" | "workflow-attachments";
 
+export const UPLOAD_MAX_BYTES: Record<UploadScope, number> = {
+	"workspace-assets": 10 * 1024 * 1024,
+	"product-assets": 25 * 1024 * 1024,
+	"source-files": 100 * 1024 * 1024,
+	"workflow-attachments": WORKFLOW_ATTACHMENT_MAX_BYTES,
+};
+
 type CreatePresignedUploadOptions = {
 	workspaceId?: string;
 	productId?: string;
@@ -54,6 +62,7 @@ type CreatePresignedUploadOptions = {
 	userId?: string;
 	uploadScope?: UploadScope;
 	pendingOwnerId?: string;
+	sizeBytes: number;
 };
 
 export const workflowAttachmentKeyPrefix = (workspaceId: string, workflowId: string, userId: string) =>
@@ -73,7 +82,7 @@ export const buildUploadKey = ({
 	userId,
 	uploadScope = "workspace-assets",
 	pendingOwnerId,
-}: CreatePresignedUploadOptions & { filename: string }): string => {
+}: Omit<CreatePresignedUploadOptions, "sizeBytes"> & { filename: string }): string => {
 	const uniqueFilename = buildUniqueFilename(filename);
 
 	if (uploadScope === "workflow-attachments" && workspaceId && workflowId && userId) {
@@ -102,7 +111,7 @@ export const buildUploadKey = ({
 export const createPresignedUrl = async (
 	filename: string,
 	contentType: string,
-	options: CreatePresignedUploadOptions = {},
+	options: CreatePresignedUploadOptions,
 ) => {
 	const key = buildUploadKey({ filename, ...options });
 
@@ -110,6 +119,7 @@ export const createPresignedUrl = async (
 		Bucket: uploadsBucket,
 		Key: key,
 		ContentType: contentType,
+		ContentLength: options.sizeBytes,
 		// Workflow attachments are part of discussion history, so the signed URL can create the object but never replace it.
 		...(options.uploadScope === "workflow-attachments" ? { IfNoneMatch: "*" } : {}),
 	});

@@ -97,8 +97,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			workspaceId: context.workspaceId,
 			previousKey: userRecord.profileAvatar,
 			newKey: normalizedAvatar,
-			sizeBytes: (input as { profileAvatarSizeBytes?: number; sizeBytes?: number }).profileAvatarSizeBytes
-				?? (input as { sizeBytes?: number }).sizeBytes,
 			metadata: { assetType: 'profile_avatar' },
 		});
 

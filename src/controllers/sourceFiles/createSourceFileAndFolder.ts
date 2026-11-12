@@ -10,10 +10,9 @@ import { recordAuditEvent } from "../../utils/auditLogV2";
 import type { AuditLogV2Change } from "../../models/auditLogV2";
 import { resolveWorkspaceProductName } from "../../utils/sourceFilesAudit";
 import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
-import { getBillingAccountByWorkspaceId, normalizeLimits } from "../../utils/billing/billingAccounts";
 import { recordCommittedUploadBytes } from "../../utils/billing/uploadCommit";
 import { withTelemetry } from '../../utils/telemetry';
-import { sourceFileKeyPrefix } from "../../utils/s3-storage";
+import { headUploadObject, sourceFileKeyPrefix } from "../../utils/s3-storage";
 
 /**
  * @param {APIGatewayProxyEvent} event
@@ -50,24 +49,18 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		});
 		if (objectIdValidation) return objectIdValidation;
 
-		const sizeBytes = input.type === 'file' && typeof input.sizeBytes === 'number' && input.sizeBytes > 0
-			? Math.floor(input.sizeBytes)
-			: undefined;
-
+		let sizeBytes: number | undefined;
 		if (input.type === 'file') {
 			const uploadCheck = await assertUsageActionAllowed(context.workspaceId, 'upload');
 			if (!uploadCheck.allowed) return ResponseWrapper.forbidden(uploadCheck.reason);
 
-			const billingAccount = await getBillingAccountByWorkspaceId(context.workspaceId);
-			if (billingAccount && normalizeLimits(billingAccount).enabled && !sizeBytes) {
-				return ResponseWrapper.badRequest('sizeBytes is required for file uploads when usage limits are enabled');
-			}
+			const uploaded = await headUploadObject(key);
+			if (!uploaded?.sizeBytes) return ResponseWrapper.badRequest('The file was not uploaded. Upload it again.');
+			sizeBytes = uploaded.sizeBytes;
 
-			if (sizeBytes) {
-				const limitCheck = await checkUploadWouldExceedLimit(context.workspaceId, sizeBytes);
-				if (!limitCheck.allowed) {
-					return ResponseWrapper.forbidden(limitCheck.reason ?? 'Upload limit reached');
-				}
+			const limitCheck = await checkUploadWouldExceedLimit(context.workspaceId, sizeBytes);
+			if (!limitCheck.allowed) {
+				return ResponseWrapper.forbidden(limitCheck.reason ?? 'Upload limit reached');
 			}
 		}
 

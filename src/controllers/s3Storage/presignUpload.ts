@@ -6,13 +6,12 @@ import { getDb } from "../../utils/db";
 import { logError } from "../../utils/logger";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { validateMissingFields } from "../../utils/validationUtils";
-import { createPresignedUrl, type UploadScope } from "../../utils/s3-storage";
+import { createPresignedUrl, UPLOAD_MAX_BYTES, type UploadScope } from "../../utils/s3-storage";
 import type { Product } from "../../models/product";
 import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
 import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE } from "../../utils/productAccess";
 import { canEditWorkspaceData, parseCognitoGroups, READ_ONLY_MESSAGE } from "../../utils/tenantContext";
 import { ACTIVE_WORKFLOW_STATUSES } from "../../models/workflow";
-import { WORKFLOW_ATTACHMENT_MAX_BYTES } from "../../models/workflowDiscussion";
 import { canComment, getProductTeamIds } from "../../utils/workflowDiscussion";
 import { findWorkflow } from "../../utils/workflows";
 import { withTelemetry } from '../../utils/telemetry';
@@ -73,9 +72,11 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			return ResponseWrapper.badRequest(`Unsupported contentType: ${input.contentType}`);
 		}
 
-		const sizeBytes = typeof input.sizeBytes === 'number' && input.sizeBytes > 0
-			? Math.floor(input.sizeBytes)
-			: undefined;
+		const sizeBytes = input.sizeBytes;
+		if (!Number.isInteger(sizeBytes) || sizeBytes <= 0) return ResponseWrapper.badRequest('sizeBytes must be a positive integer.');
+		if (sizeBytes > UPLOAD_MAX_BYTES[uploadScope]) {
+			return ResponseWrapper.badRequest(`Files for this upload must be ${UPLOAD_MAX_BYTES[uploadScope] / (1024 * 1024)} MB or smaller.`);
+		}
 
 		const userContext = await getAuthenticatedUserContext(auth.payload.sub);
 
@@ -87,6 +88,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			const { uploadUrl, key } = await createPresignedUrl(input.fileName!, contentType, {
 				uploadScope,
 				pendingOwnerId: auth.payload.sub,
+				sizeBytes,
 			});
 
 			return ResponseWrapper.created({ message: "Presigned URL generated successfully.", uploadUrl, key, expiresIn: 3600 });
@@ -100,11 +102,9 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			const uploadCheck = await assertUsageActionAllowed(userContext.workspaceId, 'upload');
 			if (!uploadCheck.allowed) return ResponseWrapper.forbidden(uploadCheck.reason);
 
-			if (sizeBytes) {
-				const limitCheck = await checkUploadWouldExceedLimit(userContext.workspaceId, sizeBytes);
-				if (!limitCheck.allowed) {
-					return ResponseWrapper.forbidden(limitCheck.reason ?? 'Upload limit reached');
-				}
+			const limitCheck = await checkUploadWouldExceedLimit(userContext.workspaceId, sizeBytes);
+			if (!limitCheck.allowed) {
+				return ResponseWrapper.forbidden(limitCheck.reason ?? 'Upload limit reached');
 			}
 		}
 
@@ -127,7 +127,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		let workflowId: string | undefined;
 		if (uploadScope === "workflow-attachments") {
-			if (sizeBytes && sizeBytes > WORKFLOW_ATTACHMENT_MAX_BYTES) return ResponseWrapper.badRequest('Each image must be 10 MB or smaller.');
 			const db = await getDb();
 			const workflow = await findWorkflow(db, userContext.workspaceId, typeof input.workflowId === "string" ? input.workflowId : undefined);
 			if (!workflow) return ResponseWrapper.notFound('Workflow not found.');
@@ -145,6 +144,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			productId,
 			workflowId,
 			userId: userContext.userId.toString(),
+			sizeBytes,
 		});
 
 		return ResponseWrapper.created({ message: "Presigned URL generated successfully.", uploadUrl, key, expiresIn: 3600 });

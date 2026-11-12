@@ -215,6 +215,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/users/createUser.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         CreateUser:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -249,6 +255,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/users/updateUser.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         UpdateUser:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -391,6 +403,10 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+            - Effect: Allow
+              Action:
                 - cognito-idp:AdminUpdateUserAttributes
                 - cognito-idp:AdminAddUserToGroup
                 - cognito-idp:AdminRemoveUserFromGroup
@@ -432,6 +448,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/workspaces/updateWorkspace.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         UpdateWorkspace:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -449,6 +471,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/departments/createDepartment.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         CreateDepartment:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -503,6 +531,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/departments/updateDepartment.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         UpdateDepartment:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -535,6 +569,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/projects/createProject.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         CreateProject:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -549,6 +589,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/projects/updateProject.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         UpdateProject:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
@@ -1063,6 +1109,10 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+            - Effect: Allow
+              Action:
                 - ses:SendEmail
               Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
       Events:
@@ -1552,6 +1602,12 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/sourceFiles/createSourceFileAndFolder.lambdaHandler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
       Events:
         CreateSourceFileAndFolder:
           Type: Api

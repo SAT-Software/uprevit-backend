@@ -127,7 +127,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			workspaceId: workspaceObjectId,
 			previousKey: '',
 			newKey: normalizedProjectImage,
-			sizeBytes: input.imageSizeBytes ?? input.sizeBytes,
 			metadata: { assetType: 'project_image' },
 		});
 

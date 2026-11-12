@@ -141,8 +141,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			workspaceId: context.workspaceId,
 			previousKey: workspaceRecord.logo,
 			newKey: normalizedLogo,
-			sizeBytes: (input as { logoSizeBytes?: number; sizeBytes?: number }).logoSizeBytes
-				?? (input as { sizeBytes?: number }).sizeBytes,
 			metadata: { assetType: 'workspace_logo' },
 		});
 

@@ -5,7 +5,12 @@ jest.mock('../../utils/db', () => ({
 	getDb: jest.fn(),
 }));
 
+jest.mock('../../utils/s3-storage', () => ({
+	headUploadObject: jest.fn(),
+}));
+
 const dbModule = jest.requireMock('../../utils/db') as any;
+const s3Storage = jest.requireMock('../../utils/s3-storage') as any;
 
 const defaultCollectionFallback = () => ({
 	countDocuments: jest.fn(async () => 0),
@@ -732,7 +737,6 @@ describe('upload commit helpers', () => {
 			workspaceId,
 			previousKey: 'uploads/ws/logo.png',
 			newKey: 'uploads/ws/logo.png',
-			sizeBytes: 2048,
 		});
 
 		expect(recordUsageSpy).not.toHaveBeenCalled();
@@ -749,9 +753,11 @@ describe('upload commit helpers', () => {
 			})),
 		});
 
+		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'image/png', sizeBytes: 250 });
+
 		const total = await sumNewUploadCommitBytes(workspaceId, [
 			{ key: 'uploads/ws/product/existing.png', sizeBytes: 100 },
-			{ key: 'uploads/ws/product/new.png', sizeBytes: 250 },
+			{ key: 'uploads/ws/product/new.png', sizeBytes: 1 },
 		]);
 
 		expect(total).toBe(250);
@@ -803,6 +809,8 @@ describe('upload commit helpers', () => {
 			}),
 		});
 
+		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'image/png', sizeBytes: 2048 });
+
 		const result = await assertNewUploadCommitsAllowed(workspaceId, [
 			{ key: 'uploads/ws/product/new.png', sizeBytes: 2048 },
 		]);
@@ -812,11 +820,12 @@ describe('upload commit helpers', () => {
 	});
 
 	it('records when asset key changes', async () => {
+		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'image/png', sizeBytes: 2048 });
+
 		await recordCommittedUploadIfNew({
 			workspaceId,
 			previousKey: 'uploads/ws/logo-old.png',
 			newKey: 'uploads/ws/logo-new.png',
-			sizeBytes: 2048,
 		});
 
 		expect(recordUsageSpy).toHaveBeenCalledWith(
@@ -825,6 +834,22 @@ describe('upload commit helpers', () => {
 				idempotencyKey: 'upload:uploads/ws/logo-new.png',
 			}),
 		);
+	});
+
+	it('records the stored object size, not a client size', async () => {
+		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'image/png', sizeBytes: 5000 });
+
+		await recordCommittedUploadIfNew({ workspaceId, previousKey: '', newKey: 'uploads/ws/avatar.png' });
+
+		expect(recordUsageSpy).toHaveBeenCalledWith(expect.objectContaining({ quantity: 5000 }));
+	});
+
+	it('skips recording when the object is not in storage', async () => {
+		s3Storage.headUploadObject.mockResolvedValue(null);
+
+		await recordCommittedUploadIfNew({ workspaceId, previousKey: '', newKey: 'uploads/ws/missing.png' });
+
+		expect(recordUsageSpy).not.toHaveBeenCalled();
 	});
 });
 
