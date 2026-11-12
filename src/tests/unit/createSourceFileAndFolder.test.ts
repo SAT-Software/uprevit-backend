@@ -24,16 +24,9 @@ jest.mock('../../utils/billing/enforcement', () => ({
 	checkUploadWouldExceedLimit: jest.fn(async () => ({ allowed: true })),
 }));
 
-jest.mock('../../utils/billing/billingAccounts', () => ({
-	getBillingAccountByWorkspaceId: jest.fn(),
-	normalizeLimits: jest.fn((account: { limits?: { enabled?: boolean } }) => ({
-		enabled: account?.limits?.enabled ?? false,
-		enforcementMode: 'overage',
-		seats: 5,
-		exports: 100,
-		uploadGb: 10,
-		ssoAllowed: false,
-	})),
+jest.mock('../../utils/s3-storage', () => ({
+	...(jest.requireActual('../../utils/s3-storage') as object),
+	headUploadObject: jest.fn(),
 }));
 
 jest.mock('../../utils/billing/uploadCommit', () => ({
@@ -42,7 +35,7 @@ jest.mock('../../utils/billing/uploadCommit', () => ({
 
 const dbModule = jest.requireMock('../../utils/db') as any;
 const tenantContext = jest.requireMock('../../utils/tenantContext') as any;
-const billingAccounts = jest.requireMock('../../utils/billing/billingAccounts') as any;
+const s3Storage = jest.requireMock('../../utils/s3-storage') as any;
 
 const { lambdaHandler } = require('../../controllers/sourceFiles/createSourceFileAndFolder');
 
@@ -76,9 +69,7 @@ describe('createSourceFileAndFolder', () => {
 			auth: { payload: { sub: 'user-sub' } },
 		});
 
-		billingAccounts.getBillingAccountByWorkspaceId.mockResolvedValue({
-			limits: { enabled: true },
-		});
+		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'application/pdf', sizeBytes: 777 });
 
 		findOne = jest.fn(async () => null);
 		insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
@@ -89,16 +80,13 @@ describe('createSourceFileAndFolder', () => {
 
 	const validKey = () => `uploads/${workspaceId.toString()}/source-files/spec.pdf`;
 
-	it('requires sizeBytes for file uploads when metering is enabled', async () => {
-		const response = await lambdaHandler(buildEvent({
-			name: 'spec.pdf',
-			type: 'file',
-			key: validKey(),
-		}));
+	it('rejects a file that was not uploaded', async () => {
+		s3Storage.headUploadObject.mockResolvedValue(null);
+
+		const response = await lambdaHandler(buildEvent({ name: 'spec.pdf', type: 'file', key: validKey() }));
 
 		expect(response.statusCode).toBe(400);
-		const body = JSON.parse(response.body);
-		expect(body.message).toContain('sizeBytes');
+		expect(insertOne).not.toHaveBeenCalled();
 	});
 
 	it.each([
@@ -118,12 +106,13 @@ describe('createSourceFileAndFolder', () => {
 			type: 'file',
 			key: validKey(),
 			url: 'https://example.com/pixel.png',
-			sizeBytes: 10,
+			sizeBytes: 1,
 		}));
 
 		expect(response.statusCode).toBe(201);
 		const inserted = insertOne.mock.calls[0][0];
 		expect(inserted.key).toBe(validKey());
+		expect(inserted.sizeBytes).toBe(777);
 		expect(inserted).not.toHaveProperty('url');
 	});
 
