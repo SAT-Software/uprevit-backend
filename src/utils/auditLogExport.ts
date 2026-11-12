@@ -7,7 +7,8 @@ export const AUDIT_EXPORT_MAX_ROWS = 10000;
 
 const csvCell = (value: unknown): string => {
 	if (value === null || value === undefined) return '';
-	const text = typeof value === 'string' ? value : typeof value === 'object' ? JSON.stringify(value) : String(value);
+	const raw = typeof value === 'string' ? value : typeof value === 'object' ? JSON.stringify(value) : String(value);
+	const text = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
 	return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 };
 
