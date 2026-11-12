@@ -14,10 +14,12 @@ jest.mock('../../utils/db', () => ({
 
 jest.mock('../../utils/exportPDF', () => ({
 	generateProductPDFExport: jest.fn(),
+	generateWorkbookTabPDFExport: jest.fn(),
 }));
 
 jest.mock('../../utils/exportExcel', () => ({
 	generateProductExcelExport: jest.fn(),
+	generateWorkbookTabExcelExport: jest.fn(),
 }));
 
 jest.mock('../../utils/reports/exportReportsPDF', () => ({
