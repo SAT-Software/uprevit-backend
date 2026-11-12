@@ -152,7 +152,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			if (!(await headUploadObject(workspaceLogo))) throw new Error('Workspace logo is unavailable');
 			await recordCommittedUploadIfNew({
 				workspaceId,
-				previousKey: '',
 				newKey: workspaceLogo,
 				metadata: { assetType: 'workspace_logo' },
 			});

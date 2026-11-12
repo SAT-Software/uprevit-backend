@@ -115,7 +115,6 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 
 		await recordCommittedUploadIfNew({
 			workspaceId: context.workspaceId,
-			previousKey: typeof existingUser?.profileAvatar === 'string' ? existingUser.profileAvatar : '',
 			newKey: normalizedAvatar,
 			metadata: { assetType: 'profile_avatar' },
 		});

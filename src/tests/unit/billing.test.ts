@@ -6,6 +6,7 @@ jest.mock('../../utils/db', () => ({
 }));
 
 jest.mock('../../utils/s3-storage', () => ({
+	...(jest.requireActual('../../utils/s3-storage') as object),
 	headUploadObject: jest.fn(),
 }));
 
@@ -43,7 +44,6 @@ const { createBillingAccountForWorkspace, DEFAULT_LIMITS, getBillingAccountByWor
 const {
 	assertNewUploadCommitsAllowed,
 	collectUploadCommitsFromValue,
-	isNewUploadKey,
 	normalizeSizeBytes,
 	recordCommittedUploadBytes,
 	recordCommittedUploadIfNew,
@@ -697,12 +697,6 @@ describe('upload commit helpers', () => {
 		expect(normalizeSizeBytes(-1)).toBeUndefined();
 	});
 
-	it('detects new upload keys', () => {
-		expect(isNewUploadKey('', 'uploads/ws/file.png')).toBe(true);
-		expect(isNewUploadKey('uploads/ws/file.png', 'uploads/ws/file.png')).toBe(false);
-		expect(isNewUploadKey('uploads/ws/old.png', 'uploads/ws/new.png')).toBe(true);
-	});
-
 	it('collects upload commits from nested payloads', () => {
 		const commits = collectUploadCommitsFromValue([
 			{ key: 'uploads/ws/product/a.png', sizeBytes: 100 },
@@ -710,8 +704,8 @@ describe('upload commit helpers', () => {
 		]);
 
 		expect(commits).toEqual([
-			{ key: 'uploads/ws/product/a.png', sizeBytes: 100 },
-			{ key: 'uploads/ws/product/tagged.png', sizeBytes: 250 },
+			{ key: 'uploads/ws/product/a.png' },
+			{ key: 'uploads/ws/product/tagged.png' },
 		]);
 	});
 
@@ -732,13 +726,14 @@ describe('upload commit helpers', () => {
 		);
 	});
 
-	it('skips recording when asset key is unchanged', async () => {
-		await recordCommittedUploadIfNew({
-			workspaceId,
-			previousKey: 'uploads/ws/logo.png',
-			newKey: 'uploads/ws/logo.png',
+	it('skips recording an upload that is already recorded', async () => {
+		dbModule.getDb.mockResolvedValue({
+			collection: jest.fn(() => ({ findOne: jest.fn(async () => ({ _id: new ObjectId() })) })),
 		});
 
+		await recordCommittedUploadIfNew({ workspaceId, newKey: 'uploads/ws/logo.png' });
+
+		expect(s3Storage.headUploadObject).not.toHaveBeenCalled();
 		expect(recordUsageSpy).not.toHaveBeenCalled();
 	});
 
@@ -746,7 +741,7 @@ describe('upload commit helpers', () => {
 		dbModule.getDb.mockResolvedValue({
 			collection: jest.fn(() => ({
 				findOne: jest.fn(async ({ idempotencyKey }: { idempotencyKey: string }) => (
-					idempotencyKey === 'upload:uploads/ws/product/existing.png'
+					idempotencyKey === `upload:uploads/${workspaceId.toString()}/product/existing.png`
 						? { idempotencyKey }
 						: null
 				)),
@@ -756,8 +751,9 @@ describe('upload commit helpers', () => {
 		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'image/png', sizeBytes: 250 });
 
 		const total = await sumNewUploadCommitBytes(workspaceId, [
-			{ key: 'uploads/ws/product/existing.png', sizeBytes: 100 },
-			{ key: 'uploads/ws/product/new.png', sizeBytes: 1 },
+			{ key: `uploads/${workspaceId.toString()}/product/existing.png`, sizeBytes: 100 },
+			{ key: `uploads/${workspaceId.toString()}/product/new.png` },
+			{ key: `uploads/${new ObjectId().toString()}/product/foreign.png` },
 		]);
 
 		expect(total).toBe(250);
@@ -812,7 +808,7 @@ describe('upload commit helpers', () => {
 		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'image/png', sizeBytes: 2048 });
 
 		const result = await assertNewUploadCommitsAllowed(workspaceId, [
-			{ key: 'uploads/ws/product/new.png', sizeBytes: 2048 },
+			{ key: `uploads/${workspaceId.toString()}/product/new.png`, sizeBytes: 2048 },
 		]);
 
 		expect(result.allowed).toBe(false);
@@ -824,7 +820,6 @@ describe('upload commit helpers', () => {
 
 		await recordCommittedUploadIfNew({
 			workspaceId,
-			previousKey: 'uploads/ws/logo-old.png',
 			newKey: 'uploads/ws/logo-new.png',
 		});
 
@@ -839,7 +834,7 @@ describe('upload commit helpers', () => {
 	it('records the stored object size, not a client size', async () => {
 		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'image/png', sizeBytes: 5000 });
 
-		await recordCommittedUploadIfNew({ workspaceId, previousKey: '', newKey: 'uploads/ws/avatar.png' });
+		await recordCommittedUploadIfNew({ workspaceId, newKey: 'uploads/ws/avatar.png' });
 
 		expect(recordUsageSpy).toHaveBeenCalledWith(expect.objectContaining({ quantity: 5000 }));
 	});
@@ -847,7 +842,7 @@ describe('upload commit helpers', () => {
 	it('skips recording when the object is not in storage', async () => {
 		s3Storage.headUploadObject.mockResolvedValue(null);
 
-		await recordCommittedUploadIfNew({ workspaceId, previousKey: '', newKey: 'uploads/ws/missing.png' });
+		await recordCommittedUploadIfNew({ workspaceId, newKey: 'uploads/ws/missing.png' });
 
 		expect(recordUsageSpy).not.toHaveBeenCalled();
 	});

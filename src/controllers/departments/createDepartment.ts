@@ -95,7 +95,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		await recordCommittedUploadIfNew({
 			workspaceId: workspaceObjectId,
-			previousKey: '',
 			newKey: normalizedDepartmentImage,
 			metadata: { assetType: 'department_image' },
 		});

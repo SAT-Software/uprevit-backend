@@ -2,7 +2,7 @@ import { ObjectId } from 'mongodb';
 import { USAGE_EVENTS_COLLECTION } from '../../models/billing';
 import type { UsageEvent } from '../../models/billing';
 import { getDb } from '../db';
-import { headUploadObject } from '../s3-storage';
+import { headUploadObject, isTenantUploadKeyAllowed } from '../s3-storage';
 import { getBillingAccountByWorkspaceId } from './billingAccounts';
 import { resolveUsagePeriod } from './billingPeriod';
 import { checkUploadWouldExceedLimit } from './enforcement';
@@ -22,12 +22,6 @@ export const normalizeSizeBytes = (value: unknown): number | undefined => {
 
 export const readUploadSizeBytes = async (key: string): Promise<number | undefined> =>
 	normalizeSizeBytes((await headUploadObject(key.trim()))?.sizeBytes);
-
-export const isNewUploadKey = (previousKey: string | undefined, newKey: string): boolean => {
-	const normalizedNew = newKey.trim();
-	if (!normalizedNew || !normalizedNew.startsWith('uploads/')) return false;
-	return normalizedNew !== (previousKey ?? '').trim();
-};
 
 export const recordCommittedUploadBytes = async ({
 	workspaceId,
@@ -81,33 +75,36 @@ export const recordCommittedUploadBytes = async ({
 	}
 };
 
+const uploadIdempotencyKey = (uploadKey: string): string => `upload:${uploadKey.trim()}`;
+
+const hasRecordedUpload = async (uploadKey: string): Promise<boolean> => {
+	const db = await getDb();
+	return Boolean(await db.collection<UsageEvent>(USAGE_EVENTS_COLLECTION).findOne(
+		{ idempotencyKey: uploadIdempotencyKey(uploadKey) },
+		{ projection: { _id: 1 } },
+	));
+};
+
 export const recordCommittedUploadIfNew = async ({
 	workspaceId,
-	previousKey,
 	newKey,
 	metadata,
 }: {
 	workspaceId: ObjectId;
-	previousKey?: string;
 	newKey: string;
 	metadata?: Record<string, unknown>;
 }): Promise<void> => {
-	if (!isNewUploadKey(previousKey, newKey)) return;
+	const uploadKey = newKey.trim();
+	if (!uploadKey.startsWith('uploads/') || await hasRecordedUpload(uploadKey)) return;
 
-	const sizeBytes = await readUploadSizeBytes(newKey);
+	const sizeBytes = await readUploadSizeBytes(uploadKey);
 	if (!sizeBytes) return;
 
-	await recordCommittedUploadBytes({
-		workspaceId,
-		uploadKey: newKey.trim(),
-		sizeBytes,
-		metadata,
-	});
+	await recordCommittedUploadBytes({ workspaceId, uploadKey, sizeBytes, metadata });
 };
 
 export type UploadCommitInput = {
 	key: string;
-	sizeBytes: number;
 };
 
 export const collectUploadCommitsFromValue = (
@@ -129,10 +126,9 @@ export const collectUploadCommitsFromValue = (
 		? record.tagged_image_key.trim()
 		: '';
 	const uploadKey = key.startsWith('uploads/') ? key : taggedImageKey;
-	const sizeBytes = normalizeSizeBytes(record.sizeBytes);
 
-	if (uploadKey.startsWith('uploads/') && sizeBytes) {
-		commits.push({ key: uploadKey, sizeBytes });
+	if (uploadKey.startsWith('uploads/')) {
+		commits.push({ key: uploadKey });
 	}
 
 	for (const nested of Object.values(record)) {
@@ -144,29 +140,21 @@ export const collectUploadCommitsFromValue = (
 	return commits;
 };
 
-const uploadIdempotencyKey = (uploadKey: string): string => `upload:${uploadKey.trim()}`;
+const collectNewWorkspaceUploadKeys = async (workspaceId: ObjectId, data: unknown): Promise<string[]> => {
+	const keys = [...new Set(collectUploadCommitsFromValue(data).map((commit) => commit.key))]
+		.filter((key) => isTenantUploadKeyAllowed(key, { workspaceId }));
+	const recorded = await Promise.all(keys.map(hasRecordedUpload));
+	return keys.filter((_, index) => !recorded[index]);
+};
 
 export const sumNewUploadCommitBytes = async (
 	workspaceId: ObjectId,
 	data: unknown,
 ): Promise<number> => {
-	const commits = collectUploadCommitsFromValue(data);
-	const seen = new Set<string>();
 	let totalBytes = 0;
-
-	const db = await getDb();
-	const events = db.collection<UsageEvent>(USAGE_EVENTS_COLLECTION);
-
-	for (const commit of commits) {
-		if (seen.has(commit.key)) continue;
-		seen.add(commit.key);
-
-		const existing = await events.findOne({ idempotencyKey: uploadIdempotencyKey(commit.key) });
-		if (existing) continue;
-
-		totalBytes += (await readUploadSizeBytes(commit.key)) ?? 0;
+	for (const key of await collectNewWorkspaceUploadKeys(workspaceId, data)) {
+		totalBytes += (await readUploadSizeBytes(key)) ?? 0;
 	}
-
 	return totalBytes;
 };
 
@@ -189,20 +177,8 @@ export const recordUploadCommitsFromPayload = async (
 	workspaceId: ObjectId,
 	data: unknown,
 ): Promise<void> => {
-	const commits = collectUploadCommitsFromValue(data);
-	const seen = new Set<string>();
-
-	for (const commit of commits) {
-		if (seen.has(commit.key)) continue;
-		seen.add(commit.key);
-
-		const sizeBytes = await readUploadSizeBytes(commit.key);
-		if (!sizeBytes) continue;
-
-		await recordCommittedUploadBytes({
-			workspaceId,
-			uploadKey: commit.key,
-			sizeBytes,
-		});
+	for (const uploadKey of await collectNewWorkspaceUploadKeys(workspaceId, data)) {
+		const sizeBytes = await readUploadSizeBytes(uploadKey);
+		if (sizeBytes) await recordCommittedUploadBytes({ workspaceId, uploadKey, sizeBytes });
 	}
 };
