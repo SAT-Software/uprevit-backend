@@ -43,7 +43,11 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		}
 
 		const workspaceKey = `ws:${context.workspaceId.toString()}:${day}`;
-		if (await bump(workspaceKey, 1) > DOCS_CHAT_DAILY_WORKSPACE_LIMIT) {
+		const workspaceCount = await bump(workspaceKey, 1).catch(async (error) => {
+			await bump(userKey, -1);
+			throw error;
+		});
+		if (workspaceCount > DOCS_CHAT_DAILY_WORKSPACE_LIMIT) {
 			await bump(workspaceKey, -1);
 			await bump(userKey, -1);
 			return limited();
