@@ -1895,6 +1895,62 @@ Resources:
     Metadata:
       BuildMethod: makefile
 
+  GetSavedQueriesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/getSavedQueries.lambdaHandler
+      Events:
+        GetSavedQueries:
+          Type: Api
+          Properties:
+            Path: /reports/saved-queries
+            Method: get
+    Metadata:
+      BuildMethod: makefile
+
+  CreateSavedQueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/createSavedQuery.lambdaHandler
+      Events:
+        CreateSavedQuery:
+          Type: Api
+          Properties:
+            Path: /reports/saved-queries
+            Method: post
+    Metadata:
+      BuildMethod: makefile
+
+  UpdateSavedQueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/updateSavedQuery.lambdaHandler
+      Events:
+        UpdateSavedQuery:
+          Type: Api
+          Properties:
+            Path: /reports/saved-queries/{queryId}
+            Method: put
+    Metadata:
+      BuildMethod: makefile
+
+  DeleteSavedQueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/reports/deleteSavedQuery.lambdaHandler
+      Events:
+        DeleteSavedQuery:
+          Type: Api
+          Properties:
+            Path: /reports/saved-queries/{queryId}
+            Method: delete
+    Metadata:
+      BuildMethod: makefile
+
   # ──────────────────────────────────────────────────────────────────────────
   # PLATFORM ADMIN
   # ──────────────────────────────────────────────────────────────────────────
