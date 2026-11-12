@@ -17,6 +17,7 @@ const CORE_INDEXES: Record<string, CoreIndex[]> = {
 	products: [{ workspace_id: 1, is_latest: 1 }, { product_lineage_id: 1, version: -1 }, { project_id: 1 }],
 	departments: [{ workspace_id: 1, isArchived: 1 }],
 	projects: [{ workspace_id: 1, isArchived: 1 }],
+	docsChatUsage: [{ key: { expiresAt: 1 }, expireAfterSeconds: 0 }],
 	sourceFiles: [
 		{ workspace_id: 1, type: 1 },
 		{ key: { workspace_id: 1, key: 1 }, unique: true, partialFilterExpression: { type: 'file', key: { $type: 'string' } } },

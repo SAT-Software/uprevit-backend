@@ -1201,6 +1201,20 @@ Resources:
     Metadata:
       BuildMethod: makefile
 
+  ConsumeDocsChatQuotaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/docs/consumeDocsChatQuota.lambdaHandler
+      Events:
+        ConsumeDocsChatQuota:
+          Type: Api
+          Properties:
+            Path: /docs/chat/quota
+            Method: post
+    Metadata:
+      BuildMethod: makefile
+
   CreateProductVersionFunction:
     Type: AWS::Serverless::Function
     Properties:

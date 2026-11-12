@@ -112,6 +112,19 @@ export class ResponseWrapper {
 	}
 
 	/**
+	 * Creates a 429 Too Many Requests response
+	 * @param {string} message - Limit message
+	 * @param {ResponseData} additionalData - Additional data to include
+	 * @return {APIGatewayProxyResult}
+	 */
+	static tooManyRequests(message: string = 'Too many requests', additionalData: ResponseData = {}): APIGatewayProxyResult {
+		return this.success({
+			message,
+			...additionalData,
+		}, StatusCodes.TOO_MANY_REQUESTS);
+	}
+
+	/**
 	 * Creates a 500 Internal Server Error response
 	 * @param {Error | string} error - Error object or error message
 	 * @param {ResponseData} additionalData - Additional data to include in the response

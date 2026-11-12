@@ -56,6 +56,7 @@ build-UpdateProductDataFunction: ENTRY := controllers/products/updateProductData
 build-GetProductDataFunction: ENTRY := controllers/products/getProductData.ts
 build-GetAllStandardSymbolsFunction: ENTRY := controllers/standardSymbols/getAllStandardSymbols.ts
 build-GetDocumentationVideoSignedUrlFunction: ENTRY := controllers/docs/getDocumentationVideoSignedUrl.ts
+build-ConsumeDocsChatQuotaFunction: ENTRY := controllers/docs/consumeDocsChatQuota.ts
 build-CreateProductVersionFunction: ENTRY := controllers/products/createProductVersion.ts
 build-GetAllProductVersionsFunction: ENTRY := controllers/products/getAllProductVersions.ts
 build-EnqueueProductExportFunction: ENTRY := controllers/products/enqueueProductExport.ts
