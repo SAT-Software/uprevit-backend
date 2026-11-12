@@ -175,21 +175,16 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			db.collection<Project>('projects').aggregate<{ total: number }>(pipeline.concat({ $count: 'total' })).toArray(),
 		]);
 
-		const projectsWithSignedAvatars = await Promise.all(
-			projects.map(async (project) => {
-				if (!project.users?.length) return project;
-
-				const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(project.users, {
-					workspaceId: context.workspaceId,
-					pendingOwnerId: context.cognitoSub,
-				});
-
-				return {
-					...project,
-					users: usersWithSignedAvatars,
-				};
-			}),
-		);
+		const signedUsers = await enrichUsersWithProfileAvatarUrls(projects.flatMap((project) => project.users ?? []), {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		});
+		let signedOffset = 0;
+		const projectsWithSignedAvatars = projects.map((project) => {
+			if (!project.users?.length) return project;
+			const users = signedUsers.slice(signedOffset, signedOffset += project.users.length);
+			return { ...project, users };
+		});
 
 		const projectsWithSignedUrls = await enrichProjectsWithImageUrls(projectsWithSignedAvatars, {
 			workspaceId: context.workspaceId,

@@ -120,25 +120,23 @@ export const aggregateUsageForPeriod = async ({
 
 	// Match events recorded for this period, or events that occurred within it.
 	// Chargebee term dates can change after events were written, so occurredAt keeps totals accurate.
-	const events = await db.collection<UsageEvent>(USAGE_EVENTS_COLLECTION).find({
-		workspaceId,
-		$or: [
-			{ billingPeriodStart: periodStart, billingPeriodEnd: periodEnd },
-			{ occurredAt: { $gte: periodStart, $lte: periodEnd } },
-		],
-	}).toArray();
-
-	const eventTotals = events.reduce<Omit<PeriodUsageTotals, 'activeSeats' | 'seatClasses'>>(
-		(totals, event) => {
-			if (event.metric === 'completed_export') {
-				totals.exports += event.quantity;
-			} else if (event.metric === 'upload_bytes') {
-				totals.uploadBytes += event.quantity;
-			}
-			return totals;
+	const rows = await db.collection<UsageEvent>(USAGE_EVENTS_COLLECTION).aggregate<{ _id: string; total: number }>([
+		{
+			$match: {
+				workspaceId,
+				$or: [
+					{ billingPeriodStart: periodStart, billingPeriodEnd: periodEnd },
+					{ occurredAt: { $gte: periodStart, $lte: periodEnd } },
+				],
+			},
 		},
-		{ exports: 0, uploadBytes: 0 },
-	);
+		{ $group: { _id: '$metric', total: { $sum: '$quantity' } } },
+	]).toArray();
+	const totalsByMetric = new Map(rows.map((row) => [row._id, row.total]));
+	const eventTotals = {
+		exports: totalsByMetric.get('completed_export') ?? 0,
+		uploadBytes: totalsByMetric.get('upload_bytes') ?? 0,
+	};
 
 	const seatClasses = await countActiveSeatsByClass(workspaceId);
 

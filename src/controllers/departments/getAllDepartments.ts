@@ -145,21 +145,16 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		]);
 		const totalCount = countResult.length > 0 ? countResult[0].total : 0;
 
-		const departmentsWithSignedAvatars = await Promise.all(
-			departments.map(async (department) => {
-				if (!department.users?.length) return department;
-
-				const usersWithSignedAvatars = await enrichUsersWithProfileAvatarUrls(department.users, {
-					workspaceId: context.workspaceId,
-					pendingOwnerId: context.cognitoSub,
-				});
-
-				return {
-					...department,
-					users: usersWithSignedAvatars,
-				};
-			}),
-		);
+		const signedUsers = await enrichUsersWithProfileAvatarUrls(departments.flatMap((department) => department.users ?? []), {
+			workspaceId: context.workspaceId,
+			pendingOwnerId: context.cognitoSub,
+		});
+		let signedOffset = 0;
+		const departmentsWithSignedAvatars = departments.map((department) => {
+			if (!department.users?.length) return department;
+			const users = signedUsers.slice(signedOffset, signedOffset += department.users.length);
+			return { ...department, users };
+		});
 
 		const departmentsWithSignedUrls = await enrichDepartmentsWithImageUrls(departmentsWithSignedAvatars, {
 			workspaceId: context.workspaceId,

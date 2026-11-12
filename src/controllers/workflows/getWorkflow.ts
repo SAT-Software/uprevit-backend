@@ -12,7 +12,7 @@ import { enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 import {
 	canManageWorkflow,
 	findWorkflow,
-	getProductTeam,
+	getProductTeams,
 	loadWorkflowProductState,
 	requireWorkflowContext,
 } from '../../utils/workflows';
@@ -60,11 +60,15 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			withContentChangeFlags(db, workflow),
 		]);
 		const signingOptions = { workspaceId: context.workspaceId, pendingOwnerId: context.cognitoSub };
+		const latestVersions = workflow.products.map((product) => latest.get(product.lineageId.toString()));
+		const teams = await getProductTeams(db, context.workspaceId, latestVersions.map((version) => version ?? {}));
+		const signedMembers = await enrichUsersWithProfileAvatarUrls(teams.flat(), signingOptions);
+		let signedOffset = 0;
+		const signedTeams = teams.map((team) => signedMembers.slice(signedOffset, signedOffset += team.length));
 
-		const products = await Promise.all(workflow.products.map(async (product) => {
+		const products = workflow.products.map((product, index) => {
 			const key = product.lineageId.toString();
 			const version = included.get(key);
-			const latestVersion = latest.get(key);
 			const auditLogs = audits.get(product.productVersionId.toString()) ?? [];
 			const created = auditLogs.find((log) => log.action === 'create');
 			const modified = auditLogs.find((log) => log.action === 'update');
@@ -78,11 +82,9 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 				createdOn: created?.actionAt ?? null,
 				modifiedBy: modified?.actionBy ?? null,
 				modifiedOn: modified?.actionAt ?? null,
-				team: latestVersion
-					? await enrichUsersWithProfileAvatarUrls(await getProductTeam(db, context.workspaceId, latestVersion), signingOptions)
-					: [],
+				team: latestVersions[index] ? signedTeams[index] : [],
 			};
-		}));
+		});
 
 		return ResponseWrapper.success({
 			message: 'Workflow fetched successfully',
