@@ -11,10 +11,10 @@ import { buildProductStatusMatch } from '../../utils/productLifecycle';
 import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
 import { productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
 import { withTelemetry } from '../../utils/telemetry';
+import { escapeRegex } from '../../utils/regex';
 
 const MAX_FILTER_LENGTH = 200;
 
-const escapeRegex = (pattern: string): string => pattern.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
 const ALLOWED_SORT_FIELDS = [
 	'product_name',

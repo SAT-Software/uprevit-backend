@@ -13,6 +13,7 @@ import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../uti
 import { getBillingAccountByWorkspaceId, normalizeLimits } from "../../utils/billing/billingAccounts";
 import { recordCommittedUploadBytes } from "../../utils/billing/uploadCommit";
 import { withTelemetry } from '../../utils/telemetry';
+import { sourceFileKeyPrefix } from "../../utils/s3-storage";
 
 /**
  * @param {APIGatewayProxyEvent} event
@@ -35,12 +36,13 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		});
 		if (missingFieldsResult) return missingFieldsResult;
 
-		if (input.type === 'file' && !input.url && !input.key) {
-			return ResponseWrapper.badRequest("At least one of 'url' or 'key' is required for source files.");
-		}
-
 		const isValidEnum = validateEnum(['file', 'folder'], input.type)
 		if(isValidEnum) return isValidEnum
+
+		const key = typeof input.key === 'string' ? input.key.trim() : '';
+		if (input.type === 'file' && !key.startsWith(sourceFileKeyPrefix(context.workspaceId))) {
+			return ResponseWrapper.badRequest('A valid source file upload key is required.');
+		}
 
 		const objectIdValidation = validateAllObjectIds({
 			...(input.parentId && { 'parentId': input.parentId }),
@@ -108,6 +110,10 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		if (existingFileOrFolder) return ResponseWrapper.conflict(`A ${existingFileOrFolder.type} with the same name already exists in this location.`);
 
+		if (input.type === 'file' && await sourceFilesCollection.findOne({ workspace_id: workspaceId, key })) {
+			return ResponseWrapper.conflict('This upload is already registered as a source file.');
+		}
+
 
 		const newSourceFile: SourceFile = {
 			_id: new ObjectId(),
@@ -117,8 +123,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			parentId: parentId,
 			...(input.type === 'folder' && productId && { product_id: productId }),
 			...(input.type === 'file' && {
-				...(input.url && { url: input.url }),
-				...(input.key && { key: input.key }),
+				key,
 				...(sizeBytes && { sizeBytes }),
 			}),
 		};

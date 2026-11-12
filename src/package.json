@@ -15,6 +15,7 @@
 		"backfill:product-owners": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/backfillProductOwners.ts",
 		"migrate:workflow-release": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateWorkflowRelease.ts",
 		"ensure:core-indexes": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/ensureCoreIndexes.ts",
+		"check:source-file-keys": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/checkSourceFileKeys.ts",
 		"migrate:bookmarks-latest-version": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateBookmarksToLatestVersion.ts"
 	},
 	"dependencies": {

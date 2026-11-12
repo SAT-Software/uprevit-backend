@@ -11,6 +11,7 @@ import { recordAuditEvent } from '../../utils/auditLogV2';
 import { findActiveWorkspaceMember } from '../../utils/productAccess';
 import { computeCompleteCount } from '../../utils/productLifecycle';
 import { withTelemetry } from '../../utils/telemetry';
+import { escapeRegex } from '../../utils/regex';
 
 /**
  * Create a product
@@ -44,6 +45,11 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		if(missingFieldsResult) return missingFieldsResult;
 
+		if (typeof input.product_plan_number !== 'string' || !input.product_plan_number.trim()) {
+			return ResponseWrapper.badRequest('product_plan_number must be a non-empty string');
+		}
+		const planNumber = input.product_plan_number.trim();
+
 
 		const objectIdValidation = validateObjectIds({
 			'project_id': input.project_id,
@@ -59,10 +65,10 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const departmentObjectId = new ObjectId(input.department_id);
 		const workspaceObjectId = context.workspaceId;
 
-		const existingProduct = await db.collection<Product>('products').findOne({
-			product_plan_number: input.product_plan_number,
-			parent_id: { $exists: false }
-		});
+		const existingProduct = await db.collection<Product>('products').findOne(
+			{ workspace_id: workspaceObjectId, product_plan_number: { $regex: `^${escapeRegex(planNumber)}$`, $options: 'i' } },
+			{ projection: { _id: 1 } },
+		);
 
 		if (existingProduct) {
 			return ResponseWrapper.conflict('Product plan number already exists');
@@ -85,7 +91,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			project_id: projectObjectId,
 			workspace_id: workspaceObjectId,
 			department_id: departmentObjectId,
-			product_plan_number: input.product_plan_number,
+			product_plan_number: planNumber,
 			product_name: input.product_name,
 			product_description: input.product_description,
 			version: input.version,
@@ -153,7 +159,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			where: { module: 'products' },
 			auth: auth.payload,
 			after: {
-				product_plan_number: input.product_plan_number,
+				product_plan_number: planNumber,
 				product_name: input.product_name,
 				product_description: input.product_description,
 				status: productData.status,
