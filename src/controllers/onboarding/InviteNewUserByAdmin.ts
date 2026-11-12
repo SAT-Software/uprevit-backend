@@ -17,6 +17,7 @@ import {
 import { findInactiveWorkspaceUserByEmail, reactivateWorkspaceUser } from "../../utils/userRemoval";
 import { parseAssignableMemberAccess, syncMemberCognitoGroups, type MemberAccess } from "../../utils/memberAccess";
 import { withTelemetry } from '../../utils/telemetry';
+import { recordAuditEvent } from '../../utils/auditLogV2';
 
 const cognito = new CognitoIdentityProviderClient({ region: 'us-east-1' });
 
@@ -35,7 +36,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
 
-		const { context } = tenantResult;
+		const { context, auth } = tenantResult;
 
 		if (!isWorkspaceAdmin(context.cognitoGroups)) {
 			return ResponseWrapper.forbidden('Insufficient permissions');
@@ -73,6 +74,19 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 		const workspaceObjectId = context.workspaceId;
 		const results: InviteResult[] = [];
 
+		const recordInvite = (entityId: string, eventKey: 'member.invited' | 'member.reactivated', memberName: string, memberEmail: string) =>
+			recordAuditEvent({
+				workspaceId: workspaceObjectId.toString(),
+				scope: { type: 'workspace', id: workspaceObjectId.toString() },
+				entity: { type: 'user', id: entityId },
+				action: 'create',
+				eventKey,
+				visibility: 'admin',
+				where: { module: 'users' },
+				auth: auth.payload,
+				meta: { memberName, memberEmail },
+			});
+
 		for (const [index, user] of users.entries()) {
 			const { email, name } = user;
 			const access = accesses[index];
@@ -89,6 +103,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 						actorUserId: context.userId,
 						access: inactiveUser.userType === 'admin' ? { ...access, userType: 'admin' } : access,
 					});
+					await recordInvite(inactiveUser._id!.toString(), 'member.reactivated', name, normalizedEmail);
 					results.push({ email: normalizedEmail, status: 'Reactivated' });
 					continue;
 				}
@@ -137,6 +152,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 
 				await syncMemberCognitoGroups(normalizedEmail, access);
 
+				await recordInvite(dbUserId, 'member.invited', name, normalizedEmail);
 				results.push({ email: normalizedEmail, status: "Success" });
 			} catch (error: unknown) {
 				if (error instanceof InviteEmailConflictError) {

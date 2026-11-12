@@ -263,6 +263,7 @@ const summaryBuilders: Record<string, SummaryBuilder> = {
 	},
 	'member.created': ({ meta }) => `added ${pickText(meta, ['memberName', 'memberEmail']) ?? 'a member'} to the workspace`,
 	'member.invited': ({ meta }) => `invited ${pickText(meta, ['memberName', 'memberEmail']) ?? 'a member'} to the workspace`,
+	'member.reactivated': ({ meta }) => `re-invited ${pickText(meta, ['memberName', 'memberEmail']) ?? 'a member'} to the workspace`,
 	'member.profile.updated': ({ meta }) => `updated the profile of ${pickText(meta, ['memberName', 'memberEmail']) ?? 'a member'}`,
 	'member.profile.completed': ({ meta }) => `${pickText(meta, ['memberName', 'memberEmail']) ?? 'a member'} completed their profile`,
 	'member.access.changed': ({ meta, changes }) =>
