@@ -5,7 +5,6 @@ build-%:
 	$(if $(ENTRY),,$(error No ENTRY set for $* in src/Makefile))
 	$(ESBUILD) $(ENTRY) $(ESBUILD_FLAGS) --outdir="$(ARTIFACTS_DIR)"
 
-build-HelloWorldFunction: ENTRY := app.ts
 build-HealthFunction: ENTRY := controllers/health/getHealth.ts
 build-CreateUserFunction: ENTRY := controllers/users/createUser.ts
 build-GetUserFunction: ENTRY := controllers/users/getUser.ts
@@ -16,7 +15,6 @@ build-GetAllUsersByWorkspaceFunction: ENTRY := controllers/users/getAllUsersByWo
 build-AdminOnboardingCreateWorkspaceFunction: ENTRY := controllers/onboarding/adminOnboardingCreateWorkspace.ts
 build-InviteNewUserByAdminFunction: ENTRY := controllers/onboarding/InviteNewUserByAdmin.ts
 build-OnboardAndUpdateInvitedUserFunction: ENTRY := controllers/onboarding/onboardAndUpdateInvitedUser.ts
-build-CreateWorkspaceFunction: ENTRY := controllers/workspaces/createWorkspace.ts
 build-GetWorkspaceFunction: ENTRY := controllers/workspaces/getWorkspace.ts
 build-UpdateWorkspaceFunction: ENTRY := controllers/workspaces/updateWorkspace.ts
 build-CreateDepartmentFunction: ENTRY := controllers/departments/createDepartment.ts

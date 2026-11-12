@@ -157,7 +157,7 @@ Test a single function by invoking it directly with a test event. An event is a 
 Run functions locally and invoke them with the `sam local invoke` command.
 
 ```bash
-uprevit-backend$ sam local invoke HelloWorldFunction --event events/event.json
+uprevit-backend$ sam local invoke HealthFunction
 ```
 
 The SAM CLI can also emulate the application's API. Use `sam local start-api` to run the API locally on port 3000.
@@ -171,10 +171,10 @@ The SAM CLI reads the application template to determine the API's routes and the
 
 ```yaml
       Events:
-        HelloWorld:
+        GetHealth:
           Type: Api
           Properties:
-            Path: /hello
+            Path: /health
             Method: get
 ```
 
@@ -189,7 +189,7 @@ To simplify troubleshooting, SAM CLI has a command called `sam logs`. `sam logs`
 `NOTE`: This command works for all AWS Lambda functions; not just the ones you deploy using SAM.
 
 ```bash
-uprevit-backend$ sam logs -n HelloWorldFunction --stack-name uprevit-backend --tail
+uprevit-backend$ sam logs -n HealthFunction --stack-name uprevit-backend --tail
 ```
 
 You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).

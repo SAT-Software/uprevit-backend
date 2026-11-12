@@ -40,6 +40,7 @@ import {
 	recordUploadCommitsFromPayload,
 } from '../../utils/billing/uploadCommit';
 import { withTelemetry } from '../../utils/telemetry';
+import { logError } from '../../utils/logger';
 
 const validTabs = [
 	'product-information',
@@ -768,8 +769,10 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 	} catch (error: unknown) {
 		if (error instanceof LifecycleConflictError || error instanceof WorkflowConflictError) return ResponseWrapper.conflict(error.message);
 		if (error instanceof ProductAccessError) return ResponseWrapper.forbidden(error.message);
-		return ResponseWrapper.internalServerError(
-			`Internal server error: ${error instanceof Error ? error.message : String(error)}`,
-		);
+		logError('Update product data handler failed', error, {
+			userId: context.userId,
+			workspaceId: context.workspaceId,
+		});
+		return ResponseWrapper.internalServerError('Failed to update product data');
 	}
 });
