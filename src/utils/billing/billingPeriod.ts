@@ -86,7 +86,11 @@ export const resolveUsagePeriod = (
 	const termEnd = account.chargebee?.currentTermEnd;
 
 	if (termStart && termEnd) {
-		return { periodStart: termStart, periodEnd: termEnd, source: 'chargebee' };
+		if (now.getTime() <= termEnd.getTime()) {
+			return { periodStart: termStart, periodEnd: termEnd, source: 'chargebee' };
+		}
+		const { periodStart, periodEnd } = computeBillingPeriodFromAnchor(termStart, account.billingCadence, now);
+		return { periodStart, periodEnd, source: 'chargebee' };
 	}
 
 	const { periodStart, periodEnd } = resolveBillingPeriod(account, now);

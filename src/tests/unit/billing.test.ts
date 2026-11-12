@@ -92,11 +92,39 @@ describe('billing period helpers', () => {
 				currentTermStart: termStart,
 				currentTermEnd: termEnd,
 			},
-		});
+		}, new Date('2026-06-15T00:00:00.000Z'));
 
 		expect(period.source).toBe('chargebee');
 		expect(period.periodStart.toISOString()).toBe(termStart.toISOString());
 		expect(period.periodEnd.toISOString()).toBe(termEnd.toISOString());
+	});
+
+	it('rolls an expired monthly Chargebee term forward', () => {
+		const period = resolveUsagePeriod({
+			billingCadence: 'monthly',
+			createdAt: new Date('2025-01-01T00:00:00.000Z'),
+			chargebee: {
+				currentTermStart: new Date('2026-06-01T00:00:00.000Z'),
+				currentTermEnd: new Date('2026-06-30T23:59:59.999Z'),
+			},
+		}, new Date('2026-08-10T00:00:00.000Z'));
+
+		expect(period.source).toBe('chargebee');
+		expect(period.periodStart.toISOString()).toBe('2026-08-01T00:00:00.000Z');
+		expect(period.periodEnd.toISOString()).toBe('2026-08-31T23:59:59.999Z');
+	});
+
+	it('rolls an expired yearly Chargebee term forward', () => {
+		const period = resolveUsagePeriod({
+			billingCadence: 'yearly',
+			createdAt: new Date('2025-01-01T00:00:00.000Z'),
+			chargebee: {
+				currentTermStart: new Date('2025-03-01T00:00:00.000Z'),
+				currentTermEnd: new Date('2026-02-28T23:59:59.999Z'),
+			},
+		}, new Date('2026-05-01T00:00:00.000Z'));
+
+		expect(period.periodStart.toISOString()).toBe('2026-03-01T00:00:00.000Z');
 	});
 
 	it('resolves the current period from stored anchor and createdAt fallback', () => {

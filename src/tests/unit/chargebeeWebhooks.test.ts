@@ -458,28 +458,63 @@ describe('claimChargebeeWebhook', () => {
 		jest.clearAllMocks();
 	});
 
-	it('returns claimed on first insert', async () => {
-		const insertOne = jest.fn<() => Promise<unknown>>().mockResolvedValue({ acknowledged: true });
+	const mockCollection = ({
+		insertOne = jest.fn<() => Promise<unknown>>().mockRejectedValue({ code: 11000 }),
+		findOneAndUpdate = jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
+		findOne = jest.fn<() => Promise<unknown>>().mockResolvedValue({ status: 'processed' }),
+	} = {}) => {
 		mockGetDb.mockResolvedValue({
 			collection: jest.fn().mockReturnValue({
 				createIndex: jest.fn<() => Promise<unknown>>().mockResolvedValue(undefined),
 				insertOne,
+				findOneAndUpdate,
+				findOne,
 			}),
 		} as never);
+		return { insertOne, findOneAndUpdate, findOne };
+	};
+
+	it('returns claimed on first insert', async () => {
+		const { insertOne } = mockCollection({ insertOne: jest.fn<() => Promise<unknown>>().mockResolvedValue({ acknowledged: true }) });
 
 		await expect(claimChargebeeWebhook('evt_1', 'invoice_generated')).resolves.toBe('claimed');
-		expect(insertOne).toHaveBeenCalledWith(expect.objectContaining({ eventId: 'evt_1' }));
+		expect(insertOne).toHaveBeenCalledWith(expect.objectContaining({ eventId: 'evt_1', status: 'processing' }));
 	});
 
-	it('returns duplicate on unique index conflict', async () => {
-		const insertOne = jest.fn<() => Promise<unknown>>().mockRejectedValue({ code: 11000 });
-		mockGetDb.mockResolvedValue({
-			collection: jest.fn().mockReturnValue({
-				createIndex: jest.fn<() => Promise<unknown>>().mockResolvedValue(undefined),
-				insertOne,
-			}),
-		} as never);
+	it('returns duplicate for a processed event', async () => {
+		mockCollection();
 
 		await expect(claimChargebeeWebhook('evt_1', 'invoice_generated')).resolves.toBe('duplicate');
+	});
+
+	it('treats a legacy row without status as processed', async () => {
+		mockCollection({ findOne: jest.fn<() => Promise<unknown>>().mockResolvedValue({}) });
+
+		await expect(claimChargebeeWebhook('evt_1', 'invoice_generated')).resolves.toBe('duplicate');
+	});
+
+	it('reclaims a stale processing lease', async () => {
+		const now = new Date('2026-11-12T10:00:00.000Z');
+		const { findOneAndUpdate } = mockCollection({
+			findOneAndUpdate: jest.fn<() => Promise<unknown>>().mockResolvedValue({ eventId: 'evt_1' }),
+		});
+
+		await expect(claimChargebeeWebhook('evt_1', 'invoice_generated', now)).resolves.toBe('claimed');
+		expect(findOneAndUpdate).toHaveBeenCalledWith(
+			{ eventId: 'evt_1', status: 'processing', claimedAt: { $lt: new Date('2026-11-12T09:55:00.000Z') } },
+			{ $set: { claimedAt: now } },
+		);
+	});
+
+	it('returns in_progress when the claim row disappeared mid-retry', async () => {
+		mockCollection({ findOne: jest.fn<() => Promise<unknown>>().mockResolvedValue(null) });
+
+		await expect(claimChargebeeWebhook('evt_1', 'invoice_generated')).resolves.toBe('in_progress');
+	});
+
+	it('returns in_progress while a live lease is held', async () => {
+		mockCollection({ findOne: jest.fn<() => Promise<unknown>>().mockResolvedValue({ status: 'processing' }) });
+
+		await expect(claimChargebeeWebhook('evt_1', 'invoice_generated')).resolves.toBe('in_progress');
 	});
 });

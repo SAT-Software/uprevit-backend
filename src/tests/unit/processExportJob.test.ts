@@ -5,6 +5,7 @@ jest.mock('../../utils/exportJobs', () => ({
 	markExportJobCompleted: jest.fn(),
 	markExportJobFailed: jest.fn(),
 	markExportJobProcessing: jest.fn(),
+	recordUsageForCompletedExportJob: jest.fn(),
 }));
 
 jest.mock('../../utils/db', () => ({
@@ -123,6 +124,7 @@ describe('processExportJob', () => {
 		});
 		expect(markExportJobCompleted).toHaveBeenCalledWith({
 			jobId,
+			workspaceId,
 			s3Key: expect.stringContaining(`/products/${workspaceId.toString()}/${jobId.toString()}/Product_ABC_123_v2.pdf`),
 			fileName: 'Product_ABC_123_v2.pdf',
 			contentType: 'application/pdf',
@@ -194,9 +196,36 @@ describe('processExportJob', () => {
 		});
 		expect(markExportJobCompleted).toHaveBeenCalledWith({
 			jobId,
+			workspaceId,
 			s3Key: expect.stringContaining(`/reports/${workspaceId.toString()}/${jobId.toString()}/Products_Report_`),
 			fileName: expect.stringMatching(/^Products_Report_\d{4}-\d{2}-\d{2}\.pdf$/),
 			contentType: 'application/pdf',
 		});
+	});
+
+	it('bills an already completed job instead of reprocessing it', async () => {
+		const jobId = new ObjectId();
+		markExportJobProcessing.mockResolvedValue(null);
+
+		const result = await lambdaHandler({
+			Records: [{
+				messageId: 'msg-3',
+				body: JSON.stringify({
+					schemaVersion: 1,
+					jobId: jobId.toString(),
+					target: 'product',
+					targetId: new ObjectId().toString(),
+					workspaceId: new ObjectId().toString(),
+					requestedBySub: 'user-sub',
+					format: 'pdf',
+					queuedAt: '2026-03-08T10:00:00.000Z',
+				}),
+				attributes: { ApproximateReceiveCount: '2' },
+			}],
+		} as any);
+
+		expect(result).toEqual({ batchItemFailures: [] });
+		expect(exportJobs.recordUsageForCompletedExportJob).toHaveBeenCalledWith(jobId);
+		expect(generateProductPDFExport).not.toHaveBeenCalled();
 	});
 });

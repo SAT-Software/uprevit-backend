@@ -14,6 +14,7 @@ import { recordCompletedExport } from './billing/usageRecording';
 
 const DEFAULT_EXPORT_FILE_TTL_HOURS = 24;
 const EXPORT_JOBS_PAGE_LIMIT = 10;
+const STALE_PROCESSING_EXPORT_MS = 2 * 60 * 60 * 1000;
 const TERMINAL_EXPORT_JOB_STATUSES: ExportJobStatus[] = ['completed', 'failed'];
 export const ACTIVE_EXPORT_JOB_STATUSES: ExportJobStatus[] = ['queued', 'processing'];
 
@@ -182,12 +183,14 @@ export const markExportJobProcessing = async ({
 
 export const markExportJobCompleted = async ({
 	jobId,
+	workspaceId,
 	s3Key,
 	fileName,
 	contentType,
 	completedAt,
 }: {
 	jobId: ObjectId;
+	workspaceId: ObjectId;
 	s3Key: string;
 	fileName: string;
 	contentType: string;
@@ -218,15 +221,17 @@ export const markExportJobCompleted = async ({
 		{ returnDocument: 'after' },
 	);
 
-	if (completedJob?.workspaceId) {
-		await recordCompletedExport({
-			workspaceId: completedJob.workspaceId,
-			jobId,
-			occurredAt: now,
-		});
-	}
+	if (completedJob) await recordCompletedExport({ workspaceId, jobId, occurredAt: now });
 
 	return completedJob;
+};
+
+export const recordUsageForCompletedExportJob = async (jobId: ObjectId): Promise<void> => {
+	const collection = await getCollection();
+	const job = await collection.findOne({ _id: jobId, status: 'completed' }, { projection: { workspaceId: 1, completedAt: 1 } });
+	if (job?.workspaceId) {
+		await recordCompletedExport({ workspaceId: job.workspaceId, jobId, occurredAt: job.completedAt ?? new Date() });
+	}
 };
 
 export const markExportJobFailed = async ({
@@ -273,7 +278,10 @@ export const countActiveExportJobs = async ({
 	const collection = await getCollection();
 	return collection.countDocuments({
 		workspaceId,
-		status: { $in: ACTIVE_EXPORT_JOB_STATUSES },
+		$or: [
+			{ status: 'queued' },
+			{ status: 'processing', startedAt: { $gte: new Date(Date.now() - STALE_PROCESSING_EXPORT_MS) } },
+		],
 		createdAt: { $gte: periodStart, $lte: periodEnd },
 	});
 };
