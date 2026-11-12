@@ -95,7 +95,8 @@ export const recordCommittedUploadIfNew = async ({
 	metadata?: Record<string, unknown>;
 }): Promise<void> => {
 	const uploadKey = newKey.trim();
-	if (!uploadKey.startsWith('uploads/') || await hasRecordedUpload(uploadKey)) return;
+	const inWorkspace = isTenantUploadKeyAllowed(uploadKey, { workspaceId }) || uploadKey.startsWith('uploads/pending/');
+	if (!inWorkspace || await hasRecordedUpload(uploadKey)) return;
 
 	const sizeBytes = await readUploadSizeBytes(uploadKey);
 	if (!sizeBytes) return;
@@ -125,10 +126,8 @@ export const collectUploadCommitsFromValue = (
 	const taggedImageKey = typeof record.tagged_image_key === 'string'
 		? record.tagged_image_key.trim()
 		: '';
-	const uploadKey = key.startsWith('uploads/') ? key : taggedImageKey;
-
-	if (uploadKey.startsWith('uploads/')) {
-		commits.push({ key: uploadKey });
+	for (const uploadKey of [key, taggedImageKey]) {
+		if (uploadKey.startsWith('uploads/')) commits.push({ key: uploadKey });
 	}
 
 	for (const nested of Object.values(record)) {

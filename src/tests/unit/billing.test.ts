@@ -731,7 +731,7 @@ describe('upload commit helpers', () => {
 			collection: jest.fn(() => ({ findOne: jest.fn(async () => ({ _id: new ObjectId() })) })),
 		});
 
-		await recordCommittedUploadIfNew({ workspaceId, newKey: 'uploads/ws/logo.png' });
+		await recordCommittedUploadIfNew({ workspaceId, newKey: `uploads/${workspaceId.toString()}/logo.png` });
 
 		expect(s3Storage.headUploadObject).not.toHaveBeenCalled();
 		expect(recordUsageSpy).not.toHaveBeenCalled();
@@ -820,13 +820,13 @@ describe('upload commit helpers', () => {
 
 		await recordCommittedUploadIfNew({
 			workspaceId,
-			newKey: 'uploads/ws/logo-new.png',
+			newKey: `uploads/${workspaceId.toString()}/logo-new.png`,
 		});
 
 		expect(recordUsageSpy).toHaveBeenCalledWith(
 			expect.objectContaining({
 				quantity: 2048,
-				idempotencyKey: 'upload:uploads/ws/logo-new.png',
+				idempotencyKey: `upload:uploads/${workspaceId.toString()}/logo-new.png`,
 			}),
 		);
 	});
@@ -834,7 +834,7 @@ describe('upload commit helpers', () => {
 	it('records the stored object size, not a client size', async () => {
 		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'image/png', sizeBytes: 5000 });
 
-		await recordCommittedUploadIfNew({ workspaceId, newKey: 'uploads/ws/avatar.png' });
+		await recordCommittedUploadIfNew({ workspaceId, newKey: `uploads/${workspaceId.toString()}/avatar.png` });
 
 		expect(recordUsageSpy).toHaveBeenCalledWith(expect.objectContaining({ quantity: 5000 }));
 	});
@@ -842,7 +842,7 @@ describe('upload commit helpers', () => {
 	it('skips recording when the object is not in storage', async () => {
 		s3Storage.headUploadObject.mockResolvedValue(null);
 
-		await recordCommittedUploadIfNew({ workspaceId, newKey: 'uploads/ws/missing.png' });
+		await recordCommittedUploadIfNew({ workspaceId, newKey: `uploads/${workspaceId.toString()}/missing.png` });
 
 		expect(recordUsageSpy).not.toHaveBeenCalled();
 	});
