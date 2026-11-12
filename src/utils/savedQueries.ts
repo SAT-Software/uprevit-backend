@@ -101,11 +101,10 @@ export const toSavedQueryResponse = (query: SavedQueryDocument, callerUserId: Ob
 	updatedAt: query.updatedAt.toISOString(),
 });
 
-export const savedQueryListFilter = (workspaceId: ObjectId, kind: SavedQueryKind, callerUserId: ObjectId) => ({
-	workspaceId,
-	kind,
-	$or: [{ ownerUserId: callerUserId }, { shared: true }],
-});
+export const savedQueryListFilters = (workspaceId: ObjectId, kind: SavedQueryKind, callerUserId: ObjectId) => [
+	{ workspaceId, kind, ownerUserId: callerUserId },
+	{ workspaceId, kind, ownerUserId: { $ne: callerUserId }, shared: true },
+];
 
 export const savedQueryOwnerFilter = (queryId: ObjectId, workspaceId: ObjectId, callerUserId: ObjectId) => ({
 	_id: queryId,

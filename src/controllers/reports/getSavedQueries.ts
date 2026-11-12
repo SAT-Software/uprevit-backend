@@ -7,7 +7,7 @@ import {
 	MAX_SAVED_QUERIES_PER_USER,
 	getSavedQueriesCollection,
 	isSavedQueryKind,
-	savedQueryListFilter,
+	savedQueryListFilters,
 	toSavedQueryResponse,
 } from '../../utils/savedQueries';
 import { withTelemetry } from '../../utils/telemetry';
@@ -28,11 +28,10 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		}
 
 		const collection = await getSavedQueriesCollection();
-		const queries = await collection
-			.find(savedQueryListFilter(context.workspaceId, kind, context.userId))
-			.sort({ updatedAt: -1 })
-			.limit(MAX_SAVED_QUERIES_PER_USER)
-			.toArray();
+		const [own, shared] = await Promise.all(savedQueryListFilters(context.workspaceId, kind, context.userId).map((filter) =>
+			collection.find(filter).sort({ updatedAt: -1 }).limit(MAX_SAVED_QUERIES_PER_USER).toArray(),
+		));
+		const queries = [...own, ...shared].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 
 		return ResponseWrapper.success({
 			message: 'Saved queries fetched successfully',

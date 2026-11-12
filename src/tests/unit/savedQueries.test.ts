@@ -106,11 +106,8 @@ describe('saved queries', () => {
 	it('lists own and shared queries of the requested kind in the workspace', async () => {
 		const result = await getHandler(buildEvent({ httpMethod: 'GET', queryStringParameters: { kind: 'workflow' } }));
 		expect(result.statusCode).toBe(200);
-		expect(collection.find).toHaveBeenCalledWith({
-			workspaceId,
-			kind: 'workflow',
-			$or: [{ ownerUserId: userId }, { shared: true }],
-		});
+		expect(collection.find).toHaveBeenCalledWith({ workspaceId, kind: 'workflow', ownerUserId: userId });
+		expect(collection.find).toHaveBeenCalledWith({ workspaceId, kind: 'workflow', ownerUserId: { $ne: userId }, shared: true });
 	});
 
 	it('returns 404 when updating a query the caller does not own', async () => {
