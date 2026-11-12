@@ -5,64 +5,11 @@ import { Product } from '../../models/product';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
-import { buildLegacyAuditLookupStage, PRODUCT_ACTIVITY_UPDATE_ACTIONS } from '../../utils/auditLogV2Aggregation';
-import { addProductReleaseInfo, buildProductStatusMatch, productSummaryProjection } from '../../utils/productLifecycle';
-import { buildListFiltersMatch, ListFilterField, parseListQuery } from '../../utils/listQuery';
-import { productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
+import { addProductReleaseInfo, buildProductStatusMatch } from '../../utils/productLifecycle';
+import { parseListQuery } from '../../utils/listQuery';
+import { signProductTeamAvatars } from '../../utils/productAccess';
 import { withTelemetry } from '../../utils/telemetry';
-import { escapeRegex } from '../../utils/regex';
-
-const MAX_FILTER_LENGTH = 200;
-
-const ALLOWED_SORT_FIELDS = [
-	'product_name',
-	'product_plan_number',
-	'product_description',
-	'project_name',
-	'department_name',
-	'version',
-	'status',
-	'target_date',
-	'complete_count',
-	'owner_name',
-	'createdBy',
-	'createdOn',
-	'modifiedBy',
-	'modifiedOn',
-	'archivedBy',
-	'archivedOn',
-	'actionBy',
-	'actionAt',
-	'_id',
-];
-
-const ACTIVE_FILTER_FIELDS: Record<string, ListFilterField> = {
-	product_name: { path: 'product_name', type: 'text' },
-	product_plan_number: { path: 'product_plan_number', type: 'text' },
-	project_name: { path: 'project_name', type: 'text' },
-	department_name: { path: 'department_name', type: 'text' },
-	status: { path: 'status', type: 'text' },
-	version: { path: 'version', type: 'number' },
-	complete_count: { path: 'complete_count', type: 'number' },
-	progress: { path: 'complete_count', type: 'number' },
-	owner_name: { path: 'owner_name', type: 'text' },
-	createdBy: { path: 'createdBy', type: 'text' },
-	createdOn: { path: 'createdOn', type: 'date' },
-	modifiedBy: { path: 'modifiedBy', type: 'text' },
-	modifiedOn: { path: 'modifiedOn', type: 'date' },
-};
-
-const ARCHIVE_FILTER_FIELDS: Record<string, ListFilterField> = {
-	product_name: { path: 'product_name', type: 'text' },
-	product_plan_number: { path: 'product_plan_number', type: 'text' },
-	project_name: { path: 'project_name', type: 'text' },
-	department_name: { path: 'department_name', type: 'text' },
-	version: { path: 'version', type: 'number' },
-	complete_count: { path: 'complete_count', type: 'number' },
-	progress: { path: 'complete_count', type: 'number' },
-	archivedBy: { path: 'archivedBy', type: 'text' },
-	archivedOn: { path: 'archivedOn', type: 'date' },
-};
+import { buildProductListPipeline, buildProductSearchOr, PRODUCT_LIST_SORT_FIELDS } from '../../utils/productListPipeline';
 
 /**
  * Event doc: https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
@@ -84,13 +31,12 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		const listQueryResult = parseListQuery({
 			query: event.queryStringParameters,
-			allowedSortFields: ALLOWED_SORT_FIELDS,
+			allowedSortFields: PRODUCT_LIST_SORT_FIELDS,
 			defaultSort: 'product_name',
 		});
 		if (listQueryResult.error) return listQueryResult.error;
 
 		const { limit, page, skip, sort, order, filters } = listQueryResult.value!;
-		const isLatest = event.queryStringParameters?.isLatest || 'true';
 		const statusFilter = event.queryStringParameters?.status;
 		const filterParam = event.queryStringParameters?.filter;
 		const requestedWorkspaceId = event.queryStringParameters?.workspaceId;
@@ -127,115 +73,21 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			filter.owner_user_id = new ObjectId(ownerId);
 		}
 
-
 		const { isArchive: isArchiveOnlyStatus, match: statusMatch } = buildProductStatusMatch(statusFilter);
 		Object.assign(filter, statusMatch);
 
-		if (filterParam) {
-			if (filterParam.length > MAX_FILTER_LENGTH) {
-				return ResponseWrapper.badRequest(`filter must not exceed ${MAX_FILTER_LENGTH} characters.`);
-			}
-			const pattern = escapeRegex(filterParam);
-			filter.$or = [
-				{ product_name: { $regex: pattern, $options: 'i' } },
-				{ product_plan_number: { $regex: pattern, $options: 'i' } },
-				{ product_description: { $regex: pattern, $options: 'i' } },
-			];
-		}
+		const search = buildProductSearchOr(filterParam);
+		if (search.error) return search.error;
+		if (search.or) filter.$or = search.or;
 
-		// Filter for isLatest
-		if (isLatest) {
-			filter.is_latest = true;
-		}
+		const isLatest = event.queryStringParameters?.isLatest !== 'false';
+		if (isLatest) filter.is_latest = true;
 
-		const pipeline: any[] = [
-			{ $match: filter },
-			{ $project: productSummaryProjection },
-			buildLegacyAuditLookupStage(
-				isArchiveOnlyStatus
-					? { scopeType: 'product', mode: 'archive' }
-					: {
-						scopeType: 'product',
-						updateActions: PRODUCT_ACTIVITY_UPDATE_ACTIONS,
-					}
-			),
-			{
-				$lookup: {
-					from: 'departments',
-					localField: 'department_id',
-					foreignField: '_id',
-					as: 'department',
-					pipeline: [
-						{ 
-							$project: { department_name: 1 }
-						}
-					]
-				}
-			},
-			{
-				$lookup: {
-					from: 'projects',
-					localField: 'project_id',
-					foreignField: '_id',
-					as: 'project',
-					pipeline: [
-						{ 
-							$project: { project_name: 1 }
-						}
-					]
-				}
-			}
-		];
-
-		pipeline.push(...productTeamLookupStages);
-
-		pipeline.push({
-			$addFields: {
-				project_name: { $arrayElemAt: ['$project.project_name', 0] },
-				department_name: { $arrayElemAt: ['$department.department_name', 0] },
-				actionBy: { $arrayElemAt: ['$auditLogs.actionBy', 0] },
-				actionAt: { $arrayElemAt: ['$auditLogs.actionAt', 0] },
-				createdAudit: {
-					$first: {
-						$filter: { input: '$auditLogs', as: 'auditLog', cond: { $eq: ['$$auditLog.action', 'create'] } },
-					},
-				},
-				modifiedAudit: {
-					$first: {
-						$filter: { input: '$auditLogs', as: 'auditLog', cond: { $eq: ['$$auditLog.action', 'update'] } },
-					},
-				},
-			},
-		});
-		pipeline.push({
-			$addFields: {
-				createdBy: '$createdAudit.actionBy',
-				createdOn: '$createdAudit.actionAt',
-				modifiedBy: '$modifiedAudit.actionBy',
-				modifiedOn: '$modifiedAudit.actionAt',
-				archivedBy: '$actionBy',
-				archivedOn: '$actionAt',
-			},
-		});
-
-		const filtersMatch = buildListFiltersMatch(
-			filters,
-			isArchiveOnlyStatus ? ARCHIVE_FILTER_FIELDS : ACTIVE_FILTER_FIELDS,
-		);
-		if (filtersMatch.error) return filtersMatch.error;
-		if (filtersMatch.match) pipeline.push({ $match: filtersMatch.match });
-
-		const sortObj: { [key: string]: 1 | -1 } = {};
-		sortObj[sort] = order === 'desc' ? -1 : 1;
-		pipeline.push({
-			$facet: {
-				rows: [{ $sort: sortObj }, { $skip: skip }, { $limit: limit }],
-				total: [{ $count: 'total' }],
-			},
-		});
+		const built = buildProductListPipeline({ match: filter, isArchiveOnlyStatus, filters, sort, order, skip, limit });
+		if (built.error) return built.error;
 
 		const [pageResult] = await db.collection<Product>('products')
-			.aggregate<{ rows: Document[]; total: { total: number }[] }>(pipeline)
+			.aggregate<{ rows: Document[]; total: { total: number }[] }>(built.pipeline!)
 			.toArray();
 		const products = pageResult?.rows ?? [];
 		const totalCount = pageResult?.total?.[0]?.total ?? 0;
