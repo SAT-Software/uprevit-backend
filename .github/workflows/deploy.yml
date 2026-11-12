@@ -44,6 +44,12 @@ jobs:
           echo "Running TypeScript compiler check..."
           npx tsc --noEmit
 
+      - name: Run unit tests
+        working-directory: src
+        run: |
+          echo "Running Jest unit tests..."
+          npm test -- --coverage=false
+
   # Deploy job - only runs after linting passes
   deploy:
     name: Deploy to AWS
