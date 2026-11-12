@@ -13,6 +13,7 @@ import { getDb } from './db';
 
 export const MAX_SAVED_QUERY_NAME_LENGTH = 120;
 export const MAX_SAVED_QUERY_CONDITIONS = 10;
+const MAX_SAVED_QUERY_DEFINITION_CHARS = 32_000;
 export const MAX_SAVED_QUERIES_PER_USER = 200;
 
 let indexesPromise: Promise<unknown> | null = null;
@@ -55,6 +56,7 @@ export const validateSavedQueryDefinition = (kind: SavedQueryKind, definition: u
 	const { conditions, conditionLogic } = definition as { conditions?: unknown; conditionLogic?: unknown };
 	if (!Array.isArray(conditions) || conditions.length === 0) return 'definition.conditions must be a non-empty array';
 	if (conditions.length > MAX_SAVED_QUERY_CONDITIONS) return `Use at most ${MAX_SAVED_QUERY_CONDITIONS} conditions`;
+	if (JSON.stringify(definition).length > MAX_SAVED_QUERY_DEFINITION_CHARS) return 'The saved query is too large';
 	if (conditionLogic !== undefined && conditionLogic !== 'AND' && conditionLogic !== 'OR') {
 		return 'definition.conditionLogic must be AND or OR';
 	}
