@@ -381,6 +381,7 @@ Resources:
               Action:
                 - cognito-idp:AdminGetUser
                 - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminDeleteUser
                 - cognito-idp:AdminUpdateUserAttributes
                 - cognito-idp:AdminAddUserToGroup
                 - cognito-idp:AdminRemoveUserFromGroup
@@ -2057,6 +2058,7 @@ Resources:
             - Effect: Allow
               Action:
                 - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminDeleteUser
                 - cognito-idp:AdminGetUser
                 - cognito-idp:AdminUpdateUserAttributes
                 - cognito-idp:AdminAddUserToGroup

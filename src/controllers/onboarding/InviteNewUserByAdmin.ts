@@ -28,16 +28,19 @@ const undoPartialInvite = async (
 	createdCognitoUser: boolean,
 	insertedUserId: ObjectId | undefined,
 ) => {
-	try {
-		if (insertedUserId) {
-			await db.collection<User>("users").deleteOne({ _id: insertedUserId });
-			await db.collection<Workspace>("workspaces").updateOne({ _id: workspaceId }, { $pull: { userIds: insertedUserId } });
+	const attempt = async (step: string, run: () => Promise<unknown>) => {
+		try {
+			await run();
+		} catch (cleanupError) {
+			logError(`Failed to undo partial invite: ${step}`, cleanupError);
 		}
-		if (createdCognitoUser) {
-			await cognito.send(new AdminDeleteUserCommand({ UserPoolId: process.env.USER_POOL_ID, Username: email }));
-		}
-	} catch (cleanupError) {
-		logError('Failed to undo partial invite', cleanupError);
+	};
+	if (insertedUserId) {
+		await attempt('delete user', () => db.collection<User>("users").deleteOne({ _id: insertedUserId }));
+		await attempt('remove workspace member', () => db.collection<Workspace>("workspaces").updateOne({ _id: workspaceId }, { $pull: { userIds: insertedUserId } }));
+	}
+	if (createdCognitoUser) {
+		await attempt('delete Cognito user', () => cognito.send(new AdminDeleteUserCommand({ UserPoolId: process.env.USER_POOL_ID, Username: email })));
 	}
 };
 
