@@ -133,7 +133,6 @@ export function updateLabelComponent(
 	}
 }
 
-
 /**
  * Handles the update of an existing label component.
  * @param {labelComponent} deletedLabelComponent - The data for the label component to update, including its id.
@@ -180,43 +179,6 @@ export function deleteLabelComponent(
 			updateQuery: {},
 			updatedData: {} as labelComponent,
 			error: ResponseWrapper.internalServerError('Failed to update label component'),
-		};
-	}
-}
-
-/**
- * Handles the update of compliance information tab completion status.
- * @param {UpdateComplianceTabCompletionData} inputData - The data object containing the tab completion status.
- * @param {string} tab - The current tab being updated.
- * @param {string} action - The action being performed.
- * @return {LabelComponentReturn} An object containing the update query, updated data, and any validation error.
- */
-export function updateLabelComponentTabCompletion(
-	inputData: { tab_completed: boolean },
-	tab: string,
-	action: string,
-): Omit<LabelComponentReturn, 'updatedData'> & { updatedData: { tab_completed: boolean } } {
-	try {
-		const isValidatedTabLabelComponent = validateTab(tab, 'label-components', action);
-		if (isValidatedTabLabelComponent) throw new Error(isValidatedTabLabelComponent.body);
-
-		if (typeof inputData.tab_completed !== 'boolean') throw new Error('tab_completed must be a boolean value.');
-
-		const updateQuery = { $set: { 'label_components.tab_completed': inputData.tab_completed } };
-		const updatedData = { tab_completed: inputData.tab_completed };
-
-		return { updateQuery, updatedData, error: null };
-	} catch (error) {
-		if (error instanceof Error)
-			return {
-				updateQuery: {},
-				updatedData: { tab_completed: false },
-				error: ResponseWrapper.badRequest(error.message),
-			};
-		return {
-			updateQuery: {},
-			updatedData: { tab_completed: false },
-			error: ResponseWrapper.internalServerError('Failed to update label component tab completion'),
 		};
 	}
 }

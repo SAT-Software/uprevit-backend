@@ -1,6 +1,7 @@
 import { ClientSession, Db, ObjectId } from 'mongodb';
 import type { Product, ProductStatus } from '../models/product';
 import { WORKFLOWS_COLLECTION, type Workflow } from '../models/workflow';
+import { PRODUCT_TABS } from './productTabs';
 
 const CONTENT_LOCKED_STATUSES: ProductStatus[] = ['released', 'obsolete'];
 
@@ -19,15 +20,7 @@ export const editableStatusFilter = { status: { $nin: CONTENT_LOCKED_STATUSES },
 /** Thrown inside a transaction when the product changed after it was read; maps to 409. */
 export class LifecycleConflictError extends Error {}
 
-export const COMPLETION_TABS = [
-	'product_information',
-	'compliance_information',
-	'label_components',
-	'symbols_graphics',
-	'product_data',
-	'operational_parameters',
-	'label_tags',
-] as const;
+export const COMPLETION_TABS = PRODUCT_TABS.map((tab) => tab.field);
 
 /** Drops tab content but keeps the completion flags, for list and version responses. */
 export const productSummaryProjection = Object.fromEntries(
