@@ -1,22 +1,6 @@
 import { ObjectId } from 'mongodb';
-import type { ExportJobDocument, ExportJobFormat, ExportJobStatus, ExportJobTarget } from '../models/exportJob';
-import {
-	buildExportExpiryDate,
-	createQueuedExportJob,
-	ensureExportJobIndexes,
-	getExportJobByIdForUser,
-	isExportStatus,
-	listExportJobsForUser,
-	markExportJobCompleted,
-	markExportJobFailed,
-	markExportJobProcessing,
-} from './exportJobs';
-
-export const buildProductExportExpiryDate = buildExportExpiryDate;
-
-export const ensureProductExportJobIndexes = ensureExportJobIndexes;
-
-export const isProductExportStatus = isExportStatus;
+import type { ExportJobDocument, ExportJobFormat } from '../models/exportJob';
+import { createQueuedExportJob } from './exportJobs';
 
 export type ProductExportTarget = 'product' | 'product_specifications' | 'operational_parameters';
 
@@ -50,58 +34,5 @@ export const createQueuedProductExportJob = async ({
 		requestedByUserId,
 		format,
 		expiresAt,
-	});
-};
-
-export const markProductExportJobProcessing = markExportJobProcessing;
-
-export const markProductExportJobCompleted = markExportJobCompleted;
-
-export const markProductExportJobFailed = markExportJobFailed;
-
-export const getProductExportJobByIdForUser = async ({
-	jobId,
-	workspaceId,
-	requestedBySub,
-	target,
-}: {
-	jobId: ObjectId;
-	workspaceId: ObjectId;
-	requestedBySub: string;
-	target?: ExportJobTarget | ExportJobTarget[];
-}): Promise<ExportJobDocument | null> => {
-	return getExportJobByIdForUser({
-		jobId,
-		workspaceId,
-		requestedBySub,
-		target,
-	});
-};
-
-export const listProductExportJobsForUser = async ({
-	requestedBySub,
-	workspaceId,
-	target,
-	targetId,
-	statuses,
-	page,
-	limit,
-}: {
-	requestedBySub: string;
-	workspaceId?: ObjectId;
-	target?: ExportJobTarget | ExportJobTarget[];
-	targetId?: ObjectId;
-	statuses?: ExportJobStatus[];
-	page?: number;
-	limit?: number;
-}) => {
-	return listExportJobsForUser({
-		requestedBySub,
-		workspaceId,
-		target,
-		targetId,
-		statuses,
-		page,
-		limit,
 	});
 };

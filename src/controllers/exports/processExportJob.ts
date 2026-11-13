@@ -7,7 +7,8 @@ import type { ExportQueueMessage } from '../../types/export-job';
 import { EXPORT_LIMITS, type PersistedReportExportRequest } from '../../types/reports';
 import { buildAuditLogCsv, loadAuditLogExportRows } from '../../utils/auditLogExport';
 import { getDb } from '../../utils/db';
-import { generateProductExcelExport, generateWorkbookTabExcelExport, type WorkbookTabTarget } from '../../utils/exportExcel';
+import { generateProductExcelExport, generateWorkbookTabExcelExport } from '../../utils/exportExcel';
+import type { WorkbookTabTarget } from '../../utils/productExportAssets';
 import { getExportWorkspaceName } from '../../utils/exportFormatting';
 import { generateProductPDFExport, generateWorkbookTabPDFExport } from '../../utils/exportPDF';
 import {
