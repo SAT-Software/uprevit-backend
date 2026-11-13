@@ -2,6 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { EDITOR_USER_TYPES } from '../../models/user';
 import { getDb } from '../../utils/db';
 import type { Product } from '../../models/product';
+import type { Project } from '../../models/project';
 import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateMissingFields, validateObjectIds } from '../../utils/validationUtils';
@@ -37,7 +38,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 	
 
 		const missingFieldsResult = validateMissingFields({
-			'project_id': input.project_id.toString(),
+			'project_id': input.project_id?.toString(),
 			'product_plan_number': input.product_plan_number,
 			'product_name': input.product_name,
 			'product_description': input.product_description,
@@ -54,7 +55,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		const objectIdValidation = validateObjectIds({
 			'project_id': input.project_id,
-			'department_id': input.department_id!,
 		});
 
 		if(objectIdValidation) return objectIdValidation;
@@ -62,9 +62,15 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		const db = await getDb();
 
-		const projectObjectId = new ObjectId(input.project_id);
-		const departmentObjectId = new ObjectId(input.department_id);
 		const workspaceObjectId = context.workspaceId;
+		const project = await db.collection<Project>('projects').findOne(
+			{ _id: new ObjectId(input.project_id), workspace_id: workspaceObjectId },
+			{ projection: { department_id: 1, isArchived: 1 } },
+		);
+		if (!project?.department_id) return ResponseWrapper.badRequest('Project not found in this workspace');
+		if (project.isArchived) return ResponseWrapper.badRequest('Restore the project before adding products to it');
+		const projectObjectId = project._id;
+		const departmentObjectId = project.department_id;
 
 		if (!(await acquireImportLock(db, workspaceObjectId))) {
 			return ResponseWrapper.conflict('Another product is being created in this workspace. Try again in a moment.');

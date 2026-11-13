@@ -1,16 +1,15 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
 import type { ExportJobStatus } from '../../models/exportJob';
-import { authenticateRequest } from '../../utils/authUtils';
 import { toExportJobSummary } from '../../utils/exportJobSerializers';
 import { logError } from '../../utils/logger';
+import { requireTenantContext } from '../../utils/tenantContext';
 import {
 	isProductExportStatus,
 	listProductExportJobsForUser,
 	PRODUCT_EXPORT_TARGETS,
 } from '../../utils/productExportJobs';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
 import { withTelemetry } from '../../utils/telemetry';
 
 /**
@@ -20,18 +19,10 @@ import { withTelemetry } from '../../utils/telemetry';
  */
 export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return auth.error;
-
-		const cognitoSub = auth.payload.sub;
-		if (!cognitoSub) {
-			return ResponseWrapper.unauthorized('Unauthorized');
-		}
-
-		const userContext = await getAuthenticatedUserContext(cognitoSub);
-		if (!userContext) {
-			return ResponseWrapper.unauthorized('Unable to resolve authenticated user context');
-		}
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+		const { context: userContext } = tenantResult;
+		const { cognitoSub } = userContext;
 
 		const page = Number.parseInt(event.queryStringParameters?.page ?? '1', 10);
 		if (!Number.isFinite(page) || page < 1) {

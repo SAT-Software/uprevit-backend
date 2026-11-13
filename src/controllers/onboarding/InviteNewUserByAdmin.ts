@@ -1,8 +1,8 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { CognitoIdentityProviderClient, AdminCreateUserCommand, AdminUpdateUserAttributesCommand } from "@aws-sdk/client-cognito-identity-provider";
+import { CognitoIdentityProviderClient, AdminCreateUserCommand, AdminDeleteUserCommand, AdminUpdateUserAttributesCommand } from "@aws-sdk/client-cognito-identity-provider";
 import { getDb } from "../../utils/db";
 import { User } from "../../models/user";
-import { ObjectId } from "mongodb";
+import { Db, ObjectId } from "mongodb";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { logError } from '../../utils/logger';
 import { validateUserArray } from "../../utils/validationUtils";
@@ -19,7 +19,27 @@ import { parseAssignableMemberAccess, syncMemberCognitoGroups, type MemberAccess
 import { withTelemetry } from '../../utils/telemetry';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 
-const cognito = new CognitoIdentityProviderClient({ region: 'us-east-1' });
+const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
+
+const undoPartialInvite = async (
+	db: Db,
+	workspaceId: ObjectId,
+	email: string,
+	createdCognitoUser: boolean,
+	insertedUserId: ObjectId | undefined,
+) => {
+	try {
+		if (insertedUserId) {
+			await db.collection<User>("users").deleteOne({ _id: insertedUserId });
+			await db.collection<Workspace>("workspaces").updateOne({ _id: workspaceId }, { $pull: { userIds: insertedUserId } });
+		}
+		if (createdCognitoUser) {
+			await cognito.send(new AdminDeleteUserCommand({ UserPoolId: process.env.USER_POOL_ID, Username: email }));
+		}
+	} catch (cleanupError) {
+		logError('Failed to undo partial invite', cleanupError);
+	}
+};
 
 type InviteResult = {
 	email: string;
@@ -91,6 +111,8 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 			const { email, name } = user;
 			const access = accesses[index];
 			const normalizedEmail = normalizeInviteEmail(email);
+			let createdCognitoUser = false;
+			let insertedUserId: ObjectId | undefined;
 			try {
 				await assertEmailAvailableForWorkspaceMemberInvite(db, normalizedEmail, workspaceObjectId);
 
@@ -115,6 +137,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 					DesiredDeliveryMediums: [ "EMAIL"],
 				}));
 		      
+				createdCognitoUser = true;
 				const newCognitoUser = createUserResponse.User;
 				if (!newCognitoUser) throw new Error(`Failed to create Cognito user for ${normalizedEmail}`);
 
@@ -133,6 +156,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 					status: "invited",
 				};
 				const userResult = await db.collection("users").insertOne(newUserDoc);
+				insertedUserId = userResult.insertedId;
 				const dbUserId = userResult.insertedId.toString();
 
 				await db.collection<Workspace>("workspaces").updateOne(
@@ -162,6 +186,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 
 				const message = error instanceof Error ? error.message : 'Invitation failed';
 				logError('Failed to invite user', error);
+				await undoPartialInvite(db, workspaceObjectId, normalizedEmail, createdCognitoUser, insertedUserId);
 				results.push({ email: normalizedEmail, status: "Failed", reason: message });
 			}
 		}

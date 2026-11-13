@@ -39,6 +39,9 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (!event.pathParameters?.id) {
 			return ResponseWrapper.badRequest('Missing required fields: id is required');
 		}
+		if (!ObjectId.isValid(event.pathParameters.id)) {
+			return ResponseWrapper.badRequest('Invalid id format. Must be a valid MongoDB ObjectId.');
+		}
 		const db = await getDb();
 		
 		const departmentData = await db.collection<Department>('departments').aggregate<DepartmentWithUsers>([

@@ -1,9 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
 import { EXPORT_JOB_COLLECTION, type ExportJobFormat } from '../../models/exportJob';
-import { authenticateRequest } from '../../utils/authUtils';
-import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
-import { canEditWorkspaceData, READ_ONLY_MESSAGE } from '../../utils/tenantContext';
+import { canEditWorkspaceData, READ_ONLY_MESSAGE, requireTenantContext } from '../../utils/tenantContext';
 import { getDb } from '../../utils/db';
 import { createQueuedExportJob } from '../../utils/exportJobs';
 import { enqueueExportJobMessage } from '../../utils/exportQueue';
@@ -98,18 +96,11 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			}
 		}
 
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+		const { context: userContext } = tenantResult;
+		const { cognitoSub } = userContext;
 
-		const cognitoSub = auth.payload.sub;
-		if (!cognitoSub) {
-			return ResponseWrapper.unauthorized('Unauthorized');
-		}
-
-		const userContext = await getAuthenticatedUserContext(cognitoSub);
-		if (!userContext) {
-			return ResponseWrapper.unauthorized('Unable to resolve authenticated user context');
-		}
 		if (!canEditWorkspaceData(userContext)) return ResponseWrapper.forbidden(READ_ONLY_MESSAGE);
 
 		const requestedWorkspaceId = new ObjectId(body.workspaceId);

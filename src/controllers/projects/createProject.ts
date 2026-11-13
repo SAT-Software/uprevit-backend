@@ -35,11 +35,11 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 	
 
 		const missingFieldsResult = validateMissingFields({
-			'department_id': input.department_id.toString(),
+			'department_id': input.department_id?.toString(),
 			'project_name': input.project_name,
 			'project_number': input.project_number,
 			'project_description': input.project_description,
-			'admin_id': input.admin_id.toString(),
+			'admin_id': input.admin_id?.toString(),
 		});
 
 		if(missingFieldsResult) {

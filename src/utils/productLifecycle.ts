@@ -10,7 +10,11 @@ export const JUST_RELEASED_MESSAGE = 'This version was just released and can no 
 
 export const isContentLocked = (status: ProductStatus) => CONTENT_LOCKED_STATUSES.includes(status);
 
-export const editableStatusFilter = { status: { $nin: CONTENT_LOCKED_STATUSES } };
+export const ARCHIVED_PRODUCT_MESSAGE = 'Restore this product before changing it';
+
+export const notArchivedFilter = { is_archived: { $ne: true } };
+
+export const editableStatusFilter = { status: { $nin: CONTENT_LOCKED_STATUSES }, ...notArchivedFilter };
 
 /** Thrown inside a transaction when the product changed after it was read; maps to 409. */
 export class LifecycleConflictError extends Error {}

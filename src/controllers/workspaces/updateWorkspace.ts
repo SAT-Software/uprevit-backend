@@ -3,10 +3,9 @@ import { getDb } from '../../utils/db';
 import { Workspace } from '../../models/workspace';
 import { WORKFLOW_COMPLETION_MODES } from '../../models/workflow';
 import { recordAuditEvent } from '../../utils/auditLogV2';
-import { ObjectId } from 'mongodb';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
-import { validateAllObjectIds, validateMissingFields } from '../../utils/validationUtils';
+import { validateAllObjectIds } from '../../utils/validationUtils';
 import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
@@ -41,35 +40,23 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			return ResponseWrapper.badRequest('Invalid JSON in request body');
 		}
 
-		const settingsOnly = input.workspaceName === undefined
-			&& (input.defaultWorkflowCompletionMode !== undefined || input.supportReplayEnabled !== undefined);
-		const missingFieldsResult = validateMissingFields({
-			...(!settingsOnly && { 'workspaceName': input.workspaceName }),
-			'_id': input._id!.toString(),
-		});
-		
-		if (missingFieldsResult) {
-			return missingFieldsResult;
+		if (!input._id) {
+			return ResponseWrapper.badRequest('Missing required fields: _id');
 		}
 
 		const objectIdsResult = validateAllObjectIds({
-			'_id': input._id!,
+			'_id': input._id,
 		});
 
 		if (objectIdsResult) {
 			return objectIdsResult;
 		}
 
-		const workspaceMismatch = assertWorkspaceMatch(input._id!, context.workspaceId);
+		const workspaceMismatch = assertWorkspaceMatch(input._id, context.workspaceId);
 		if (workspaceMismatch) return workspaceMismatch;
 
-		if (input.userIds && input.userIds.length > 0) {
-			const invalidUserIds = input.userIds.filter((userId) => !ObjectId.isValid(userId));
-			if (invalidUserIds.length > 0) {
-				return ResponseWrapper.badRequest(
-					`Invalid user IDs format: ${invalidUserIds.join(', ')}. Must be valid MongoDB ObjectIds.`,
-				);
-			}
+		if (input.workspaceName !== undefined && (typeof input.workspaceName !== 'string' || !input.workspaceName.trim())) {
+			return ResponseWrapper.badRequest('workspaceName must be a non-empty string');
 		}
 
 		const db = await getDb();
@@ -82,21 +69,15 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			return ResponseWrapper.badRequest('Workspace not found');
 		}
 
-		const userObjectIds = input.userIds ? input.userIds.map((userId) => new ObjectId(userId)) : [];
-		const normalizedLogo = normalizePersistedAssetReference(input.logo, workspaceRecord.logo ?? '');
+		const updateFields: Partial<Workspace> = {};
+		for (const field of ['workspaceName', 'companyName', 'description'] as const) {
+			if (input[field] !== undefined) updateFields[field] = input[field];
+		}
 
-		const updateFields: Partial<Workspace> = settingsOnly ? {} : {
-			workspaceName: input.workspaceName,
-			companyName: input.companyName,
-			description: input.description,
-			logo: normalizedLogo,
-			plan: input.plan,
-			planId: input.planId,
-			planStart: input.planStart,
-			planEnd: input.planEnd,
-			cost: input.cost,
-			userIds: userObjectIds,
-		};
+		const normalizedLogo = input.logo === undefined
+			? undefined
+			: normalizePersistedAssetReference(input.logo, workspaceRecord.logo ?? '');
+		if (normalizedLogo !== undefined) updateFields.logo = normalizedLogo;
 
 		if (typeof input.memberListIncludeInactive === 'boolean') {
 			updateFields.memberListIncludeInactive = input.memberListIncludeInactive;
@@ -114,6 +95,10 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 				return ResponseWrapper.badRequest('supportReplayEnabled must be a boolean');
 			}
 			updateFields.supportReplayEnabled = input.supportReplayEnabled;
+		}
+
+		if (Object.keys(updateFields).length === 0) {
+			return ResponseWrapper.badRequest('No workspace fields to update');
 		}
 
 		const workspace = await db.collection<Workspace>('workspaces').updateOne(
@@ -140,11 +125,13 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			meta: { workspaceName: updateFields.workspaceName ?? workspaceRecord.workspaceName },
 		});
 
-		await recordCommittedUploadIfNew({
-			workspaceId: context.workspaceId,
-			newKey: normalizedLogo,
-			metadata: { assetType: 'workspace_logo' },
-		});
+		if (normalizedLogo !== undefined) {
+			await recordCommittedUploadIfNew({
+				workspaceId: context.workspaceId,
+				newKey: normalizedLogo,
+				metadata: { assetType: 'workspace_logo' },
+			});
+		}
 
 		return ResponseWrapper.success({
 			message: 'Workspace updated successfully',

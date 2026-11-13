@@ -16,7 +16,8 @@
 		"migrate:workflow-release": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateWorkflowRelease.ts",
 		"ensure:core-indexes": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/ensureCoreIndexes.ts",
 		"check:source-file-keys": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/checkSourceFileKeys.ts",
-		"migrate:bookmarks-latest-version": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateBookmarksToLatestVersion.ts"
+		"migrate:bookmarks-latest-version": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateBookmarksToLatestVersion.ts",
+		"normalize:component-types": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/normalizeComponentTypes.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-cognito-identity-provider": "^3.679.0",

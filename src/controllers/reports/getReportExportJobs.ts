@@ -1,10 +1,9 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import type { ExportJobStatus } from '../../models/exportJob';
-import { authenticateRequest } from '../../utils/authUtils';
-import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
 import { toExportJobSummary } from '../../utils/exportJobSerializers';
 import { isExportStatus, listExportJobsForUser } from '../../utils/exportJobs';
 import { logError } from '../../utils/logger';
+import { requireTenantContext } from '../../utils/tenantContext';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { withTelemetry } from '../../utils/telemetry';
 
@@ -15,18 +14,10 @@ import { withTelemetry } from '../../utils/telemetry';
  */
 export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return auth.error;
-
-		const cognitoSub = auth.payload.sub;
-		if (!cognitoSub) {
-			return ResponseWrapper.unauthorized('Unauthorized');
-		}
-
-		const userContext = await getAuthenticatedUserContext(cognitoSub);
-		if (!userContext) {
-			return ResponseWrapper.unauthorized('Unable to resolve authenticated user context');
-		}
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+		const { context: userContext } = tenantResult;
+		const { cognitoSub } = userContext;
 
 		const page = Number.parseInt(event.queryStringParameters?.page ?? '1', 10);
 		if (!Number.isFinite(page) || page < 1) {

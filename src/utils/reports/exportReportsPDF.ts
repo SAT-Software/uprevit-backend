@@ -1,3 +1,4 @@
+import { COMPLETION_TABS } from '../productLifecycle';
 import { logError } from '../logger';
 import { PRODUCT_STATUSES, ReportExportContext, describeReportFilters, formatExportDate, statusLabel, statusTone } from '../exportFormatting';
 import { createPdfLayout } from '../pdfLayout';
@@ -22,10 +23,12 @@ interface ProductForExport {
 	symbols_graphics?: { tab_completed?: boolean };
 	label_components?: { tab_completed?: boolean };
 	label_tags?: { tab_completed?: boolean };
+	product_data?: { tab_completed?: boolean };
+	operational_parameters?: { tab_completed?: boolean };
 }
 
 const completedSections = (product: ProductForExport): number =>
-	[product.product_information, product.compliance_information, product.symbols_graphics, product.label_components, product.label_tags].filter((section) => section?.tab_completed).length;
+	COMPLETION_TABS.filter((tab) => product[tab]?.tab_completed).length;
 
 /**
  * Generates a PDF report export for multiple products.
@@ -81,7 +84,7 @@ export async function generateReportsPDFExport(products: ProductForExport[], con
 					{ text: info?.market_geography },
 					{ text: info?.class_of_device },
 					{ text: info?.basic_udi_di },
-					{ text: `${completedSections(product)} of 5` },
+					{ text: `${completedSections(product)} of ${COMPLETION_TABS.length}` },
 				];
 			}),
 		);

@@ -1,8 +1,7 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
-import { authenticateRequest } from '../../utils/authUtils';
-import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
 import { logError } from '../../utils/logger';
+import { requireTenantContext } from '../../utils/tenantContext';
 import { getProductExportJobByIdForUser, PRODUCT_EXPORT_TARGETS } from '../../utils/productExportJobs';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { createExportPresignedGetUrl } from '../../utils/s3-storage';
@@ -16,8 +15,10 @@ import { withTelemetry } from '../../utils/telemetry';
  */
 export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
 	try {
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+		const { context: userContext } = tenantResult;
+		const { cognitoSub } = userContext;
 
 		const jobId = event.pathParameters?.jobId;
 		if (!jobId) {
@@ -26,16 +27,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		const validationError = validateAllObjectIds({ jobId });
 		if (validationError) return validationError;
-
-		const cognitoSub = auth.payload.sub;
-		if (!cognitoSub) {
-			return ResponseWrapper.unauthorized('Unauthorized');
-		}
-
-		const userContext = await getAuthenticatedUserContext(cognitoSub);
-		if (!userContext) {
-			return ResponseWrapper.unauthorized('Unable to resolve authenticated user context');
-		}
 
 		const job = await getProductExportJobByIdForUser({
 			jobId: new ObjectId(jobId),

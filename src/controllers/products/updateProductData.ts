@@ -26,6 +26,7 @@ import {
 	completeCountExpression,
 	CONTENT_LOCKED_MESSAGE,
 	editableStatusFilter,
+	ARCHIVED_PRODUCT_MESSAGE,
 	isContentLocked,
 	JUST_RELEASED_MESSAGE,
 	LifecycleConflictError,
@@ -282,6 +283,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		if (!product) return ResponseWrapper.notFound('Product not found, please check the provided product id.');
 		if (!canEditProduct(context, product)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
 		if (isContentLocked(product.status)) return ResponseWrapper.conflict(CONTENT_LOCKED_MESSAGE);
+		if (product.is_archived) return ResponseWrapper.conflict(ARCHIVED_PRODUCT_MESSAGE);
 
 		const isCompletionAction = input.action.endsWith('_completion');
 		const marksTabIncomplete = isCompletionAction && (input.data as { tab_completed?: boolean } | undefined)?.tab_completed === false;
@@ -711,8 +713,9 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			actorId: context.userId,
 		});
 		if (updateResult.matchedCount === 0) {
-			const current = await db.collection<Product>('products').findOne(productTenantFilter, { projection: { status: 1, owner_user_id: 1, contributor_user_ids: 1 } });
+			const current = await db.collection<Product>('products').findOne(productTenantFilter, { projection: { status: 1, is_archived: 1, owner_user_id: 1, contributor_user_ids: 1 } });
 			if (current && !canEditProduct(context, current)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
+			if (current?.is_archived) return ResponseWrapper.conflict(ARCHIVED_PRODUCT_MESSAGE);
 			if (current && isContentLocked(current.status)) {
 				return ResponseWrapper.conflict(product.status === 'in_review' ? JUST_RELEASED_MESSAGE : CONTENT_LOCKED_MESSAGE);
 			}
