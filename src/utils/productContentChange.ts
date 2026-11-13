@@ -1,18 +1,10 @@
 import { isDeepStrictEqual } from 'util';
 import type { Product } from '../models/product';
+import { COMPLETION_TABS } from './productLifecycle';
 
 const REVIEWED_FIELDS = ['product_name', 'product_plan_number', 'product_description'] as const;
 
-const REVIEWED_TABS = [
-	'product_information',
-	'compliance_information',
-	'languages_information',
-	'label_components',
-	'symbols_graphics',
-	'product_data',
-	'operational_parameters',
-	'label_tags',
-] as const;
+const REVIEWED_TABS = [...COMPLETION_TABS, 'languages_information'] as const;
 
 /** Planning metadata stored inside `product_information.data` that approvers are not notified about. */
 const PRODUCT_INFORMATION_PLANNING_FIELDS = ['target_date', 'actual_completion_date'];

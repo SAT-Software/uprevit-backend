@@ -1,10 +1,6 @@
 import { APIGatewayProxyResult } from 'aws-lambda';
 import { validateTab, validateMissingFields, validateObjectIds } from '../../../utils/validationUtils';
-import {
-	ComplianceStandard,
-	DeleteComplianceStandardData,
-	UpdateComplianceTabCompletionData,
-} from '../../../types/products/compliance-info';
+import { ComplianceStandard, DeleteComplianceStandardData } from '../../../types/products/compliance-info';
 import { ResponseWrapper } from '../../../utils/responseWrapper';
 import { ObjectId } from 'mongodb';
 
@@ -12,8 +8,7 @@ type ComplianceStandardReturn = {
 	updateQuery: Record<string, unknown>;
 	updatedData:
 		| (ComplianceStandard & { _id: string })[]
-		| DeleteComplianceStandardData
-		| UpdateComplianceTabCompletionData;
+		| DeleteComplianceStandardData;
 	error: APIGatewayProxyResult | null;
 };
 
@@ -177,43 +172,6 @@ export function deleteComplianceStandard(
 			updateQuery: {},
 			updatedData: { id: '' },
 			error: ResponseWrapper.internalServerError('Failed to delete compliance standard'),
-		};
-	}
-}
-
-/**
- * Handles the update of compliance information tab completion status.
- * @param {UpdateComplianceTabCompletionData} inputData - The data object containing the tab completion status.
- * @param {string} tab - The current tab being updated.
- * @param {string} action - The action being performed.
- * @return {ComplianceStandardReturn} An object containing the update query, updated data, and any validation error.
- */
-export function updateComplianceTabCompletion(
-	inputData: UpdateComplianceTabCompletionData,
-	tab: string,
-	action: string,
-): Omit<ComplianceStandardReturn, 'updatedData'> & { updatedData: UpdateComplianceTabCompletionData } {
-	try {
-		const isValidatedTabComplianceInfo = validateTab(tab, 'compliance-information', action);
-		if (isValidatedTabComplianceInfo) throw new Error(isValidatedTabComplianceInfo.body);
-
-		if (typeof inputData.tab_completed !== 'boolean') throw new Error('tab_completed must be a boolean value.');
-
-		const updateQuery = { $set: { 'compliance_information.tab_completed': inputData.tab_completed } };
-		const updatedData = { tab_completed: inputData.tab_completed };
-
-		return { updateQuery, updatedData, error: null };
-	} catch (error) {
-		if (error instanceof Error)
-			return {
-				updateQuery: {},
-				updatedData: { tab_completed: false },
-				error: ResponseWrapper.badRequest(error.message),
-			};
-		return {
-			updateQuery: {},
-			updatedData: { tab_completed: false },
-			error: ResponseWrapper.internalServerError('Failed to update compliance tab completion'),
 		};
 	}
 }

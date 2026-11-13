@@ -196,44 +196,6 @@ export function deleteSymbolsGraphics(
 }
 
 /**
- * Handles the update of compliance information tab completion status.
- * @param {UpdateSymbolsGraphicsTabCompletion} inputData - The data object containing the tab completion status.
- * @param {string} tab - The current tab being updated.
- * @param {string} action - The action being performed.
- * @return {SymbolsGraphicsReturn} An object containing the update query, updated data, and any validation error.
- */
-export function updateSymbolsGraphicsTabCompletion(
-	inputData: { tab_completed: boolean },
-	tab: string,
-	action: string,
-): Omit<SymbolsGraphicsReturn, 'updatedData'> & { updatedData: { tab_completed: boolean } } {
-	try {
-		const isValidatedTabSymbolsGraphics = validateTab(tab, 'symbols-graphics', action);
-		if (isValidatedTabSymbolsGraphics) throw new Error(isValidatedTabSymbolsGraphics.body);
-
-		if (typeof inputData.tab_completed !== 'boolean') throw new Error('tab_completed must be a boolean value.');
-
-		const updateQuery = { $set: { 'symbols_graphics.tab_completed': inputData.tab_completed } };
-		const updatedData = { tab_completed: inputData.tab_completed };
-
-		return { updateQuery, updatedData, error: null };
-	} catch (error) {
-		if (error instanceof Error)
-			return {
-				updateQuery: {},
-				updatedData: { tab_completed: false },
-				error: ResponseWrapper.badRequest(error.message),
-			};
-		return {
-			updateQuery: {},
-			updatedData: { tab_completed: false },
-			error: ResponseWrapper.internalServerError('Failed to update symbols graphics tab completion'),
-		};
-	}
-}
-
-
-/**
  * @param {AddStandardSymbolsGraphicsData} data - The standard symbols selected for the product.
  * @param {string} tab - The current tab being updated.
  * @param {string} action - The action being performed.

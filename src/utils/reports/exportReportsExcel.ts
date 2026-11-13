@@ -8,6 +8,7 @@ require('regenerator-runtime/runtime');
 
 const ExcelJS = require('exceljs/dist/es5');
 import { logError } from '../logger';
+import { PRODUCT_TABS } from '../productTabs';
 import { EXPORT_TONES, ExportTone, PRODUCT_STATUSES, ReportExportContext, describeReportFilters, formatExportTimestamp, statusLabel, statusTone } from '../exportFormatting';
 
 interface ProductForExport {
@@ -48,15 +49,7 @@ const ZEBRA_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb('#
 const toneFill = (tone: ExportTone) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: argb(EXPORT_TONES[tone].fill) } });
 const toneFont = (tone: ExportTone) => ({ bold: true, color: { argb: argb(EXPORT_TONES[tone].text) } });
 
-const SECTIONS: Array<{ key: keyof ProductForExport; label: string }> = [
-	{ key: 'product_information', label: 'Product information' },
-	{ key: 'compliance_information', label: 'Compliance' },
-	{ key: 'symbols_graphics', label: 'Symbols & graphics' },
-	{ key: 'label_components', label: 'Label components' },
-	{ key: 'product_data', label: 'Product specifications' },
-	{ key: 'operational_parameters', label: 'Operational parameters' },
-	{ key: 'label_tags', label: 'Label tags' },
-];
+const SECTIONS: Array<{ key: keyof ProductForExport; label: string }> = PRODUCT_TABS.map((tab) => ({ key: tab.field, label: tab.label }));
 
 const isComplete = (product: ProductForExport, key: keyof ProductForExport): boolean =>
 	Boolean((product[key] as { tab_completed?: boolean } | undefined)?.tab_completed);

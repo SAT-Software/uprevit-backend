@@ -74,7 +74,6 @@ export function updateProductData(
 			throw new Error('workbook_data must be a non-empty object.');
 		}
 
-
 		const updateQuery = { $set: { 'product_data.data': updatedProductData.workbook_data } };
 		const updatedData = updatedProductData;
 
@@ -95,7 +94,6 @@ export function updateProductData(
 		};
 	}
 }
-
 
 /**
 	* Handles the deletion of product data.
@@ -127,46 +125,6 @@ export function deleteProductData(
 			updateQuery: {},
 			updatedData: {},
 			error: ResponseWrapper.internalServerError('Failed to delete product data'),
-		};
-	}
-}
-
-/**
- * Handles the update of product data tab completion status.
- * @param { ProductData } inputData - The data object containing the tab completion status.
- * @param {string} tab - The current tab being updated.
- * @param {string} action - The action being performed.
- * @return {ProductDataReturn} An object containing the update query, updated data, and any validation error.
- */
-export function updateProductDataTabCompletion(
-	inputData: ProductData & { tab_completed: boolean },
-	tab: string,
-	action: string,
-): Omit<ProductDataReturn, 'updatedData'> & { updatedData: { tab_completed: boolean } } {
-	try {
-		const isValidatedTab = validateTab(tab, 'product-specifications', action);
-		if (isValidatedTab) throw new Error(isValidatedTab.body);
-
-		if (typeof inputData.tab_completed !== 'boolean') {
-			throw new Error('tab_completed must be a boolean value.');
-		}
-
-		const updateQuery = { $set: { 'product_data.tab_completed': inputData.tab_completed } };
-		const updatedData = { tab_completed: inputData.tab_completed };
-
-		return { updateQuery, updatedData, error: null };
-	} catch (error) {
-		if (error instanceof Error) {
-			return {
-				updateQuery: {},
-				updatedData: { tab_completed: false },
-				error: ResponseWrapper.badRequest(error.message),
-			};
-		}
-		return {
-			updateQuery: {},
-			updatedData: { tab_completed: false },
-			error: ResponseWrapper.internalServerError('Failed to update product data tab completion'),
 		};
 	}
 }

@@ -10,16 +10,15 @@ import {
 	deleteCustomField,
 	updateCustomField,
 	updateProductInformation,
-	updateProductInfoTabCompletion,
 } from './productData/product-info';
 import { UpdateProductDataRequest } from '../../types/products/all-update-product-data';
-import { addComplianceStandard, deleteComplianceStandard, updateComplianceStandard, updateComplianceTabCompletion } from './productData/compliance-standard';
-import { addLabelComponent, deleteLabelComponent, updateLabelComponent, updateLabelComponentTabCompletion } from './productData/label-components';
+import { addComplianceStandard, deleteComplianceStandard, updateComplianceStandard } from './productData/compliance-standard';
+import { addLabelComponent, deleteLabelComponent, updateLabelComponent } from './productData/label-components';
 import { updateLanguagesInformation } from './productData/languages';
-import { AddStandardSymbolsGraphics, AddSymbolsGraphics, deleteSymbolsGraphics, UpdateSymbolsGraphics, updateSymbolsGraphicsTabCompletion } from './productData/symbols-graphics';
-import { addProductData, deleteProductData, updateProductData, updateProductDataTabCompletion } from './productData/product-data';
-import { addOperationalParameters, deleteOperationalParameters, updateOperationalParameters, updateOperationalParametersTabCompletion } from './productData/operational-parameters';
-import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagsTabCompletion, updateLabelTagTaggedImage, updateLabelTagLegend } from './productData/label-tags';
+import { AddStandardSymbolsGraphics, AddSymbolsGraphics, deleteSymbolsGraphics, UpdateSymbolsGraphics } from './productData/symbols-graphics';
+import { addProductData, deleteProductData, updateProductData } from './productData/product-data';
+import { addOperationalParameters, deleteOperationalParameters, updateOperationalParameters } from './productData/operational-parameters';
+import { addLabelTag, deleteLabelTag, updateLabelTag, updateLabelTagTaggedImage, updateLabelTagLegend } from './productData/label-tags';
 import { SymbolsGraphics } from '../../types/products/symbols-graphics';
 import { recordAuditEvent } from '../../utils/auditLogV2';
 import {
@@ -42,17 +41,9 @@ import {
 } from '../../utils/billing/uploadCommit';
 import { withTelemetry } from '../../utils/telemetry';
 import { logError } from '../../utils/logger';
+import { buildTabCompletionUpdate, getTabByCompletionAction, PRODUCT_TABS } from '../../utils/productTabs';
 
-const validTabs = [
-	'product-information',
-	'compliance-information',
-	'languages-information',
-	'label-components',
-	'symbols-graphics',
-	'product-specifications',
-	'operational-parameters',
-	'label-tags',
-];
+const validTabs: string[] = [...PRODUCT_TABS.map((tab) => tab.slug), 'languages-information'];
 
 type ProductDataAuditMeta = {
 	eventKey: string;
@@ -61,6 +52,11 @@ type ProductDataAuditMeta = {
 };
 
 const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
+	...Object.fromEntries(PRODUCT_TABS.map((tab): [string, ProductDataAuditMeta] => [tab.completionAction, {
+		eventKey: tab.completionEvent,
+		action: 'update',
+		changedPaths: [`${tab.field}.tab_completed`],
+	}])),
 	update_product_information: {
 		eventKey: 'product.product_information.updated',
 		action: 'update',
@@ -94,11 +90,6 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
 		action: 'delete',
 		changedPaths: ['product_information.custom_fields'],
 	},
-	update_product_information_completion: {
-		eventKey: 'product.product_information.completion.updated',
-		action: 'update',
-		changedPaths: ['product_information.tab_completed'],
-	},
 	add_compliance_standard: {
 		eventKey: 'product.compliance_item.added',
 		action: 'create',
@@ -113,11 +104,6 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
 		eventKey: 'product.compliance_item.deleted',
 		action: 'delete',
 		changedPaths: ['compliance_information.data'],
-	},
-	update_compliance_tab_completion: {
-		eventKey: 'product.compliance_information.completion.updated',
-		action: 'update',
-		changedPaths: ['compliance_information.tab_completed'],
 	},
 	update_languages_information: {
 		eventKey: 'product.languages_information.updated',
@@ -139,11 +125,6 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
 		action: 'delete',
 		changedPaths: ['label_components.data'],
 	},
-	update_label_component_tab_completion: {
-		eventKey: 'product.label_components.completion.updated',
-		action: 'update',
-		changedPaths: ['label_components.tab_completed'],
-	},
 	add_symbols_graphics: {
 		eventKey: 'product.symbol_graphic.added',
 		action: 'create',
@@ -164,11 +145,6 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
 		action: 'delete',
 		changedPaths: ['symbols_graphics.data'],
 	},
-	update_symbols_graphics_tab_completion: {
-		eventKey: 'product.symbol_graphics.completion.updated',
-		action: 'update',
-		changedPaths: ['symbols_graphics.tab_completed'],
-	},
 	add_product_data: {
 		eventKey: 'product.product_specification.added',
 		action: 'create',
@@ -184,11 +160,6 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
 		action: 'delete',
 		changedPaths: ['product_data.data'],
 	},
-	update_product_data_tab_completion: {
-		eventKey: 'product.product_specifications.completion.updated',
-		action: 'update',
-		changedPaths: ['product_data.tab_completed'],
-	},
 	add_operational_parameters: {
 		eventKey: 'product.operational_parameter.added',
 		action: 'create',
@@ -203,11 +174,6 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
 		eventKey: 'product.operational_parameter.deleted',
 		action: 'delete',
 		changedPaths: ['operational_parameters.data'],
-	},
-	update_operational_parameters_tab_completion: {
-		eventKey: 'product.operational_parameters.completion.updated',
-		action: 'update',
-		changedPaths: ['operational_parameters.tab_completed'],
 	},
 	add_label_tags: {
 		eventKey: 'product.label_tag.added',
@@ -233,11 +199,6 @@ const PRODUCT_DATA_ACTION_AUDIT_META: Record<string, ProductDataAuditMeta> = {
 		eventKey: 'product.label_tag.legend.updated',
 		action: 'update',
 		changedPaths: ['label_tags.data'],
-	},
-	update_label_tags_tab_completion: {
-		eventKey: 'product.label_tags.completion.updated',
-		action: 'update',
-		changedPaths: ['label_tags.tab_completed'],
 	},
 };
 
@@ -284,7 +245,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const editDenied = denyProductContentEdit(context, product);
 		if (editDenied) return editDenied;
 
-		const isCompletionAction = input.action.endsWith('_completion');
+		const completionTab = getTabByCompletionAction(input.action);
+		const isCompletionAction = Boolean(completionTab);
 		const marksTabIncomplete = isCompletionAction && (input.data as { tab_completed?: boolean } | undefined)?.tab_completed === false;
 		if (marksTabIncomplete && product.status === 'submitted') {
 			return ResponseWrapper.conflict(TAB_INCOMPLETE_WHILE_SUBMITTED_MESSAGE);
@@ -335,14 +297,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 			break;
 
-		case 'update_product_information_completion':
-			const updateTabCompletionResult = updateProductInfoTabCompletion(input.data, input.tab, input.action);
-			if (updateTabCompletionResult.error) return updateTabCompletionResult.error;
-
-			({ updateQuery, updatedData } = updateTabCompletionResult);
-
-			break;
-
 		case 'add_compliance_standard':
 			const addComplianceStandardResult = addComplianceStandard(input.data, input.tab, input.action);
 			if (addComplianceStandardResult.error) return addComplianceStandardResult.error;
@@ -365,14 +319,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 			({ updateQuery } = deleteComplianceStandardResult);
 			updatedData = input.data;
-
-			break;
-
-		case 'update_compliance_tab_completion':
-			const updateComplianceTabCompletionResult = updateComplianceTabCompletion(input.data, input.tab, input.action);
-			if (updateComplianceTabCompletionResult.error) return updateComplianceTabCompletionResult.error;
-
-			({ updateQuery, updatedData } = updateComplianceTabCompletionResult);
 
 			break;
 
@@ -425,13 +371,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 			break;
 
-		case 'update_label_component_tab_completion':
-			const updateLabelComponentTabCompletionResult = updateLabelComponentTabCompletion(input.data, input.tab, input.action);
-			if (updateLabelComponentTabCompletionResult.error) return updateLabelComponentTabCompletionResult.error;
-
-			({ updateQuery, updatedData } = updateLabelComponentTabCompletionResult);
-
-			break;
 		case 'add_symbols_graphics': {
 			const addSymbolsGraphicsResult = AddSymbolsGraphics(input.data, input.tab, input.action);
 			if (addSymbolsGraphicsResult.error) return addSymbolsGraphicsResult.error;
@@ -531,14 +470,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 			break;
 
-		case 'update_symbols_graphics_tab_completion':
-			const updateSymbolsGraphicsTabCompletionResult = updateSymbolsGraphicsTabCompletion(input.data, input.tab, input.action);
-			if (updateSymbolsGraphicsTabCompletionResult.error) return updateSymbolsGraphicsTabCompletionResult.error;
-
-			({ updateQuery, updatedData } = updateSymbolsGraphicsTabCompletionResult);
-
-			break;
-
 		case 'add_product_data':
 			const addProductDataResult = addProductData(input.data, input.tab, input.action);
 			if (addProductDataResult.error) return addProductDataResult.error;
@@ -560,14 +491,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			if (deleteProductDataResult.error) return deleteProductDataResult.error;
 
 			({ updateQuery, updatedData } = deleteProductDataResult);
-
-			break;
-
-		case 'update_product_data_tab_completion':
-			const updateProductDataTabCompletionResult = updateProductDataTabCompletion(input.data, input.tab, input.action);
-			if (updateProductDataTabCompletionResult.error) return updateProductDataTabCompletionResult.error;
-
-			({ updateQuery, updatedData } = updateProductDataTabCompletionResult);
 
 			break;
 
@@ -595,14 +518,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 			break;
 
-		case 'update_operational_parameters_tab_completion':
-			const updateOperationalParametersTabCompletionResult = updateOperationalParametersTabCompletion(input.data, input.tab, input.action);
-			if (updateOperationalParametersTabCompletionResult.error) return updateOperationalParametersTabCompletionResult.error;
-
-			({ updateQuery, updatedData } = updateOperationalParametersTabCompletionResult);
-
-			break;
-
 		case 'add_label_tags':
 			const addLabelTagResult = addLabelTag(input.data, input.tab, input.action);
 			if (addLabelTagResult.error) return addLabelTagResult.error;
@@ -627,14 +542,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 			break;
 
-		case 'update_label_tags_tab_completion':
-			const updateLabelTagsTabCompletionResult = updateLabelTagsTabCompletion(input.data, input.tab, input.action);
-			if (updateLabelTagsTabCompletionResult.error) return updateLabelTagsTabCompletionResult.error;
-
-			({ updateQuery, updatedData } = updateLabelTagsTabCompletionResult);
-
-			break;
-
 		case 'update_label_tag_tagged_image':
 			const updateLabelTagTaggedImageResult = updateLabelTagTaggedImage(input.data, input.tab, input.action);
 			if (updateLabelTagTaggedImageResult.error) return updateLabelTagTaggedImageResult.error;
@@ -651,8 +558,13 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 			break;
 
-		default:
-			return ResponseWrapper.badRequest('Invalid action');
+		default: {
+			if (!completionTab) return ResponseWrapper.badRequest('Invalid action');
+			const completion = buildTabCompletionUpdate(completionTab, input.data, input.tab);
+			if (completion.error) return completion.error;
+
+			({ updateQuery, updatedData } = completion);
+		}
 		}
 
 		if (skipUpdate) {

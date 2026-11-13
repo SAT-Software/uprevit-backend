@@ -150,43 +150,6 @@ export function deleteLabelTag(
 }
 
 /**
- * Handles the update of label tags tab completion status.
- * @param {UpdateLabelTagsTabCompletion} inputData - The data object containing the tab completion status.
- * @param {string} tab - The current tab being updated.
- * @param {string} action - The action being performed.
- * @return {LabelTagReturn} An object containing the update query, updated data, and any validation error.
- */
-export function updateLabelTagsTabCompletion(
-	inputData: { tab_completed: boolean },
-	tab: string,
-	action: string,
-): Omit<LabelTagReturn, 'updatedData'> & { updatedData: { tab_completed: boolean } } {
-	try {
-		const isValidatedTab = validateTab(tab, 'label-tags', action);
-		if (isValidatedTab) throw new Error(isValidatedTab.body);
-
-		if (typeof inputData.tab_completed !== 'boolean') throw new Error('tab_completed must be a boolean value.');
-
-		const updateQuery = { $set: { 'label_tags.tab_completed': inputData.tab_completed } };
-		const updatedData = { tab_completed: inputData.tab_completed };
-
-		return { updateQuery, updatedData, error: null };
-	} catch (error) {
-		if (error instanceof Error)
-			return {
-				updateQuery: {},
-				updatedData: { tab_completed: false },
-				error: ResponseWrapper.badRequest(error.message),
-			};
-		return {
-			updateQuery: {},
-			updatedData: { tab_completed: false },
-			error: ResponseWrapper.internalServerError('Failed to update label tags tab completion'),
-		};
-	}
-}
-
-/**
  * @param {object} inputData
  * @param {string} tab
  * @param {string} action

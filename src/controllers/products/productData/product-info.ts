@@ -6,7 +6,6 @@ import {
 	UpdateProductInformationData,
 	CustomFieldInput,
 	DeleteCustomFieldInput,
-	UpdateProductInformationCompletionData,
 } from '../../../types/products/product-info';
 
 type ExistingCustomField = {
@@ -217,38 +216,5 @@ export function deleteCustomField(
 		if (error instanceof Error) return { updateQuery: {}, updatedData: { id: '' }, error: ResponseWrapper.badRequest(error.message) };
 
 		return { updateQuery: {}, updatedData: { id: '' }, error: ResponseWrapper.internalServerError('Failed to delete custom field') };
-	}
-}
-
-/**
- * Handles the update of product information tab completion status.
- * @param {UpdateProductInformationCompletionData} inputData - The data object containing the tab completion status.
- * @param {string} tab - The current tab being updated.
- * @param {string} action - The action being performed.
- * @return {Object} An object containing the update query, updated data, and any validation error.
- */
-export function updateProductInfoTabCompletion(
-	inputData: UpdateProductInformationCompletionData,
-	tab: string,
-	action: string,
-): {
-    updateQuery: Record<string, unknown>;
-    updatedData: { tab_completed: boolean };
-    error: APIGatewayProxyResult | null;
-} {
-	try {
-		const isValidTabProductInfoCompletion = validateTab(tab, 'product-information', action);
-		if (isValidTabProductInfoCompletion) throw new Error(isValidTabProductInfoCompletion.body);
-	
-		if (typeof inputData.tab_completed !== 'boolean') throw new Error('tab_completed must be a boolean value.');
-	
-		const updateQuery = { $set: { 'product_information.tab_completed': inputData.tab_completed } };
-		const updatedData = { tab_completed: inputData.tab_completed };
-	
-		return { updateQuery, updatedData, error: null };
-	} catch (error) {
-		if (error instanceof Error) return { updateQuery: {}, updatedData: { tab_completed: false }, error: ResponseWrapper.badRequest(error.message) };
-		
-		return { updateQuery: {}, updatedData: { tab_completed: false }, error: ResponseWrapper.internalServerError('Failed to update product information tab completion') };
 	}
 }
