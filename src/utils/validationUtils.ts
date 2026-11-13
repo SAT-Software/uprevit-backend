@@ -61,7 +61,7 @@ export function validateAllObjectIds(
  * @param {Record<string, string>} fields - Object with field names as keys and values to validate
  * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if all valid
  */
-export function validateMissingFields(fields: Record<string, string>): APIGatewayProxyResult | null {
+export function validateMissingFields(fields: Record<string, unknown>): APIGatewayProxyResult | null {
 	for (const [fieldName, value] of Object.entries(fields)) {
 		if (!value) {
 			return ResponseWrapper.badRequest(`Missing required field(s): ${fieldName}`);

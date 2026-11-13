@@ -108,8 +108,7 @@ export const assertWorkspaceMatch = (
 	message = 'You are not authorized to access resources for this workspace',
 ): APIGatewayProxyResult | null => {
 	if (!(requestedWorkspaceId instanceof ObjectId)) {
-		const requestedWorkspaceIdString = requestedWorkspaceId.toString().trim();
-		if (!ObjectId.isValid(requestedWorkspaceIdString)) {
+		if (typeof requestedWorkspaceId !== 'string' || !ObjectId.isValid(requestedWorkspaceId.trim())) {
 			return ResponseWrapper.badRequest('Invalid workspace id');
 		}
 	}
@@ -118,7 +117,7 @@ export const assertWorkspaceMatch = (
 	try {
 		requestedId = requestedWorkspaceId instanceof ObjectId
 			? requestedWorkspaceId
-			: new ObjectId(requestedWorkspaceId.toString());
+			: new ObjectId(requestedWorkspaceId.trim());
 	} catch {
 		return ResponseWrapper.badRequest('Invalid workspace id');
 	}

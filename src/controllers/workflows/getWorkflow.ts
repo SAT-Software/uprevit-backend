@@ -98,7 +98,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 				canEdit: workflow.status === 'draft' && canManageWorkflow(context, workflow),
 				canCancel: ACTIVE_WORKFLOW_STATUSES.includes(workflow.status) && canManageWorkflow(context, workflow),
 				canComplete: workflow.status === 'ready_to_complete' && canManageWorkflow(context, workflow),
-				canReplace: workflow.status === 'in_review' && workflow.initiator.userId.equals(context.userId),
+				canReplace: workflow.status === 'in_review' && canManageWorkflow(context, workflow),
 				canSendReminder: ACTIVE_WORKFLOW_STATUSES.includes(workflow.status) && workflow.initiator.userId.equals(context.userId),
 			},
 		});

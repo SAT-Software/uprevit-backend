@@ -36,6 +36,8 @@ interface ProductForExport {
 	symbols_graphics?: { tab_completed?: boolean };
 	label_components?: { tab_completed?: boolean };
 	label_tags?: { tab_completed?: boolean };
+	product_data?: { tab_completed?: boolean };
+	operational_parameters?: { tab_completed?: boolean };
 }
 
 const argb = (hex: string) => `FF${hex.replace('#', '').toUpperCase()}`;
@@ -51,6 +53,8 @@ const SECTIONS: Array<{ key: keyof ProductForExport; label: string }> = [
 	{ key: 'compliance_information', label: 'Compliance' },
 	{ key: 'symbols_graphics', label: 'Symbols & graphics' },
 	{ key: 'label_components', label: 'Label components' },
+	{ key: 'product_data', label: 'Product specifications' },
+	{ key: 'operational_parameters', label: 'Operational parameters' },
 	{ key: 'label_tags', label: 'Label tags' },
 ];
 
@@ -207,7 +211,7 @@ export async function generateReportsExcelExport(products: ProductForExport[], c
 			row.getCell('product_name').font = { bold: true };
 			row.getCell('target_date').numFmt = 'dd mmm yyyy';
 			row.getCell('version').alignment = { vertical: 'top', horizontal: 'right' };
-			row.getCell('sections_done').numFmt = '0 "of 5"';
+			row.getCell('sections_done').numFmt = `0 "of ${SECTIONS.length}"`;
 			row.getCell('sections_done').alignment = { vertical: 'top', horizontal: 'right' };
 			if (product.status) {
 				const tone = statusTone(product.status);

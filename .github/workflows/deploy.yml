@@ -9,6 +9,7 @@ on:
       - develop
       - main
       - demo
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -55,6 +56,7 @@ jobs:
     name: Deploy to AWS
     runs-on: blacksmith-8vcpu-ubuntu-2404
     needs: lint
+    if: github.event_name != 'pull_request'
     environment: ${{ github.ref == 'refs/heads/main' && 'prod' || github.ref == 'refs/heads/demo' && 'demo' || github.ref == 'refs/heads/develop' && 'develop' || 'stage' }}
     env:
       AWS_REGION: us-east-1

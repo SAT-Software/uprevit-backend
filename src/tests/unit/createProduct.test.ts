@@ -65,7 +65,9 @@ describe('createProduct plan number check', () => {
 		insertOne = jest.fn(async () => ({ insertedId: new ObjectId() }));
 		updateOne = jest.fn(async () => ({ acknowledged: true }));
 		dbModule.getDb.mockResolvedValue({
-			collection: jest.fn(() => ({ findOne, insertOne, updateOne, deleteOne: jest.fn(async () => ({ deletedCount: 1 })) })),
+			collection: jest.fn((name: string) => (name === 'projects'
+				? { findOne: jest.fn(async () => ({ _id: new ObjectId(), department_id: new ObjectId(), isArchived: false })) }
+				: { findOne, insertOne, updateOne, deleteOne: jest.fn(async () => ({ deletedCount: 1 })) })),
 		});
 	});
 

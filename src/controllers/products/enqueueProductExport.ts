@@ -5,7 +5,6 @@ import {
 	type ExportJobFormat,
 } from '../../models/exportJob';
 import type { Product } from '../../models/product';
-import { authenticateRequest } from '../../utils/authUtils';
 import { getDb } from '../../utils/db';
 import { enqueueExportJobMessage } from '../../utils/exportQueue';
 import { logError } from '../../utils/logger';
@@ -16,8 +15,7 @@ import {
 } from '../../utils/productExportJobs';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { validateAllObjectIds } from '../../utils/validationUtils';
-import { getAuthenticatedUserContext } from '../../utils/authenticatedUser';
-import { canEditWorkspaceData, READ_ONLY_MESSAGE } from '../../utils/tenantContext';
+import { canEditWorkspaceData, READ_ONLY_MESSAGE, requireTenantContext } from '../../utils/tenantContext';
 import { assertUsageActionAllowed } from '../../utils/billing/enforcement';
 import { withTelemetry } from '../../utils/telemetry';
 
@@ -63,8 +61,10 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		format = body.format as ExportJobFormat;
 
-		const auth = await authenticateRequest(event);
-		if (!auth.isValid) return auth.error;
+		const tenantResult = await requireTenantContext(event);
+		if (!tenantResult.ok) return tenantResult.response;
+		const { context: userContext } = tenantResult;
+		const { cognitoSub } = userContext;
 
 		const productId = event.pathParameters?.productId;
 		if (!productId) return ResponseWrapper.badRequest("Product id - 'productId' is required in path parameters");
@@ -72,15 +72,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const validationError = validateAllObjectIds({ productId });
 		if (validationError) return validationError;
 
-		const cognitoSub = auth.payload.sub;
-		if (!cognitoSub) {
-			return ResponseWrapper.unauthorized('Unauthorized');
-		}
-
-		const userContext = await getAuthenticatedUserContext(cognitoSub);
-		if (!userContext) {
-			return ResponseWrapper.unauthorized('Unable to resolve authenticated user context');
-		}
 		if (!canEditWorkspaceData(userContext)) return ResponseWrapper.forbidden(READ_ONLY_MESSAGE);
 
 		const db = await getDb();

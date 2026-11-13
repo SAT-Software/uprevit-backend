@@ -1,3 +1,4 @@
+import { COMPLETION_TABS } from '../productLifecycle';
 import { ObjectId, Document } from 'mongodb';
 import {
 	QueryCondition,
@@ -358,11 +359,7 @@ export function buildExportPipeline(
 			target_date: 1,
 			version: 1,
 			'product_information.data': 1,
-			'product_information.tab_completed': 1,
-			'compliance_information.tab_completed': 1,
-			'symbols_graphics.tab_completed': 1,
-			'label_components.tab_completed': 1,
-			'label_tags.tab_completed': 1,
+			...Object.fromEntries(COMPLETION_TABS.map((tab) => [`${tab}.tab_completed`, 1])),
 		},
 	});
 

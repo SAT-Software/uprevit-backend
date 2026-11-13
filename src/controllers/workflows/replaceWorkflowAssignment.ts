@@ -6,7 +6,7 @@ import { ResponseWrapper } from '../../utils/responseWrapper';
 import { WorkflowReplacementError, replaceAssignment } from '../../utils/workflowAssignments';
 import { parseJsonObject } from '../../utils/workflowInput';
 import { WorkflowConflictError, getActorSnapshot, parseWorkflowText, withContentChangeFlags } from '../../utils/workflowLifecycle';
-import { findWorkflow, requireWorkflowContext } from '../../utils/workflows';
+import { canManageWorkflow, findWorkflow, requireWorkflowContext } from '../../utils/workflows';
 import { withTelemetry } from '../../utils/telemetry';
 
 /**
@@ -30,7 +30,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		const workflow = await findWorkflow(db, context.workspaceId, event.pathParameters?.workflowId);
 		if (!workflow) return ResponseWrapper.notFound('Workflow not found');
-		if (!workflow.initiator.userId.equals(context.userId)) return ResponseWrapper.forbidden('Only the Initiator can replace an approver');
+		if (!canManageWorkflow(context, workflow)) return ResponseWrapper.forbidden('Only the Initiator or a Workspace admin can replace an approver');
 
 		const assignmentId = event.pathParameters?.assignmentId;
 		const assignment = assignmentId && ObjectId.isValid(assignmentId)

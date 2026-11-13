@@ -12,6 +12,8 @@ import {
 	computeCompleteCount,
 	CONTENT_LOCKED_MESSAGE,
 	editableStatusFilter,
+	notArchivedFilter,
+	ARCHIVED_PRODUCT_MESSAGE,
 	JUST_RELEASED_MESSAGE,
 	LifecycleConflictError,
 	productLineageFilter,
@@ -83,6 +85,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
 		}
 
+		if (existingProduct.is_archived && action !== 'restore') return ResponseWrapper.conflict(ARCHIVED_PRODUCT_MESSAGE);
+
 		if (existingProduct.status === 'in_review' && action !== 'restore' && action !== 'update-product') {
 			return ResponseWrapper.conflict(IN_REVIEW_MESSAGE);
 		}
@@ -133,7 +137,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			}
 
 			const submitted = await products.updateOne(
-				{ ...productFilter, ...editorFilter, ...allTabsCompletedFilter, status: 'draft' },
+				{ ...productFilter, ...editorFilter, ...allTabsCompletedFilter, ...notArchivedFilter, status: 'draft' },
 				{ $set: { actual_completion_date: new Date(), complete_count: 100, status: 'submitted' } },
 			);
 			if (submitted.matchedCount === 0) {
@@ -147,7 +151,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		case 'return-to-draft': {
 			const returned = await products.findOneAndUpdate(
-				{ ...productFilter, ...editorFilter, status: 'submitted' },
+				{ ...productFilter, ...editorFilter, ...notArchivedFilter, status: 'submitted' },
 				{ $set: { status: 'draft' } },
 				{ returnDocument: 'after', projection: { owner_user_id: 1 } },
 			);

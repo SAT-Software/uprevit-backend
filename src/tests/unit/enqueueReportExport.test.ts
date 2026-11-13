@@ -23,6 +23,7 @@ jest.mock('../../utils/db', () => ({
 
 jest.mock('../../utils/billing/enforcement', () => ({
 	assertUsageActionAllowed: jest.fn(async () => ({ allowed: true })),
+	assertWorkspaceAccessAllowed: jest.fn(async () => ({ allowed: true })),
 }));
 
 const authUtils = jest.requireMock('../../utils/authUtils') as any;

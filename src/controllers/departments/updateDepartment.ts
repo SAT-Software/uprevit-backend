@@ -37,8 +37,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const missingFieldsResult = validateMissingFields({
 			'department_name': input.department_name,
 			'department_description': input.department_description,
-			'admin_id': input.admin_id.toString(),
-			'_id': input._id!.toString(),
+			'admin_id': input.admin_id,
+			'_id': input._id,
 		});
 
 		if(missingFieldsResult) {
@@ -64,10 +64,13 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const db = await getDb();
 		const departmentFilter = tenantObjectIdFilter(input._id!, context.workspaceId);
 
-		const departmentRecord: Department | null = await db.collection<Department>('departments').findOne(departmentFilter);
+		const departmentRecord: Department | null = await db.collection<Department>('departments').findOne({
+			...departmentFilter,
+			isArchived: { $ne: true },
+		});
 
 		if (!departmentRecord) {
-			return ResponseWrapper.badRequest('Department not found');
+			return ResponseWrapper.notFound('Department not found or archived');
 		}
 
 		const adminObjectId = new ObjectId(input.admin_id);
