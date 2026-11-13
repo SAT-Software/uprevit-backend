@@ -9,7 +9,7 @@ import { validateMissingFields } from "../../utils/validationUtils";
 import { createPresignedUrl, UPLOAD_MAX_BYTES, type UploadScope } from "../../utils/s3-storage";
 import type { Product } from "../../models/product";
 import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
-import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE } from "../../utils/productAccess";
+import { denyProductContentEdit } from "../../utils/productAccess";
 import { canEditWorkspaceData, parseCognitoGroups, READ_ONLY_MESSAGE } from "../../utils/tenantContext";
 import { ACTIVE_WORKFLOW_STATUSES } from "../../models/workflow";
 import { canComment, getProductTeamIds } from "../../utils/workflowDiscussion";
@@ -118,11 +118,12 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			const product = await db.collection<Product>('products').findOne({
 				_id: new ObjectId(productId),
 				workspace_id: userContext.workspaceId,
-			}, { projection: { owner_user_id: 1, contributor_user_ids: 1 } });
+			}, { projection: { owner_user_id: 1, contributor_user_ids: 1, status: 1, is_archived: 1, is_latest: 1 } });
 
 			if (!product) return ResponseWrapper.forbidden('You are not authorized to upload files for this product.');
-			const actor = { userId: userContext.userId, cognitoGroups: parseCognitoGroups(auth.payload['cognito:groups']) };
-			if (!canEditProduct(actor, product)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
+			const actor = { userId: userContext.userId, userType: userContext.userType, cognitoGroups: parseCognitoGroups(auth.payload['cognito:groups']) };
+			const editDenied = denyProductContentEdit(actor, product);
+			if (editDenied) return editDenied;
 		}
 
 		let workflowId: string | undefined;

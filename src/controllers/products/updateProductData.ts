@@ -33,7 +33,7 @@ import {
 	TAB_INCOMPLETE_WHILE_IN_REVIEW_MESSAGE,
 	TAB_INCOMPLETE_WHILE_SUBMITTED_MESSAGE,
 } from '../../utils/productLifecycle';
-import { canEditProduct, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError, productEditorFilter } from '../../utils/productAccess';
+import { canEditProduct, denyProductContentEdit, PRODUCT_EDIT_FORBIDDEN_MESSAGE, ProductAccessError, productEditorFilter } from '../../utils/productAccess';
 import { saveProductContent, sendChangeNotices } from '../../utils/workflowChangeNotices';
 import { WorkflowConflictError } from '../../utils/workflowLifecycle';
 import {
@@ -281,9 +281,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const product = await db.collection<Product>('products').findOne(productTenantFilter);
 
 		if (!product) return ResponseWrapper.notFound('Product not found, please check the provided product id.');
-		if (!canEditProduct(context, product)) return ResponseWrapper.forbidden(PRODUCT_EDIT_FORBIDDEN_MESSAGE);
-		if (isContentLocked(product.status)) return ResponseWrapper.conflict(CONTENT_LOCKED_MESSAGE);
-		if (product.is_archived) return ResponseWrapper.conflict(ARCHIVED_PRODUCT_MESSAGE);
+		const editDenied = denyProductContentEdit(context, product);
+		if (editDenied) return editDenied;
 
 		const isCompletionAction = input.action.endsWith('_completion');
 		const marksTabIncomplete = isCompletionAction && (input.data as { tab_completed?: boolean } | undefined)?.tab_completed === false;

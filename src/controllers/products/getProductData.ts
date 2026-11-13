@@ -6,7 +6,7 @@ import { logError } from '../../utils/logger';
 import { validateAllObjectIds, validateEnum } from '../../utils/validationUtils';
 import { requireTenantContext, tenantObjectIdFilter } from '../../utils/tenantContext';
 import { buildLegacyAuditLookupStage } from '../../utils/auditLogV2Aggregation';
-import { productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
+import { getProductCapabilities, productTeamLookupStages, signProductTeamAvatars } from '../../utils/productAccess';
 import { addProductReleaseInfo } from '../../utils/productLifecycle';
 import {
 	createPresignedGetUrlMap,
@@ -216,8 +216,10 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 				contributor_user_ids: product.contributor_user_ids ?? [],
 				owner: product.owner,
 				contributors: product.contributors,
+				is_archived: product.is_archived ?? false,
 				active_workflow: product.active_workflow,
 				released_version: product.released_version,
+				capabilities: getProductCapabilities(context, product),
 			}
 		};
 
