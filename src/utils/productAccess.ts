@@ -1,8 +1,10 @@
-import { Db, ObjectId } from 'mongodb';
+import { Db, Document, ObjectId } from 'mongodb';
 import type { Product, ProductTeamMember } from '../models/product';
 import type { User, UserType } from '../models/user';
 import { enrichUsersWithProfileAvatarUrls, type TenantUploadSigningOptions } from './s3-storage';
-import { isWorkspaceAdmin, type TenantContext } from './tenantContext';
+import { canEditWorkspaceData, isWorkspaceAdmin, READ_ONLY_MESSAGE, type TenantContext } from './tenantContext';
+import { ARCHIVED_PRODUCT_MESSAGE, canCreateVersion, COMPLETION_TABS, isContentLocked } from './productLifecycle';
+import { ResponseWrapper } from './responseWrapper';
 
 export type ProductRole = 'owner' | 'contributor' | 'admin' | 'viewer';
 
@@ -36,6 +38,72 @@ export const canEditProduct = (user: ProductActor, product: ProductTeam) =>
 
 export const canManageProductTeam = (user: ProductActor, product: ProductTeam) =>
 	['owner', 'admin'].includes(getProductRole(user, product));
+
+type CapabilityActor = Pick<TenantContext, 'userId' | 'cognitoGroups' | 'userType'>;
+type CapabilityProduct = ProductTeam & Pick<Product, 'status' | 'is_archived' | 'is_latest'> & Partial<Pick<Product, typeof COMPLETION_TABS[number]>>;
+
+export type ProductCapabilities = {
+	role: ProductRole;
+	canEdit: boolean;
+	canManageTeam: boolean;
+	canSubmit: boolean;
+	canReturnToDraft: boolean;
+	canMarkTabIncomplete: boolean;
+	canArchive: boolean;
+	canCreateVersion: boolean;
+	lockedReason: string | null;
+};
+
+const contentLockReason = (actor: CapabilityActor, product: CapabilityProduct, role: ProductRole) => {
+	if (!canEditWorkspaceData(actor)) return READ_ONLY_MESSAGE;
+	if (role === 'viewer') return PRODUCT_EDIT_FORBIDDEN_MESSAGE;
+	if (product.is_archived) return ARCHIVED_PRODUCT_MESSAGE;
+	if (product.status === 'released') return "Released versions can't be edited. Create a new version to make changes.";
+	if (isContentLocked(product.status)) return "Obsolete versions can't be edited";
+	return null;
+};
+
+/**
+ * What the caller may do with a Product Version right now. Handlers enforce the same rules at write time.
+ * @param {CapabilityActor} actor Caller
+ * @param {CapabilityProduct} product Product Version with its team, status and archive flag
+ * @return {ProductCapabilities} Allowed actions and, when content is locked, why
+ */
+export const getProductCapabilities = (actor: CapabilityActor, product: CapabilityProduct): ProductCapabilities => {
+	const role = getProductRole(actor, product);
+	const isEditor = canEditWorkspaceData(actor);
+	const isAdmin = isEditor && isWorkspaceAdmin(actor.cognitoGroups);
+	const lockedReason = contentLockReason(actor, product, role);
+	const canEdit = lockedReason === null;
+	return {
+		role,
+		canEdit,
+		canManageTeam: isEditor && (role === 'owner' || role === 'admin') && Boolean(product.is_latest),
+		canSubmit: canEdit && product.status === 'draft' && COMPLETION_TABS.every((tab) => product[tab]?.tab_completed),
+		canReturnToDraft: canEdit && product.status === 'submitted',
+		canMarkTabIncomplete: canEdit && product.status === 'draft',
+		canArchive: isAdmin && !product.is_archived && product.status !== 'in_review',
+		canCreateVersion: isEditor && role !== 'viewer' && canCreateVersion(product),
+		lockedReason,
+	};
+};
+
+/** Adds `capabilities` to each product for the caller. */
+export const withProductCapabilities = <T extends Document>(actor: CapabilityActor, products: T[]) =>
+	products.map((product) => ({ ...product, capabilities: getProductCapabilities(actor, product as unknown as CapabilityProduct) }));
+
+/**
+ * Response for a content edit the caller can't make, or null when the edit is allowed.
+ * @param {CapabilityActor} actor Caller
+ * @param {CapabilityProduct} product Product Version being edited
+ * @return {APIGatewayProxyResult | null} 403 for missing access, 409 for a locked version
+ */
+export const denyProductContentEdit = (actor: CapabilityActor, product: CapabilityProduct) => {
+	const { role, lockedReason } = getProductCapabilities(actor, product);
+	if (!lockedReason) return null;
+	if (!canEditWorkspaceData(actor) || role === 'viewer') return ResponseWrapper.forbidden(lockedReason);
+	return ResponseWrapper.conflict(lockedReason);
+};
 
 /**
  * Finds an active member of the workspace with one of the given User Types, used to validate team and approver picks.

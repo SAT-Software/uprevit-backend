@@ -1,3 +1,4 @@
+import type { ProductCapabilities } from '../utils/productAccess';
 import { ObjectId } from 'mongodb';
 import { AuditLog } from './auditLog';
 import type { User } from './user';
@@ -35,6 +36,8 @@ export type ProductData ={
 			contributors?: ProductTeamMember[];
 			active_workflow?: { id: ObjectId; numberLabel: string } | null;
 			released_version?: { id: ObjectId; version: number } | null;
+			is_archived?: boolean;
+			capabilities?: ProductCapabilities;
 		}
 }
 

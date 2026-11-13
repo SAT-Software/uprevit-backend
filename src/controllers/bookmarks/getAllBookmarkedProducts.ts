@@ -8,7 +8,7 @@ import { logError } from '../../utils/logger';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
 import { buildProductStatusMatch } from '../../utils/productLifecycle';
 import { parseListQuery } from '../../utils/listQuery';
-import { signProductTeamAvatars } from '../../utils/productAccess';
+import { signProductTeamAvatars, withProductCapabilities } from '../../utils/productAccess';
 import { withTelemetry } from '../../utils/telemetry';
 import { buildProductListPipeline, buildProductSearchOr, PRODUCT_LIST_SORT_FIELDS } from '../../utils/productListPipeline';
 
@@ -133,7 +133,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		return ResponseWrapper.success({
 			message: 'Bookmarked products fetched successfully',
 			result: {
-				products: productsWithTeam,
+				products: withProductCapabilities(context, productsWithTeam),
 				pagination: {
 					currentPage: page,
 					totalPages,
