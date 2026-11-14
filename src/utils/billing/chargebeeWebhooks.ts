@@ -163,7 +163,7 @@ export const buildChargebeeMirrorUpdate = (
 	subscription: ChargebeeSubscription,
 	options: { invoicePastDue?: boolean } = {},
 ): Partial<BillingAccount> => {
-	const invoicePastDue = options.invoicePastDue ?? (subscription.due_invoices_count ?? 0) > 0;
+	const invoicePastDue = options.invoicePastDue ?? account.pastDue;
 	const limits = normalizeLimits(account);
 	const items = subscriptionItems(subscription);
 	const seatItemPriceIds = getChargebeeSeatAddonItemPriceIds();
@@ -273,16 +273,10 @@ export const syncPastDueFromChargebee = async (subscriptionId: string): Promise<
 
 	const subscription = await retrieveChargebeeSubscription(subscriptionId);
 	const customerId = account.chargebee?.customerId?.trim() ?? subscription.customer_id;
-	let invoicePastDue = resolveInvoicePastDue(subscription);
-
-	if (customerId) {
-		try {
-			const invoices = await listChargebeeInvoicesForCustomer(customerId);
-			invoicePastDue = resolveInvoicePastDue(subscription, invoices);
-		} catch {
-			invoicePastDue = resolveInvoicePastDue(subscription);
-		}
-	}
+	const invoices = customerId
+		? await listChargebeeInvoicesForCustomer(customerId).catch(() => undefined)
+		: undefined;
+	const invoicePastDue = resolveInvoicePastDue(account, invoices);
 
 	await applyChargebeeSubscriptionMirror({ account, subscription, invoicePastDue });
 	return true;

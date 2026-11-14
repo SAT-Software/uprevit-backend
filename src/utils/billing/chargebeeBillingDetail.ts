@@ -12,30 +12,31 @@ import { serializeInvoiceSummary } from './invoiceSerializers';
 import { limitsToUsageLimits, normalizeLimits } from './billingAccounts';
 import { serializeBillingAccount, serializeWorkspaceBillingPreview } from './serializers';
 
-export const resolveInvoicePastDueFromInvoices = (invoices: ChargebeeInvoice[]): boolean =>
+const SECONDS_PER_DAY = 86_400;
+
+// Offline invoices stay payment_due forever and Chargebee does not know our net terms, so use the later deadline.
+export const resolveInvoicePastDueFromInvoices = (
+	invoices: ChargebeeInvoice[],
+	netTermDays = 0,
+	now = Date.now(),
+): boolean =>
 	invoices.some((invoice) => {
-		if (invoice.status === 'voided') return false;
-		return (invoice.amount_due ?? 0) > 0;
+		if (invoice.status === 'voided' || (invoice.amount_due ?? 0) <= 0) return false;
+		const dueAt = Math.max(invoice.due_date ?? 0, (invoice.date ?? 0) + netTermDays * SECONDS_PER_DAY);
+		return dueAt * 1000 < now;
 	});
 
-export const resolveInvoicePastDue = (
-	subscription: ChargebeeSubscription,
-	invoices?: ChargebeeInvoice[],
-): boolean => {
-	if (invoices !== undefined) {
-		return resolveInvoicePastDueFromInvoices(invoices);
-	}
-
-	return (subscription.due_invoices_count ?? 0) > 0;
-};
+export const resolveInvoicePastDue = (account: BillingAccount, invoices?: ChargebeeInvoice[]): boolean =>
+	invoices === undefined
+		? account.pastDue
+		: resolveInvoicePastDueFromInvoices(invoices, account.netTermDays);
 
 export const applyLiveChargebeeToSerializedAccount = (
 	account: BillingAccount & { _id: ObjectId },
 	subscription: ChargebeeSubscription,
 	options: { invoicePastDue?: boolean } = {},
 ) => {
-	const invoicePastDue = options.invoicePastDue ?? resolveInvoicePastDue(subscription);
-	const mirror = buildChargebeeMirrorUpdate(account, subscription, { invoicePastDue });
+	const mirror = buildChargebeeMirrorUpdate(account, subscription, options);
 	const serialized = serializeBillingAccount(account);
 	const mirroredLimits = mirror.limits
 		? { ...normalizeLimits(account), ...mirror.limits }
@@ -97,10 +98,10 @@ export const resolveLiveWorkspaceBillingPreview = async (account: BillingAccount
 		const [subscription, invoices] = await Promise.all([
 			retrieveChargebeeSubscription(subscriptionId),
 			customerId
-				? listChargebeeInvoicesForCustomer(customerId).catch(() => [] as ChargebeeInvoice[])
-				: Promise.resolve([] as ChargebeeInvoice[]),
+				? listChargebeeInvoicesForCustomer(customerId).catch(() => undefined)
+				: Promise.resolve(undefined),
 		]);
-		const invoicePastDue = resolveInvoicePastDue(subscription, invoices);
+		const invoicePastDue = resolveInvoicePastDue(account, invoices);
 		const mirror = buildChargebeeMirrorUpdate(account, subscription, { invoicePastDue });
 		const base = serializeWorkspaceBillingPreview(account);
 		if (base.status === 'not_set') return base;
@@ -124,7 +125,7 @@ export const buildChargebeeBillingDetail = async (account: BillingAccount & { _i
 	let invoiceError: string | null = null;
 
 	if (customerId && isChargebeeConfigured()) {
-		let fetchedInvoices: ChargebeeInvoice[] = [];
+		let fetchedInvoices: ChargebeeInvoice[] | undefined;
 		let subscription: ChargebeeSubscription | null = null;
 
 		const invoicePromise = listChargebeeInvoicesForCustomer(customerId)
@@ -147,10 +148,7 @@ export const buildChargebeeBillingDetail = async (account: BillingAccount & { _i
 		await Promise.all([invoicePromise, subscriptionPromise]);
 
 		if (subscription) {
-			const invoicePastDue = resolveInvoicePastDue(
-				subscription,
-				fetchedInvoices.length > 0 ? fetchedInvoices : undefined,
-			);
+			const invoicePastDue = resolveInvoicePastDue(account, fetchedInvoices);
 			serializedAccount = applyLiveChargebeeToSerializedAccount(account, subscription, { invoicePastDue });
 		}
 	}

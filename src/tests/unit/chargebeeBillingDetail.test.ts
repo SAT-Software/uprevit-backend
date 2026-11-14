@@ -60,28 +60,31 @@ describe('chargebeeBillingDetail', () => {
 		clearAddonEnv();
 	});
 
-	it('resolves invoice past due from due_invoices_count when invoices are unavailable', () => {
-		expect(resolveInvoicePastDue({ id: 'sub_1', customer_id: 'cust_1', status: 'active', due_invoices_count: 1 }))
-			.toBe(true);
-		expect(resolveInvoicePastDue({ id: 'sub_1', customer_id: 'cust_1', status: 'active', due_invoices_count: 0 }))
-			.toBe(false);
+	it('falls back to the stored past due flag when invoices are unavailable', () => {
+		expect(resolveInvoicePastDue(baseAccount)).toBe(true);
+		expect(resolveInvoicePastDue({ ...baseAccount, pastDue: false })).toBe(false);
 	});
 
-	it('prefers invoice balances over stale due_invoices_count', () => {
-		const subscription = {
-			id: 'sub_1',
-			customer_id: 'cust_1',
-			status: 'active',
-			due_invoices_count: 1,
-		};
-
-		expect(resolveInvoicePastDue(subscription, [
+	it('prefers invoice balances over the stored past due flag', () => {
+		expect(resolveInvoicePastDue(baseAccount, [
 			{ id: 'inv_1', customer_id: 'cust_1', status: 'paid', amount_due: 0, total: 100 },
 		])).toBe(false);
 
 		expect(resolveInvoicePastDueFromInvoices([
 			{ id: 'inv_2', customer_id: 'cust_1', status: 'payment_due', amount_due: 50, total: 50 },
 		])).toBe(true);
+	});
+
+	it('treats unpaid invoices as past due only after due date and net terms', () => {
+		const day = 86_400;
+		const now = 1_800_000_000 * 1000;
+		const issued = 1_800_000_000 - 10 * day;
+		const invoice = { id: 'inv_1', customer_id: 'cust_1', status: 'payment_due', amount_due: 50, date: issued, due_date: issued };
+
+		expect(resolveInvoicePastDueFromInvoices([invoice], 0, now)).toBe(true);
+		expect(resolveInvoicePastDueFromInvoices([invoice], 30, now)).toBe(false);
+		expect(resolveInvoicePastDueFromInvoices([{ ...invoice, due_date: issued + 20 * day }], 0, now)).toBe(false);
+		expect(resolveInvoicePastDueFromInvoices([invoice], 5, now)).toBe(true);
 	});
 
 	it('clears stale past due and subscription status from live Chargebee data', () => {
@@ -97,7 +100,7 @@ describe('chargebeeBillingDetail', () => {
 			subscription_items: [
 				{ item_price_id: 'platform-monthly', item_type: 'plan', quantity: 1 },
 			],
-		});
+		}, { invoicePastDue: false });
 
 		expect(serialized.pastDue).toBe(false);
 		expect(serialized.status).toBe('active');
