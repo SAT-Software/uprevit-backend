@@ -1,3 +1,4 @@
+import { COMPLETION_TABS } from '../productLifecycle';
 import { ObjectId, Document } from 'mongodb';
 import {
 	QueryCondition,
@@ -160,15 +161,9 @@ function buildCondition(condition: QueryCondition): BuiltCondition {
 	if (field.type === 'date') return { query: buildDateMatch(path, operator, value) };
 
 	const positive = NEGATED[operator] ?? operator;
-	let negated = positive !== operator;
-	let fieldValue = value;
-	if (field.type === 'boolean' || field.type === 'presence') {
-		fieldValue = String((value === 'true') !== negated);
-		negated = false;
-	}
-
+	const negated = positive !== operator;
 	const fullPath = section.isArray || !section.path ? path : `${section.path}.${path}`;
-	const match = buildFieldMatch(fullPath, field, positive, fieldValue);
+	const match = buildFieldMatch(fullPath, field, positive, value);
 
 	if (!section.isArray) return { query: negated ? negate(match) : match };
 	const query = withEntities(section, [match]);
@@ -372,11 +367,7 @@ export function buildExportPipeline(
 				target_date: 1,
 				version: 1,
 				'product_information.data': 1,
-				'product_information.tab_completed': 1,
-				'compliance_information.tab_completed': 1,
-				'symbols_graphics.tab_completed': 1,
-				'label_components.tab_completed': 1,
-				'label_tags.tab_completed': 1,
+				...Object.fromEntries(COMPLETION_TABS.map((tab) => [`${tab}.tab_completed`, 1])),
 			},
 		},
 	];
