@@ -31,7 +31,7 @@ describe('buildExportPipeline', () => {
 		expect(pipeline[1]).toEqual({
 			$match: {
 				$and: [{
-					'product_information.data.class_of_device': 'EU MDR - Class IIa',
+					'product_information.data.class_of_device': /^EU MDR - Class IIa$/i,
 				}],
 			},
 		});
@@ -58,10 +58,7 @@ describe('buildAggregationPipeline', () => {
 		expect(pipeline[1]).toEqual({
 			$match: {
 				$and: [{
-					'product_information.data.basic_udi_di': {
-						$regex: 'BUDI-123',
-						$options: 'i',
-					},
+					'product_information.data.basic_udi_di': /BUDI-123/i,
 				}],
 			},
 		});
