@@ -6,6 +6,7 @@ import {
 	type BillingCadence,
 } from '../../models/billing';
 import { getDb } from '../db';
+import { logError } from '../logger';
 import {
 	getChargebeeApproverSeatAddonItemPriceIds,
 	getChargebeeSeatAddonItemPriceIds,
@@ -15,10 +16,11 @@ import {
 import {
 	listChargebeeInvoicesForCustomer,
 	retrieveChargebeeSubscription,
+	type ChargebeeInvoice,
 	type ChargebeeSubscription,
 	type ChargebeeSubscriptionItem,
 } from './chargebeeClient';
-import { resolveInvoicePastDue } from './chargebeeBillingDetail';
+import { resolveInvoicePastDue, resolveNextInvoiceDeadline } from './chargebeeBillingDetail';
 import { limitsToUsageLimits, normalizeLimits } from './billingAccounts';
 
 export const CHARGEBEE_WEBHOOK_EVENTS_COLLECTION = 'chargebeeWebhookEvents';
@@ -163,7 +165,7 @@ export const buildChargebeeMirrorUpdate = (
 	subscription: ChargebeeSubscription,
 	options: { invoicePastDue?: boolean } = {},
 ): Partial<BillingAccount> => {
-	const invoicePastDue = options.invoicePastDue ?? (subscription.due_invoices_count ?? 0) > 0;
+	const invoicePastDue = options.invoicePastDue ?? account.pastDue;
 	const limits = normalizeLimits(account);
 	const items = subscriptionItems(subscription);
 	const seatItemPriceIds = getChargebeeSeatAddonItemPriceIds();
@@ -246,14 +248,17 @@ export const findBillingAccountByChargebeeSubscriptionId = async (
 export const applyChargebeeSubscriptionMirror = async ({
 	account,
 	subscription,
-	invoicePastDue,
+	invoices,
 }: {
 	account: BillingAccount & { _id: ObjectId };
 	subscription: ChargebeeSubscription;
-	invoicePastDue?: boolean;
+	invoices?: ChargebeeInvoice[];
 }): Promise<BillingAccount & { _id: ObjectId }> => {
 	const db = await getDb();
-	const update = buildChargebeeMirrorUpdate(account, subscription, { invoicePastDue });
+	const update = buildChargebeeMirrorUpdate(account, subscription, {
+		invoicePastDue: resolveInvoicePastDue(account, invoices),
+	});
+	if (invoices) update.pastDueCheckAt = resolveNextInvoiceDeadline(invoices, account.netTermDays);
 
 	await db.collection<BillingAccount>(BILLING_ACCOUNTS_COLLECTION).updateOne(
 		{ _id: account._id },
@@ -273,19 +278,30 @@ export const syncPastDueFromChargebee = async (subscriptionId: string): Promise<
 
 	const subscription = await retrieveChargebeeSubscription(subscriptionId);
 	const customerId = account.chargebee?.customerId?.trim() ?? subscription.customer_id;
-	let invoicePastDue = resolveInvoicePastDue(subscription);
+	const invoices = customerId
+		? await listChargebeeInvoicesForCustomer(customerId).catch(() => undefined)
+		: undefined;
 
-	if (customerId) {
+	await applyChargebeeSubscriptionMirror({ account, subscription, invoices });
+	return true;
+};
+
+export const refreshElapsedPastDueChecks = async (now = new Date()): Promise<number> => {
+	const db = await getDb();
+	const accounts = await db.collection<BillingAccount>(BILLING_ACCOUNTS_COLLECTION)
+		.find({ pastDueCheckAt: { $lte: now } }, { projection: { 'chargebee.subscriptionId': 1 } })
+		.toArray();
+	let refreshed = 0;
+	for (const account of accounts) {
+		const subscriptionId = account.chargebee?.subscriptionId?.trim();
+		if (!subscriptionId) continue;
 		try {
-			const invoices = await listChargebeeInvoicesForCustomer(customerId);
-			invoicePastDue = resolveInvoicePastDue(subscription, invoices);
-		} catch {
-			invoicePastDue = resolveInvoicePastDue(subscription);
+			if (await syncPastDueFromChargebee(subscriptionId)) refreshed += 1;
+		} catch (error) {
+			logError('Past due refresh failed', error);
 		}
 	}
-
-	await applyChargebeeSubscriptionMirror({ account, subscription, invoicePastDue });
-	return true;
+	return refreshed;
 };
 
 export const resolveLiveUsageLimits = async (

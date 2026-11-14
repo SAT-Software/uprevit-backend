@@ -179,31 +179,15 @@ describe('chargebee webhooks mirror', () => {
 		expect(update.sso?.enabled).toBe(true);
 	});
 
-	it('marks past due when due_invoices_count is positive', () => {
-		const update = buildChargebeeMirrorUpdate(baseAccount, {
-			id: 'sub_123',
-			customer_id: 'cust_123',
-			status: 'active',
-			due_invoices_count: 2,
-		});
+	it('keeps the stored past due flag when no invoice state is given', () => {
+		const subscription = { id: 'sub_123', customer_id: 'cust_123', status: 'active', due_invoices_count: 2 };
 
-		expect(update.pastDue).toBe(true);
-		expect(update.status).toBe('past_due');
-	});
+		expect(buildChargebeeMirrorUpdate(baseAccount, subscription).pastDue).toBe(false);
+		expect(buildChargebeeMirrorUpdate(baseAccount, subscription).status).toBe('active');
 
-	it('clears past due when due_invoices_count is zero', () => {
-		const update = buildChargebeeMirrorUpdate(
-			{ ...baseAccount, pastDue: true, status: 'past_due' },
-			{
-				id: 'sub_123',
-				customer_id: 'cust_123',
-				status: 'active',
-				due_invoices_count: 0,
-			},
-		);
-
-		expect(update.pastDue).toBe(false);
-		expect(update.status).toBe('active');
+		const pastDue = buildChargebeeMirrorUpdate({ ...baseAccount, pastDue: true }, subscription);
+		expect(pastDue.pastDue).toBe(true);
+		expect(pastDue.status).toBe('past_due');
 	});
 
 	it('honors explicit invoicePastDue override', () => {
@@ -446,6 +430,7 @@ describe('syncPastDueFromChargebee', () => {
 			expect.objectContaining({
 				$set: expect.objectContaining({
 					pastDue: false,
+					pastDueCheckAt: null,
 					status: 'active',
 				}),
 			}),
