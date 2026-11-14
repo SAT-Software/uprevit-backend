@@ -4,6 +4,7 @@ import { ObjectId } from 'mongodb';
 import { Product } from '../../models/product';
 import { Department } from '../../models/department';
 import { Project } from '../../models/project';
+import { User } from '../../models/user';
 import { ResponseWrapper } from '../../utils/responseWrapper';
 import { logError } from '../../utils/logger';
 import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
@@ -69,38 +70,60 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		const departmentIds = [...new Set(products.map((p: any) => p.department_id).filter(Boolean))];
 		const projectIds = [...new Set(products.map((p: any) => p.project_id).filter(Boolean))];
+		const ownerIds = [...new Set(products.map((p: any) => p.owner_user_id).filter(Boolean))];
 
 		const objectIdIds = (ids: any[]) => ids.map((id) => (id instanceof ObjectId ? id : ObjectId.createFromHexString(id.toString())));
 
-		const [departments, projects] = await Promise.all([
+		const [departments, projects, owners] = await Promise.all([
 			departmentIds.length > 0
-				? await db.collection<Department>('departments').find({
+				? db.collection<Department>('departments').find({
 					_id: { $in: objectIdIds(departmentIds) },
 				}).project({ _id: 1, department_name: 1 }).toArray()
 				: [],
-
 			projectIds.length > 0
-				? await db.collection<Project>('projects').find({
+				? db.collection<Project>('projects').find({
 					_id: { $in: objectIdIds(projectIds) },
 				}).project({ _id: 1, project_name: 1 }).toArray()
-				: [],	
+				: [],
+			ownerIds.length > 0
+				? db.collection<User>('users').find({
+					_id: { $in: objectIdIds(ownerIds) },
+				}).project({ _id: 1, name: 1, email: 1 }).toArray()
+				: [],
 		]);
 
 		const departmentMap = new Map(departments.map((d) => [d._id?.toString(), d.department_name]));
 		const projectMap = new Map(projects.map((p) => [p._id?.toString(), p.project_name]));
+		const ownerMap = new Map(owners.map((u) => [u._id?.toString(), u.name || u.email]));
 
-		const transformedProducts = products.map((p: any) => ({
-			_id: p._id,
-			product_name: p.product_name,
-			product_plan_number: p.product_plan_number,
-			department_id: p.department_id,
-			department_name: departmentMap.get(p.department_id?.toString()) || null,
-			project_id: p.project_id,
-			project_name: projectMap.get(p.project_id?.toString()) || null,
-			status: p.status,
-			target_date: p.target_date,
-			version: p.version,
-		}));
+		const transformedProducts = products.map((p: any) => {
+			const info = p.product_information?.data ?? {};
+			return {
+				_id: p._id,
+				product_name: p.product_name,
+				product_plan_number: p.product_plan_number,
+				product_description: p.product_description ?? null,
+				department_id: p.department_id,
+				department_name: departmentMap.get(p.department_id?.toString()) || null,
+				project_id: p.project_id,
+				project_name: projectMap.get(p.project_id?.toString()) || null,
+				status: p.status,
+				is_archived: p.is_archived === true,
+				target_date: p.target_date ?? null,
+				actual_completion_date: p.actual_completion_date ?? null,
+				released_at: p.released_at ?? null,
+				version: p.version,
+				owner_name: ownerMap.get(p.owner_user_id?.toString()) || null,
+				market_geography: info.market_geography || null,
+				country_of_origin: info.country_of_origin || null,
+				commercial_clinical: info.commercial_clinical || null,
+				manufacturing_location: info.manufacturing_location || null,
+				oem_contract_manufacturer: info.oem_contract_manufacturer || null,
+				class_of_device: info.class_of_device || null,
+				basic_udi_di: info.basic_udi_di || null,
+				languages: (p.languages_information?.data ?? []).map((language: { name?: string }) => language.name).filter(Boolean),
+			};
+		});
 
 		const response = {
 			message: 'Query executed successfully',
