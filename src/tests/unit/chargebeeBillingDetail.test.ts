@@ -5,6 +5,7 @@ import {
 	applyLiveChargebeeToSerializedAccount,
 	resolveInvoicePastDue,
 	resolveInvoicePastDueFromInvoices,
+	resolveNextInvoiceDeadline,
 } from '../../utils/billing/chargebeeBillingDetail';
 
 const clearAddonEnv = () => {
@@ -85,6 +86,8 @@ describe('chargebeeBillingDetail', () => {
 		expect(resolveInvoicePastDueFromInvoices([invoice], 30, now)).toBe(false);
 		expect(resolveInvoicePastDueFromInvoices([{ ...invoice, due_date: issued + 20 * day }], 0, now)).toBe(false);
 		expect(resolveInvoicePastDueFromInvoices([invoice], 5, now)).toBe(true);
+		expect(resolveNextInvoiceDeadline([invoice], 30, now)).toEqual(new Date((issued + 30 * day) * 1000));
+		expect(resolveNextInvoiceDeadline([invoice], 5, now)).toBeNull();
 	});
 
 	it('clears stale past due and subscription status from live Chargebee data', () => {

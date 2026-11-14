@@ -103,6 +103,7 @@ export type BillingAccount = {
 		disabledAt?: Date;
 	};
 	pastDue: boolean;
+	pastDueCheckAt?: Date | null;
 	createdAt: Date;
 	updatedAt: Date;
 };

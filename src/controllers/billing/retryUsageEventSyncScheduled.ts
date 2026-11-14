@@ -1,6 +1,7 @@
 import { ScheduledEvent } from 'aws-lambda';
 import { logError } from '../../utils/logger';
 import { processScheduledUsageEventRetries } from '../../utils/billing/usageEventChargebeeSync';
+import { refreshElapsedPastDueChecks } from '../../utils/billing/chargebeeWebhooks';
 import { withTelemetry } from '../../utils/telemetry';
 
 const { BETTER_STACK_HEARTBEAT_URL } = process.env;
@@ -22,16 +23,22 @@ const sendHeartbeat = async (succeeded: boolean): Promise<void> => {
 };
 
 /**
- * Scheduled job that retries failed Chargebee usage event syncs within the 12-hour window.
+ * Scheduled job that retries failed Chargebee usage event syncs within the 12-hour window
+ * and refreshes past due once an invoice deadline elapses.
  * @param {ScheduledEvent} _event EventBridge scheduled event
  * @return {Promise<void>}
  */
 export const lambdaHandler = withTelemetry(async (_event: ScheduledEvent): Promise<void> => {
 	try {
 		const result = await processScheduledUsageEventRetries();
+		const pastDueRefreshed = await refreshElapsedPastDueChecks().catch((error) => {
+			logError('Scheduled past due refresh failed', error);
+			return 0;
+		});
 		console.log(JSON.stringify({
 			message: 'Chargebee usage event retry job completed',
 			...result,
+			pastDueRefreshed,
 		}));
 		await sendHeartbeat(true);
 	} catch (error) {

@@ -14,7 +14,6 @@ import {
 	retrieveChargebeeSubscription,
 	updateChargebeeSubscriptionOfflineBilling,
 } from '../../utils/billing/chargebeeClient';
-import { resolveInvoicePastDue } from '../../utils/billing/chargebeeBillingDetail';
 import {
 	applyChargebeeSubscriptionMirror,
 	findBillingAccountByChargebeeCustomerId,
@@ -86,7 +85,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const mirrored = await applyChargebeeSubscriptionMirror({
 			account,
 			subscription: refreshed,
-			invoicePastDue: resolveInvoicePastDue(account, invoices),
+			invoices,
 		});
 
 		const retried = await retryPendingUsageEventsForWorkspace(workspaceObjectId, mirrored);

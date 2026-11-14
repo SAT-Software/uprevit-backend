@@ -15,16 +15,31 @@ import { serializeBillingAccount, serializeWorkspaceBillingPreview } from './ser
 const SECONDS_PER_DAY = 86_400;
 
 // Offline invoices stay payment_due forever and Chargebee does not know our net terms, so use the later deadline.
+const invoiceDeadlineMs = (invoice: ChargebeeInvoice, netTermDays: number): number | null => {
+	if (invoice.status === 'voided' || (invoice.amount_due ?? 0) <= 0) return null;
+	return Math.max(invoice.due_date ?? 0, (invoice.date ?? 0) + netTermDays * SECONDS_PER_DAY) * 1000;
+};
+
 export const resolveInvoicePastDueFromInvoices = (
 	invoices: ChargebeeInvoice[],
 	netTermDays = 0,
 	now = Date.now(),
 ): boolean =>
 	invoices.some((invoice) => {
-		if (invoice.status === 'voided' || (invoice.amount_due ?? 0) <= 0) return false;
-		const dueAt = Math.max(invoice.due_date ?? 0, (invoice.date ?? 0) + netTermDays * SECONDS_PER_DAY);
-		return dueAt * 1000 < now;
+		const deadline = invoiceDeadlineMs(invoice, netTermDays);
+		return deadline !== null && deadline < now;
 	});
+
+export const resolveNextInvoiceDeadline = (
+	invoices: ChargebeeInvoice[],
+	netTermDays = 0,
+	now = Date.now(),
+): Date | null => {
+	const upcoming = invoices
+		.map((invoice) => invoiceDeadlineMs(invoice, netTermDays))
+		.filter((deadline): deadline is number => deadline !== null && deadline >= now);
+	return upcoming.length > 0 ? new Date(Math.min(...upcoming)) : null;
+};
 
 export const resolveInvoicePastDue = (account: BillingAccount, invoices?: ChargebeeInvoice[]): boolean =>
 	invoices === undefined

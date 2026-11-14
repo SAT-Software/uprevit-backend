@@ -430,6 +430,7 @@ describe('syncPastDueFromChargebee', () => {
 			expect.objectContaining({
 				$set: expect.objectContaining({
 					pastDue: false,
+					pastDueCheckAt: null,
 					status: 'active',
 				}),
 			}),

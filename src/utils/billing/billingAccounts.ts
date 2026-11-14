@@ -47,6 +47,7 @@ export const ensureBillingAccountIndexes = async (): Promise<void> => {
 		collection.createIndex({ status: 1 }),
 		collection.createIndex({ 'limits.enabled': 1 }),
 		collection.createIndex({ pastDue: 1 }),
+		collection.createIndex({ pastDueCheckAt: 1 }, { sparse: true }),
 	]);
 
 	hasEnsuredBillingIndexes = true;
