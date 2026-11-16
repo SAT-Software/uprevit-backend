@@ -69,7 +69,7 @@ describe('fetchExportImage', () => {
 	});
 
 	it('stops reading responses over the size cap', async () => {
-		global.fetch = jest.fn<typeof fetch>().mockResolvedValue(new Response(new Uint8Array(16 * 1024 * 1024)));
+		global.fetch = jest.fn<typeof fetch>().mockResolvedValue(new Response(new Uint8Array(26 * 1024 * 1024)));
 
 		await expect(fetchExportImage(SIGNED)).resolves.toBeNull();
 	});

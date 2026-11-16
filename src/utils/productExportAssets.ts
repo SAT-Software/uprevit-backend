@@ -1,6 +1,7 @@
 import { Product } from "../models/product";
 import { logError } from "./logger";
-import { createPresignedGetUrlMap, createStandardSymbolPresignedGetUrlMap } from "./s3-storage";
+import { readResponseCapped } from "./readResponseCapped";
+import { createPresignedGetUrlMap, createStandardSymbolPresignedGetUrlMap, UPLOAD_MAX_BYTES } from "./s3-storage";
 
 export type WorkbookTabTarget = "product_specifications" | "operational_parameters";
 
@@ -55,7 +56,7 @@ export const resolveImageUrl = (
 	return s3Key ? signedUrlMap.get(s3Key) : undefined;
 };
 
-const MAX_EXPORT_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_EXPORT_IMAGE_BYTES = UPLOAD_MAX_BYTES["product-assets"];
 const EXPORT_IMAGE_FETCH_TIMEOUT_MS = 15_000;
 
 const isAllowedExportImageUrl = (url: string): boolean => {
@@ -82,28 +83,10 @@ export const fetchExportImage = async (
 		redirect: "error",
 		signal: AbortSignal.timeout(EXPORT_IMAGE_FETCH_TIMEOUT_MS),
 	});
-	if (!response.ok || !response.body) return null;
+	if (!response.ok) return null;
 
-	const reader = response.body.getReader();
-	if (Number(response.headers.get("content-length")) > MAX_EXPORT_IMAGE_BYTES) {
-		await reader.cancel();
-		return null;
-	}
-
-	const chunks: Uint8Array[] = [];
-	let total = 0;
-	for (;;) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		total += value.byteLength;
-		if (total > MAX_EXPORT_IMAGE_BYTES) {
-			await reader.cancel();
-			return null;
-		}
-		chunks.push(value);
-	}
-
-	return { bytes: Buffer.concat(chunks), contentType: response.headers.get("content-type") };
+	const bytes = await readResponseCapped(response, MAX_EXPORT_IMAGE_BYTES);
+	return bytes ? { bytes, contentType: response.headers.get("content-type") } : null;
 };
 
 export const getPreferredLabelTagImageUrl = (

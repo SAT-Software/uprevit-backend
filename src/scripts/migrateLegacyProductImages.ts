@@ -1,6 +1,7 @@
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { MongoClient, ObjectId, ServerApiVersion } from 'mongodb';
 import crypto from 'node:crypto';
+import { readResponseCapped } from '../utils/readResponseCapped';
 
 /**
  * Copies legacy product images stored as external UploadThing URLs into the tenant uploads/ prefix
@@ -43,9 +44,7 @@ const isLegacyUrl = (value: unknown): value is string => {
 
 const download = async (url: string): Promise<Uint8Array | null> => {
 	const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(20_000) });
-	if (!response.ok) return null;
-	const bytes = new Uint8Array(await response.arrayBuffer());
-	return bytes.byteLength <= MAX_BYTES ? bytes : null;
+	return response.ok ? readResponseCapped(response, MAX_BYTES) : null;
 };
 
 const main = async () => {
@@ -82,14 +81,11 @@ const main = async () => {
 		};
 
 		for await (const product of products.find({})) {
-			const update: Record<string, Item[]> = {};
+			let changed = false;
 			for (const [array, fields] of Object.entries(IMAGE_FIELDS)) {
 				const items = (product[array] as { data?: Item[] } | undefined)?.data;
 				if (!Array.isArray(items)) continue;
-				let changed = false;
-				const next = [];
 				for (const item of items) {
-					const patched = { ...item };
 					for (const [imageField, keyField] of fields) {
 						const value = item[imageField];
 						if (item[keyField] || typeof value !== 'string' || !value || value.startsWith('uploads/')) continue;
@@ -99,18 +95,18 @@ const main = async () => {
 						}
 						counts.items += 1;
 						const key = await copy(value, product);
-						if (!key) continue;
-						patched[imageField] = key;
-						patched[keyField] = key;
+						if (!key || !item._id) continue;
 						changed = true;
+						if (dryRun) continue;
+						await products.updateOne(
+							{ _id: product._id },
+							{ $set: { [`${array}.data.$[item].${imageField}`]: key, [`${array}.data.$[item].${keyField}`]: key } },
+							{ arrayFilters: [{ 'item._id': item._id, [`item.${imageField}`]: value }] },
+						);
 					}
-					next.push(patched);
 				}
-				if (changed) update[`${array}.data`] = next;
 			}
-			if (!Object.keys(update).length) continue;
-			counts.products += 1;
-			if (!dryRun) await products.updateOne({ _id: product._id }, { $set: update });
+			if (changed) counts.products += 1;
 		}
 
 		console.log(`${DB_NAME}: ${dryRun ? 'would update' : 'updated'} ${counts.products} product versions, `
