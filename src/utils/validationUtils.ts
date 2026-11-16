@@ -169,14 +169,21 @@ export function addFieldsToUpdateWithPrefix(
  * @param {string} fieldName - The name of the field.
  * @return {APIGatewayProxyResult | null} ResponseWrapper error if invalid, null if valid.
  */
+export const MAX_INVITES_PER_REQUEST = 10;
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function validateUserArray(value: any, fieldName: string): APIGatewayProxyResult | null {
-	if (!Array.isArray(value) || !value.every(item => 
+	if (!Array.isArray(value) || value.length < 1 || value.length > MAX_INVITES_PER_REQUEST || !value.every(item =>
 		typeof item === 'object' &&
-    item !== null &&
-    typeof item.name === 'string' &&
-    typeof item.email === 'string'
+		item !== null &&
+		typeof item.name === 'string' &&
+		typeof item.email === 'string' &&
+		EMAIL_PATTERN.test(item.email.trim())
 	)) {
-		return ResponseWrapper.badRequest(`Field '${fieldName}' must be an array of objects with 'name' and 'email' string properties.`);
+		return ResponseWrapper.badRequest(
+			`Field '${fieldName}' must be an array of 1-${MAX_INVITES_PER_REQUEST} objects with 'name' and a valid 'email'.`,
+		);
 	}
 	return null;
 }

@@ -11,6 +11,7 @@ import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext } from "..
 import { assertUsageActionAllowed } from "../../utils/billing/enforcement";
 import {
 	assertEmailAvailableForWorkspaceMemberInvite,
+	findUnfinishedWorkspaceInviteSub,
 	InviteEmailConflictError,
 	normalizeInviteEmail,
 } from "../../utils/platformInviteUtils";
@@ -90,7 +91,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 		if (accessError) return ResponseWrapper.badRequest(accessError);
 		const accesses = parsedAccesses as MemberAccess[];
 
-		const inviteCheck = await assertUsageActionAllowed(context.workspaceId, 'invite');
+		const inviteCheck = await assertUsageActionAllowed(context.workspaceId, 'invite', users.length);
 		if (!inviteCheck.allowed) return ResponseWrapper.forbidden(inviteCheck.reason);
 
 		const db = await getDb();
@@ -117,7 +118,10 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 			let createdCognitoUser = false;
 			let insertedUserId: ObjectId | undefined;
 			try {
-				await assertEmailAvailableForWorkspaceMemberInvite(db, normalizedEmail, workspaceObjectId);
+				const unfinishedInviteSub = await findUnfinishedWorkspaceInviteSub(db, normalizedEmail, workspaceObjectId);
+				if (!unfinishedInviteSub) {
+					await assertEmailAvailableForWorkspaceMemberInvite(db, normalizedEmail, workspaceObjectId);
+				}
 
 				const inactiveUser = await findInactiveWorkspaceUserByEmail(db, normalizedEmail, workspaceObjectId);
 				if (inactiveUser) {
@@ -133,20 +137,21 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 					continue;
 				}
 
-				const createUserResponse = await cognito.send(new AdminCreateUserCommand({
-					UserPoolId: process.env.USER_POOL_ID,
-					Username: normalizedEmail,
-					UserAttributes: [{ Name: "name", Value: name }],
-					DesiredDeliveryMediums: [ "EMAIL"],
-				}));
-		      
-				createdCognitoUser = true;
-				const newCognitoUser = createUserResponse.User;
-				if (!newCognitoUser) throw new Error(`Failed to create Cognito user for ${normalizedEmail}`);
-
-
-				const cognitoSub = newCognitoUser.Attributes?.find(attr => attr.Name === "sub")?.Value;
-				if (!cognitoSub) throw new Error("New Cognito user sub not found.");
+				let cognitoSub = unfinishedInviteSub;
+				if (!cognitoSub) {
+					const createUserResponse = await cognito.send(new AdminCreateUserCommand({
+						UserPoolId: process.env.USER_POOL_ID,
+						Username: normalizedEmail,
+						UserAttributes: [
+							{ Name: "name", Value: name },
+							{ Name: "custom:workspaceId", Value: workspaceObjectId.toString() },
+						],
+						DesiredDeliveryMediums: [ "EMAIL"],
+					}));
+					createdCognitoUser = true;
+					cognitoSub = createUserResponse.User?.Attributes?.find(attr => attr.Name === "sub")?.Value ?? null;
+					if (!cognitoSub) throw new Error("New Cognito user sub not found.");
+				}
 
 
 				const newUserDoc: User = {

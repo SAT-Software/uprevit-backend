@@ -6,6 +6,18 @@ import { resolveEffectiveLimits } from './effectiveLimits';
 import { bytesToGb, gbToBytes, resolveUsagePeriod } from './billingPeriod';
 import { countActiveExportJobs } from '../exportJobs';
 import { aggregateUsageForPeriod, countActiveSeatsByClass, type SeatClass } from './usageRecording';
+import { AUDIT_LOG_V2_COLLECTION } from '../../models/auditLogV2';
+
+export const MAX_INVITES_PER_DAY = 100;
+
+const countInvitesSentToday = async (workspaceId: ObjectId): Promise<number> => {
+	const db = await getDb();
+	return db.collection(AUDIT_LOG_V2_COLLECTION).countDocuments({
+		workspaceId,
+		eventKey: { $in: ['member.invited', 'member.reactivated'] },
+		occurredAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+	});
+};
 
 type EnforceableUsageMetric = 'completed_export' | 'upload_bytes';
 
@@ -54,6 +66,13 @@ export const assertUsageActionAllowed = async (
 	}
 	if (isWorkspaceUsageFrozen(workspace)) {
 		return { allowed: false, reason: 'Workspace usage is frozen' };
+	}
+
+	if (action === 'invite') {
+		const invitesSent = await countInvitesSentToday(workspaceId);
+		if (invitesSent + (additionalQuantity ?? 1) > MAX_INVITES_PER_DAY) {
+			return { allowed: false, reason: 'Daily invite limit reached for this workspace' };
+		}
 	}
 
 	if (action === 'export') {

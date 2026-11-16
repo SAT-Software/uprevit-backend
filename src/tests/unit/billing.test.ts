@@ -423,6 +423,25 @@ describe('metric enforcement', () => {
 		expect(underLimit.allowed).toBe(true);
 	});
 
+	it('blocks invites past the daily workspace invite cap', async () => {
+		const countDocuments = jest.fn(async () => 99);
+		dbModule.getDb.mockResolvedValue({
+			collection: jest.fn((name: string) => (name === 'workspaces'
+				? { findOne: jest.fn(async () => ({ _id: workspaceId })) }
+				: { ...defaultCollectionFallback(), countDocuments })),
+		});
+
+		await expect(assertUsageActionAllowed(workspaceId, 'invite', 1)).resolves.toEqual({ allowed: true });
+		await expect(assertUsageActionAllowed(workspaceId, 'invite', 2)).resolves.toEqual({
+			allowed: false,
+			reason: 'Daily invite limit reached for this workspace',
+		});
+		expect(countDocuments).toHaveBeenCalledWith(expect.objectContaining({
+			workspaceId,
+			eventKey: { $in: ['member.invited', 'member.reactivated'] },
+		}));
+	});
+
 	it('blocks activation at the active-seat limit in block mode', async () => {
 		dbModule.getDb.mockResolvedValue({
 			collection: jest.fn((name: string) => {

@@ -17,7 +17,8 @@
 		"ensure:core-indexes": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/ensureCoreIndexes.ts",
 		"check:source-file-keys": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/checkSourceFileKeys.ts",
 		"migrate:bookmarks-latest-version": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateBookmarksToLatestVersion.ts",
-		"normalize:component-types": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/normalizeComponentTypes.ts"
+		"normalize:component-types": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/normalizeComponentTypes.ts",
+		"cleanup:duplicate-user-emails": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/cleanupDuplicateUserEmails.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-cognito-identity-provider": "^3.679.0",
