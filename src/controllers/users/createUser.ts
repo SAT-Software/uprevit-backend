@@ -67,7 +67,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			});
 		} catch (error) {
 			if (error instanceof InviteEmailConflictError) return ResponseWrapper.conflict(error.message);
-			if ((error as { code?: number }).code === 11000) return ResponseWrapper.conflict('A user with this email already exists.');
+			if ((error as { code?: number }).code === 11000) return ResponseWrapper.conflict('A user with this email already exists. Re-invite removed members from workspace settings.');
 			throw error;
 		}
 
