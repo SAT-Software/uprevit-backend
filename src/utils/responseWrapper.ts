@@ -1,6 +1,12 @@
 import { APIGatewayProxyResult } from 'aws-lambda';
 import { StatusCodes } from './statusCodes';
 
+const JSON_HEADERS = {
+	'Content-Type': 'application/json',
+	'Cache-Control': 'no-store',
+	'Vary': 'Authorization',
+};
+
 export interface ResponseData {
 	message?: string;
 	error?: string;
@@ -21,9 +27,7 @@ export class ResponseWrapper {
 	static success(data: ResponseData = {}, statusCode: number = StatusCodes.SUCCESS): APIGatewayProxyResult {
 		return {
 			statusCode,
-			headers: {
-				'Content-Type': 'application/json',
-			},
+			headers: { ...JSON_HEADERS },
 			body: JSON.stringify(data),
 		};
 	}
@@ -149,9 +153,7 @@ export class ResponseWrapper {
 	static custom(statusCode: number, data: ResponseData = {}): APIGatewayProxyResult {
 		return {
 			statusCode,
-			headers: {
-				'Content-Type': 'application/json',
-			},
+			headers: { ...JSON_HEADERS },
 			body: JSON.stringify(data),
 		};
 	}

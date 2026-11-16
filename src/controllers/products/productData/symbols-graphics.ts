@@ -5,6 +5,7 @@ import { validateAllObjectIds, validateBoolean, validateEnum, validateMissingFie
 import { ObjectId } from "mongodb";
 import { getDb } from "../../../utils/db";
 import { StandardSymbol } from "../../../models/standardSymbols";
+import { toPersistedUploadKey, withPersistedUploadKeys } from "../../../utils/s3-storage";
 
 type SymbolsGraphicsReturn = {
     updateQuery: Record<string, unknown>;
@@ -38,7 +39,7 @@ export function AddSymbolsGraphics(
 		if(!Array.isArray(newSymbolsGraphics)) throw new Error('Data for add_symbols_graphics must be an array of symbols and graphics.');
 
 		const componentsWithIds = newSymbolsGraphics.map(component => ({
-			...component,
+			...withPersistedUploadKeys(component, ['image', 'key']),
 			_id: new ObjectId(),
 		}))
         
@@ -100,7 +101,7 @@ export function UpdateSymbolsGraphics(
 		if(objectIdValidation) throw new Error(objectIdValidation.body);
 
 		const updateSet: Record<string, unknown> = {
-			'symbols_graphics.data.$[elem].image': updatedSymbolsGraphics.image,
+			'symbols_graphics.data.$[elem].image': toPersistedUploadKey(updatedSymbolsGraphics.image),
 			'symbols_graphics.data.$[elem].text': updatedSymbolsGraphics.text,
 			'symbols_graphics.data.$[elem].description': updatedSymbolsGraphics.description,
 			'symbols_graphics.data.$[elem].text_present': updatedSymbolsGraphics.text_present,
@@ -108,8 +109,14 @@ export function UpdateSymbolsGraphics(
 			'symbols_graphics.data.$[elem].entity': updatedSymbolsGraphics.entity,
 		};
 
+		const existingSymbolsGraphic = existingSymbolsGraphics.find((item) => item._id?.toString() === updatedSymbolsGraphics.id);
+		const imageKeyChanged = updatedSymbolsGraphics.key !== undefined
+			&& existingSymbolsGraphic?.key !== updatedSymbolsGraphics.key;
+
 		if (updatedSymbolsGraphics.key !== undefined) {
-			updateSet['symbols_graphics.data.$[elem].key'] = updatedSymbolsGraphics.key;
+			updateSet['symbols_graphics.data.$[elem].key'] = imageKeyChanged
+				? toPersistedUploadKey(updatedSymbolsGraphics.key)
+				: updatedSymbolsGraphics.key;
 		}
 
 		if (typeof updatedSymbolsGraphics.count === 'number') {
@@ -117,10 +124,7 @@ export function UpdateSymbolsGraphics(
 		}
 
 		const updateUnset: Record<string, ""> = {};
-		const existingSymbolsGraphic = existingSymbolsGraphics.find((item) => item._id?.toString() === updatedSymbolsGraphics.id);
 		const isStandardSymbol = Boolean(existingSymbolsGraphic?.standard_symbol_id || existingSymbolsGraphic?.standard_ref_number);
-		const imageKeyChanged = updatedSymbolsGraphics.key !== undefined
-			&& existingSymbolsGraphic?.key !== updatedSymbolsGraphics.key;
 
 		if (isStandardSymbol && imageKeyChanged) {
 			updateUnset['symbols_graphics.data.$[elem].standard_symbol_id'] = "";

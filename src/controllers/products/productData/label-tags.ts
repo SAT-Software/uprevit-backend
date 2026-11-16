@@ -3,6 +3,7 @@ import { LabelTag, LegendItem } from "../../../types/products/label-tags";
 import { ResponseWrapper } from "../../../utils/responseWrapper";
 import { validateAllObjectIds, validateMissingFields, validateObjectIds, validateTab } from "../../../utils/validationUtils";
 import { ObjectId } from "mongodb";
+import { toPersistedUploadKey, withPersistedUploadKeys } from "../../../utils/s3-storage";
 
 type LabelTagReturn = {
     updateQuery: Record<string, unknown>;
@@ -30,7 +31,7 @@ export function addLabelTag(
 		}
 
 		const componentsWithIds = newLabelTag.map(label => ({
-			...label,
+			...withPersistedUploadKeys(label, ['image', 'key', 'tagged_image', 'tagged_image_key']),
 			_id: new ObjectId(),
 		}));
 
@@ -84,9 +85,9 @@ export function updateLabelTag(
 				'label_tags.data.$[elem].description': updatedLabelTag.description
 			}),
 			'label_tags.data.$[elem].type': updatedLabelTag.type,
-			'label_tags.data.$[elem].image': updatedLabelTag.image,
+			'label_tags.data.$[elem].image': toPersistedUploadKey(updatedLabelTag.image),
 			...(updatedLabelTag.key !== undefined && {
-				'label_tags.data.$[elem].key': updatedLabelTag.key,
+				'label_tags.data.$[elem].key': toPersistedUploadKey(updatedLabelTag.key),
 			}),
 		}, arrayFilters: [{'elem._id': new ObjectId(updatedLabelTag.id!)}]}
 
@@ -167,7 +168,10 @@ export function updateLabelTagTaggedImage(
 		const missingFieldsValidation = validateMissingFields({ id: inputData.id });
 		if (missingFieldsValidation) throw new Error(missingFieldsValidation.body);
 
-		if (!inputData.tagged_image && !inputData.tagged_image_key) {
+		const taggedImage = toPersistedUploadKey(inputData.tagged_image);
+		const taggedImageKey = toPersistedUploadKey(inputData.tagged_image_key);
+
+		if (!taggedImage && !taggedImageKey) {
 			throw new Error('At least one of tagged_image or tagged_image_key is required.');
 		}
 
@@ -176,12 +180,12 @@ export function updateLabelTagTaggedImage(
 
 		const setFields: Record<string, unknown> = {};
 
-		if (inputData.tagged_image !== undefined) {
-			setFields['label_tags.data.$[elem].tagged_image'] = inputData.tagged_image;
+		if (taggedImage !== undefined) {
+			setFields['label_tags.data.$[elem].tagged_image'] = taggedImage;
 		}
 
-		if (inputData.tagged_image_key !== undefined) {
-			setFields['label_tags.data.$[elem].tagged_image_key'] = inputData.tagged_image_key;
+		if (taggedImageKey !== undefined) {
+			setFields['label_tags.data.$[elem].tagged_image_key'] = taggedImageKey;
 		}
 
 		if (inputData.annotation_state !== undefined) {
@@ -195,8 +199,8 @@ export function updateLabelTagTaggedImage(
 
 		const updatedData = {
 			id: inputData.id,
-			tagged_image: inputData.tagged_image,
-			tagged_image_key: inputData.tagged_image_key,
+			tagged_image: taggedImage,
+			tagged_image_key: taggedImageKey,
 			annotation_state: inputData.annotation_state,
 		};
 

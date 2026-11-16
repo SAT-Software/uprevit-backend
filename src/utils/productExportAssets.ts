@@ -51,19 +51,59 @@ export const resolveImageUrl = (
 	keyValue: unknown,
 	signedUrlMap: Map<string, string>,
 ): string | undefined => {
-	const directUrl = toOptionalString(imageValue);
-	const explicitKey = toOptionalString(keyValue);
-	const keyFromImage = toS3Key(directUrl);
-	const s3Key = explicitKey || keyFromImage;
+	const s3Key = toOptionalString(keyValue) || toS3Key(imageValue);
+	return s3Key ? signedUrlMap.get(s3Key) : undefined;
+};
 
-	if (s3Key) {
-		const signedUrl = signedUrlMap.get(s3Key);
-		if (signedUrl) return signedUrl;
-		if (directUrl && !directUrl.startsWith("uploads/")) return directUrl;
-		return undefined;
+const MAX_EXPORT_IMAGE_BYTES = 15 * 1024 * 1024;
+const EXPORT_IMAGE_FETCH_TIMEOUT_MS = 15_000;
+
+const isAllowedExportImageUrl = (url: string): boolean => {
+	try {
+		const parsed = new URL(url);
+		return parsed.protocol === "https:" && parsed.hostname.endsWith(".amazonaws.com");
+	} catch {
+		return false;
+	}
+};
+
+/**
+ * Downloads a signed S3 image for export embedding with a host allowlist, deadline, and size cap.
+ * @param {string} url Signed S3 GET URL
+ * @return {Promise<{bytes: Uint8Array, contentType: string | null} | null>} Image bytes, or null when unavailable
+ */
+export const fetchExportImage = async (
+	url: string,
+): Promise<{ bytes: Uint8Array; contentType: string | null } | null> => {
+	if (!isAllowedExportImageUrl(url)) return null;
+
+	const response = await fetch(url, {
+		headers: { Connection: "close" },
+		redirect: "error",
+		signal: AbortSignal.timeout(EXPORT_IMAGE_FETCH_TIMEOUT_MS),
+	});
+	if (!response.ok || !response.body) return null;
+
+	const reader = response.body.getReader();
+	if (Number(response.headers.get("content-length")) > MAX_EXPORT_IMAGE_BYTES) {
+		await reader.cancel();
+		return null;
 	}
 
-	return directUrl;
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	for (;;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		total += value.byteLength;
+		if (total > MAX_EXPORT_IMAGE_BYTES) {
+			await reader.cancel();
+			return null;
+		}
+		chunks.push(value);
+	}
+
+	return { bytes: Buffer.concat(chunks), contentType: response.headers.get("content-type") };
 };
 
 export const getPreferredLabelTagImageUrl = (

@@ -5,6 +5,7 @@ import transformUniverExcelData from "./transformUniverExcelData";
 import { applyWorkbookCellFormats } from "./workbookCellFormat";
 import { logError } from "./logger";
 import {
+	fetchExportImage,
 	getPreferredLabelTagImageUrl,
 	isLikelyWebpUrl,
 	isWebpBytes,
@@ -165,11 +166,11 @@ const fetchWorkbookImageAsset = async (workbook: any, url: string): Promise<Work
 	if (isLikelyWebpUrl(url)) return { placeholderText: IMAGE_PLACEHOLDER_TEXT };
 
 	try {
-		const response = await fetch(url);
-		if (!response.ok) return { placeholderText: "Image unavailable" };
+		const fetched = await fetchExportImage(url);
+		if (!fetched) return { placeholderText: "Image unavailable" };
 
-		const bytes = new Uint8Array(await response.arrayBuffer());
-		const extension = detectImageExtension(bytes, response.headers.get("content-type"), url);
+		const { bytes } = fetched;
+		const extension = detectImageExtension(bytes, fetched.contentType, url);
 
 		if (extension === "webp") return { placeholderText: IMAGE_PLACEHOLDER_TEXT };
 		if (!extension) return { placeholderText: "Unsupported image" };

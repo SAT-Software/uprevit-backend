@@ -520,6 +520,21 @@ export const normalizePersistedAssetReference = (
 	return trimmed;
 };
 
+export const toPersistedUploadKey = (value: unknown): string | undefined => {
+	if (value === undefined) return undefined;
+	const reference = normalizePersistedAssetReference(value);
+	return reference.startsWith("uploads/") ? reference : "";
+};
+
+export const withPersistedUploadKeys = <T extends object>(item: T, fields: readonly string[]): T => {
+	const source = item as Record<string, unknown>;
+	const sanitized = { ...source };
+	for (const field of fields) {
+		if (field in source) sanitized[field] = toPersistedUploadKey(source[field]);
+	}
+	return sanitized as T;
+};
+
 export const enrichUsersWithProfileAvatarUrls = async <T extends UserAvatarShape>(
 	users: T[],
 	signingOptions: TenantUploadSigningOptions,

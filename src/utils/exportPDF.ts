@@ -5,6 +5,7 @@ import { logError } from "./logger";
 import { formatExportDate, listText, statusLabel, yesNo } from "./exportFormatting";
 import { CONTENT_WIDTH, PdfCell, PdfColumn, PdfImageAsset, createPdfLayout } from "./pdfLayout";
 import {
+	fetchExportImage,
 	getPreferredLabelTagImageUrl,
 	isLikelyWebpUrl,
 	isWebpBytes,
@@ -61,11 +62,11 @@ const embedImageAsset = async (
 	if (isLikelyWebpUrl(url)) return { placeholderText: "Image format not supported" };
 
 	try {
-		const response = await fetch(url, { headers: { Connection: "close" } });
-		if (!response.ok) return { placeholderText: "Image unavailable" };
+		const fetched = await fetchExportImage(url);
+		if (!fetched) return { placeholderText: "Image unavailable" };
 
-		const bytes = new Uint8Array(await response.arrayBuffer());
-		const format = getImageFormat(bytes, response.headers.get("content-type"), url);
+		const { bytes } = fetched;
+		const format = getImageFormat(bytes, fetched.contentType, url);
 
 		if (format === "webp") return { placeholderText: "Image format not supported" };
 		if (format === "png") return { image: await pdfDoc.embedPng(bytes) };
