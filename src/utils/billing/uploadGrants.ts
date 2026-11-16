@@ -11,6 +11,7 @@ export type UploadGrant = {
 	contentType: string;
 	expiresAt: Date;
 	createdAt: Date;
+	metered?: boolean;
 };
 
 let indexesReady: Promise<unknown> | undefined;
@@ -37,12 +38,16 @@ export const clearUploadGrant = async (key: string): Promise<void> => {
 	await (await getUploadGrants()).deleteOne({ key });
 };
 
+export const markUploadGrantMetered = async (key: string): Promise<void> => {
+	await (await getUploadGrants()).updateOne({ key }, { $set: { metered: true } });
+};
+
 export const sumPendingUploadGrantBytes = async (
 	workspaceId: ObjectId,
 	excludeKeys: string[] = [],
 ): Promise<number> => {
 	const [result] = await (await getUploadGrants()).aggregate<{ total: number }>([
-		{ $match: { workspaceId, key: { $nin: excludeKeys } } },
+		{ $match: { workspaceId, metered: { $ne: true }, key: { $nin: excludeKeys } } },
 		{ $group: { _id: null, total: { $sum: '$sizeBytes' } } },
 	]).toArray();
 	return result?.total ?? 0;

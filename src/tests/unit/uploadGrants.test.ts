@@ -14,6 +14,7 @@ jest.mock('../../utils/billing/billingAccounts', () => ({
 }));
 jest.mock('../../utils/billing/uploadGrants', () => ({
 	clearUploadGrant: jest.fn(async () => undefined),
+	markUploadGrantMetered: jest.fn(async () => undefined),
 	sumPendingUploadGrantBytes: jest.fn(async () => 0),
 	getUploadGrants: jest.fn(),
 }));
@@ -72,11 +73,16 @@ describe('upload grants', () => {
 	it('meters an expired grant once with the stored size', async () => {
 		const key = `uploads/${workspaceId}/workspace/a.png`;
 		const grants = mockExpiredGrants([{ _id: new ObjectId(), key, workspaceId, sizeBytes: 10, contentType: 'image/png' }]);
-		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'image/png', sizeBytes: 4096 });
+		const lastModified = new Date(Date.now() - 2 * 3600000);
+		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'image/png', sizeBytes: 4096, lastModified });
 		s3Storage.readUploadObjectPrefix.mockResolvedValue(PNG);
 
 		await expect(reconcileExpiredUploadGrants()).resolves.toEqual({ processed: 1, metered: 1, removed: 0 });
-		expect(recordUsageEvent).toHaveBeenCalledWith(expect.objectContaining({ quantity: 4096, idempotencyKey: `upload:${key}` }));
+		expect(recordUsageEvent).toHaveBeenCalledWith(expect.objectContaining({
+			quantity: 4096,
+			idempotencyKey: `upload:${key}`,
+			occurredAt: lastModified,
+		}));
 		expect(grants.deleteOne).toHaveBeenCalled();
 	});
 
@@ -97,5 +103,14 @@ describe('upload grants', () => {
 		await expect(reconcileExpiredUploadGrants()).resolves.toEqual({ processed: 1, metered: 0, removed: 0 });
 		expect(grants.deleteOne).toHaveBeenCalled();
 		expect(recordUsageEvent).not.toHaveBeenCalled();
+	});
+
+	it('still checks image bytes after the upload was already metered', async () => {
+		mockExpiredGrants([{ _id: new ObjectId(), key: 'uploads/x/b.png', workspaceId, sizeBytes: 10, contentType: 'image/png', metered: true }]);
+		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'image/png', sizeBytes: 10 });
+		s3Storage.readUploadObjectPrefix.mockResolvedValue(new TextEncoder().encode('not an image'));
+
+		await expect(reconcileExpiredUploadGrants()).resolves.toEqual({ processed: 1, metered: 0, removed: 1 });
+		expect(s3Storage.deleteObjectByKey).toHaveBeenCalledWith('uploads/x/b.png');
 	});
 });

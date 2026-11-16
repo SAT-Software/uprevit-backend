@@ -7,6 +7,7 @@ jest.mock('../../utils/db', () => ({
 
 jest.mock('../../utils/billing/uploadGrants', () => ({
 	clearUploadGrant: jest.fn(async () => undefined),
+	markUploadGrantMetered: jest.fn(async () => undefined),
 	sumPendingUploadGrantBytes: jest.fn(async () => 0),
 	getUploadGrants: jest.fn(),
 }));

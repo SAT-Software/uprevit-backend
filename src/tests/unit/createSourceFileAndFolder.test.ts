@@ -31,6 +31,7 @@ jest.mock('../../utils/s3-storage', () => ({
 
 jest.mock('../../utils/billing/uploadCommit', () => ({
 	recordCommittedUploadBytes: jest.fn(async () => undefined),
+	hasRecordedUpload: jest.fn(async () => false),
 }));
 
 const dbModule = jest.requireMock('../../utils/db') as any;

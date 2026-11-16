@@ -9,7 +9,7 @@ import { getBillingAccountByWorkspaceId } from './billingAccounts';
 import { resolveUsagePeriod } from './billingPeriod';
 import { checkUploadWouldExceedLimit } from './enforcement';
 import { recordUsageEvent } from './usageRecording';
-import { clearUploadGrant, getUploadGrants } from './uploadGrants';
+import { getUploadGrants, markUploadGrantMetered } from './uploadGrants';
 import {
 	buildChargebeeDeduplicationId,
 	trySyncUsageEventToChargebee,
@@ -45,7 +45,7 @@ export const recordCommittedUploadBytes = async ({
 
 	const account = await getBillingAccountByWorkspaceId(workspaceId);
 	if (!account) {
-		await clearUploadGrant(normalizedKey);
+		await markUploadGrantMetered(normalizedKey);
 		return;
 	}
 
@@ -72,7 +72,7 @@ export const recordCommittedUploadBytes = async ({
 			attempts: 0,
 		},
 	});
-	await clearUploadGrant(normalizedKey);
+	await markUploadGrantMetered(normalizedKey);
 
 	if (insertedEvent?._id) {
 		await trySyncUsageEventToChargebee({
@@ -84,7 +84,7 @@ export const recordCommittedUploadBytes = async ({
 
 const uploadIdempotencyKey = (uploadKey: string): string => `upload:${uploadKey.trim()}`;
 
-const hasRecordedUpload = async (uploadKey: string): Promise<boolean> => {
+export const hasRecordedUpload = async (uploadKey: string): Promise<boolean> => {
 	const db = await getDb();
 	return Boolean(await db.collection<UsageEvent>(USAGE_EVENTS_COLLECTION).findOne(
 		{ idempotencyKey: uploadIdempotencyKey(uploadKey) },
@@ -203,9 +203,9 @@ const hasDeclaredImageSignature = async (key: string, contentType: string): Prom
 };
 
 /**
- * Meters every upload whose presigned URL has expired exactly once, using the stored object size,
- * so bytes count toward usage even when no record ever references the key. Images whose bytes do
- * not match their declared type are deleted instead.
+ * Checks every upload once its presigned URL has expired: images whose bytes do not match their
+ * declared type are deleted, and uploads no record has metered yet are metered from the stored
+ * size and upload time, so bytes count toward usage even when nothing references the key.
  * @param {Date} now Current time
  * @return {Promise<{processed: number, metered: number, removed: number}>} Run counts
  */
@@ -223,12 +223,13 @@ export const reconcileExpiredUploadGrants = async (now = new Date()) => {
 			if (head && !(await hasDeclaredImageSignature(grant.key, grant.contentType))) {
 				await deleteObjectByKey(grant.key);
 				counts.removed += 1;
-			} else if (head?.sizeBytes) {
+			} else if (head?.sizeBytes && !grant.metered) {
 				await recordCommittedUploadBytes({
 					workspaceId: grant.workspaceId,
 					uploadKey: grant.key,
 					sizeBytes: head.sizeBytes,
 					metadata: { source: 'upload_reconcile' },
+					occurredAt: head.lastModified,
 				});
 				counts.metered += 1;
 			}

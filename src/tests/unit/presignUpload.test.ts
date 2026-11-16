@@ -17,6 +17,7 @@ jest.mock('../../utils/billing/enforcement', () => ({
 
 jest.mock('../../utils/billing/uploadGrants', () => ({
 	recordUploadGrant: jest.fn(async () => undefined),
+	clearUploadGrant: jest.fn(async () => undefined),
 }));
 
 jest.mock('../../utils/s3-storage', () => ({
@@ -27,6 +28,7 @@ jest.mock('../../utils/s3-storage', () => ({
 const authenticatedUser = jest.requireMock('../../utils/authenticatedUser') as any;
 const s3Storage = jest.requireMock('../../utils/s3-storage') as any;
 const uploadGrants = jest.requireMock('../../utils/billing/uploadGrants') as any;
+const enforcement = jest.requireMock('../../utils/billing/enforcement') as any;
 
 const { lambdaHandler } = require('../../controllers/s3Storage/presignUpload');
 
@@ -74,5 +76,16 @@ describe('presignUpload', () => {
 			sizeBytes: 1000,
 			contentType: 'image/png',
 		}));
+	});
+
+	it('releases the grant when a concurrent upload used up the limit', async () => {
+		enforcement.checkUploadWouldExceedLimit
+			.mockResolvedValueOnce({ allowed: true })
+			.mockResolvedValueOnce({ allowed: false, reason: 'upload limit reached for this billing period' });
+
+		const response = await lambdaHandler(upload(1000));
+
+		expect(response.statusCode).toBe(403);
+		expect(uploadGrants.clearUploadGrant).toHaveBeenCalledWith('k');
 	});
 });

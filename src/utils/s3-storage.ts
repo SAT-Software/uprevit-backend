@@ -208,7 +208,7 @@ export const createPresignedGetUrl = async (
 export const headUploadObject = async (key: string) => {
 	try {
 		const head = await client.send(new HeadObjectCommand({ Bucket: uploadsBucket, Key: key }));
-		return { contentType: head.ContentType ?? "", sizeBytes: head.ContentLength ?? 0 };
+		return { contentType: head.ContentType ?? "", sizeBytes: head.ContentLength ?? 0, lastModified: head.LastModified };
 	} catch (error) {
 		const status = error instanceof S3ServiceException ? error.$metadata.httpStatusCode : undefined;
 		if (status === 403 || status === 404) return null;
