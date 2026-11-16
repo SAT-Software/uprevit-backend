@@ -140,4 +140,20 @@ describe('member creation and invites', () => {
 		const create = cognitoSend.mock.calls.find(([command]) => command.name === 'AdminCreateUser')?.[0];
 		expect(create?.input.UserAttributes).toContainEqual({ Name: 'custom:workspaceId', Value: workspaceId.toString() });
 	});
+
+	it('keeps the Cognito account when a parallel invite already claimed the email', async () => {
+		const users = mockUsers(null);
+		users.insertOne.mockRejectedValue({ code: 11000 });
+		const { UserNotFoundException } = jest.requireMock('@aws-sdk/client-cognito-identity-provider') as any;
+		cognitoSend.mockImplementation(async (command) => {
+			if (command.name === 'AdminGetUser') throw new UserNotFoundException();
+			if (command.name === 'AdminCreateUser') return { User: { Attributes: [{ Name: 'sub', Value: 'new-sub' }] } };
+			return {};
+		});
+
+		const response = await inviteUsers(buildEvent([{ name: 'A', email: 'a@example.com' }], { workspaceId: workspaceId.toString() }));
+
+		expect(JSON.parse(response.body).data[0]).toMatchObject({ status: 'Failed', reason: 'This email is already being invited.' });
+		expect(cognitoSend.mock.calls.map(([command]) => command.name)).not.toContain('AdminDeleteUser');
+	});
 });

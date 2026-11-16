@@ -19,6 +19,7 @@ const groupUsage = (events: { metric: string; quantity: number }[]) => Object.en
 
 const defaultCollectionFallback = () => ({
 	countDocuments: jest.fn(async () => 0),
+	updateOne: jest.fn(async () => ({})),
 	aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 0 }]) })),
 	createIndex: jest.fn(async () => undefined),
 	findOne: jest.fn(async () => null),
@@ -423,23 +424,27 @@ describe('metric enforcement', () => {
 		expect(underLimit.allowed).toBe(true);
 	});
 
-	it('blocks invites past the daily workspace invite cap', async () => {
-		const countDocuments = jest.fn(async () => 99);
+	it('reserves invites atomically against the daily workspace cap', async () => {
+		const updateOne = jest.fn(async () => ({}))
+			.mockResolvedValueOnce({})
+			.mockRejectedValueOnce({ code: 11000 });
 		dbModule.getDb.mockResolvedValue({
 			collection: jest.fn((name: string) => (name === 'workspaces'
 				? { findOne: jest.fn(async () => ({ _id: workspaceId })) }
-				: { ...defaultCollectionFallback(), countDocuments })),
+				: { ...defaultCollectionFallback(), updateOne })),
 		});
 
-		await expect(assertUsageActionAllowed(workspaceId, 'invite', 1)).resolves.toEqual({ allowed: true });
+		await expect(assertUsageActionAllowed(workspaceId, 'invite', 2)).resolves.toEqual({ allowed: true });
 		await expect(assertUsageActionAllowed(workspaceId, 'invite', 2)).resolves.toEqual({
 			allowed: false,
 			reason: 'Daily invite limit reached for this workspace',
 		});
-		expect(countDocuments).toHaveBeenCalledWith(expect.objectContaining({
-			workspaceId,
-			eventKey: { $in: ['member.invited', 'member.reactivated'] },
-		}));
+		await expect(assertUsageActionAllowed(workspaceId, 'invite', 101)).resolves.toMatchObject({ allowed: false });
+		expect(updateOne).toHaveBeenCalledWith(
+			expect.objectContaining({ count: { $lte: 98 } }),
+			{ $inc: { count: 2 } },
+			{ upsert: true },
+		);
 	});
 
 	it('blocks activation at the active-seat limit in block mode', async () => {

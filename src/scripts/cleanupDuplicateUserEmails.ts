@@ -3,8 +3,9 @@ import { MongoClient, ObjectId, ServerApiVersion } from 'mongodb';
 /**
  * Normalizes user emails (trim + lowercase) and removes phantom user records that claim an email
  * already owned by another account, so the case-insensitive unique email index can be created.
- * A phantom is an invited record with no Cognito identity. Groups with more than one real account
- * are reported for manual review and left untouched. Safe to run twice.
+ * A phantom is an invited record with no Cognito identity that no project, department or product
+ * references. Groups with more than one remaining account are reported for manual review and left
+ * untouched. Safe to run twice.
  *
  * Usage: MONGODB_URI=... DB_NAME=... npm run cleanup:duplicate-user-emails -- [--dry-run]
  * Then: npm run ensure:core-indexes
@@ -30,13 +31,23 @@ const main = async () => {
 			groups.set(email, [...(groups.get(email) ?? []), user]);
 		}
 
+		const isReferenced = async (id: ObjectId) => Boolean(
+			await db.collection('projects').findOne({ $or: [{ users: id }, { admin_id: id }] }, { projection: { _id: 1 } })
+			?? await db.collection('departments').findOne({ $or: [{ users: id }, { admin_id: id }] }, { projection: { _id: 1 } })
+			?? await db.collection('products').findOne(
+				{ $or: [{ owner_user_id: id }, { contributor_user_ids: id }] },
+				{ projection: { _id: 1 } },
+			),
+		);
 		const phantoms: UserRecord[] = [];
 		const renames: Array<{ user: UserRecord; email: string }> = [];
 		const unresolved: string[] = [];
 		for (const [email, records] of groups) {
 			let kept = records;
 			if (records.length > 1) {
-				const real = records.filter((user) => !isPhantom(user));
+				const referenced = new Set<UserRecord>();
+				for (const user of records) if (isPhantom(user) && await isReferenced(user._id)) referenced.add(user);
+				const real = records.filter((user) => !isPhantom(user) || referenced.has(user));
 				const keep = real.length ? real : [records[0]];
 				phantoms.push(...records.filter((user) => !keep.includes(user)));
 				kept = keep;

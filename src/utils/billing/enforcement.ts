@@ -6,17 +6,25 @@ import { resolveEffectiveLimits } from './effectiveLimits';
 import { bytesToGb, gbToBytes, resolveUsagePeriod } from './billingPeriod';
 import { countActiveExportJobs } from '../exportJobs';
 import { aggregateUsageForPeriod, countActiveSeatsByClass, type SeatClass } from './usageRecording';
-import { AUDIT_LOG_V2_COLLECTION } from '../../models/auditLogV2';
 
 export const MAX_INVITES_PER_DAY = 100;
 
-const countInvitesSentToday = async (workspaceId: ObjectId): Promise<number> => {
-	const db = await getDb();
-	return db.collection(AUDIT_LOG_V2_COLLECTION).countDocuments({
-		workspaceId,
-		eventKey: { $in: ['member.invited', 'member.reactivated'] },
-		occurredAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-	});
+export const INVITE_COUNTERS_COLLECTION = 'workspaceInviteCounters';
+
+const reserveDailyInvites = async (workspaceId: ObjectId, quantity: number): Promise<boolean> => {
+	if (quantity > MAX_INVITES_PER_DAY) return false;
+	const counters = (await getDb()).collection<{ _id: string; count: number }>(INVITE_COUNTERS_COLLECTION);
+	try {
+		await counters.updateOne(
+			{ _id: `${workspaceId}:${new Date().toISOString().slice(0, 10)}`, count: { $lte: MAX_INVITES_PER_DAY - quantity } },
+			{ $inc: { count: quantity } },
+			{ upsert: true },
+		);
+		return true;
+	} catch (error) {
+		if ((error as { code?: number }).code === 11000) return false;
+		throw error;
+	}
 };
 
 type EnforceableUsageMetric = 'completed_export' | 'upload_bytes';
@@ -69,8 +77,7 @@ export const assertUsageActionAllowed = async (
 	}
 
 	if (action === 'invite') {
-		const invitesSent = await countInvitesSentToday(workspaceId);
-		if (invitesSent + (additionalQuantity ?? 1) > MAX_INVITES_PER_DAY) {
+		if (!(await reserveDailyInvites(workspaceId, additionalQuantity ?? 1))) {
 			return { allowed: false, reason: 'Daily invite limit reached for this workspace' };
 		}
 	}

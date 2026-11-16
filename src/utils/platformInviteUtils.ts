@@ -44,7 +44,7 @@ export const cognitoUserExists = async (email: string): Promise<boolean> => {
 
 /**
  * Returns the Cognito sub of an invite this workspace started but never finished (Cognito user
- * tagged with the workspace, no user record), so a retried invite can resume instead of failing.
+ * tagged with the workspace, no user record for the email), so a retried invite can resume instead of failing.
  * @param {Db} db Database
  * @param {string} email Normalized email address
  * @param {ObjectId} workspaceId Inviting workspace
@@ -61,9 +61,7 @@ export const findUnfinishedWorkspaceInviteSub = async (
 			Username: email,
 		}));
 		const attribute = (name: string) => UserAttributes.find((item) => item.Name === name)?.Value;
-		return attribute('custom:workspaceId') === workspaceId.toString() && !attribute('custom:userId')
-			? attribute('sub') ?? null
-			: null;
+		return attribute('custom:workspaceId') === workspaceId.toString() ? attribute('sub') ?? null : null;
 	} catch (error) {
 		if (error instanceof UserNotFoundException) return null;
 		throw error;

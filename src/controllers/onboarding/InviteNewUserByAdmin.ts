@@ -192,6 +192,11 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 					continue;
 				}
 
+				if ((error as { code?: number }).code === 11000) {
+					results.push({ email: normalizedEmail, status: "Failed", reason: 'This email is already being invited.' });
+					continue;
+				}
+
 				const message = error instanceof Error ? error.message : 'Invitation failed';
 				logError('Failed to invite user', error);
 				await undoPartialInvite(db, workspaceObjectId, normalizedEmail, createdCognitoUser, insertedUserId);
