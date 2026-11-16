@@ -15,6 +15,10 @@ jest.mock('../../utils/billing/enforcement', () => ({
 	checkUploadWouldExceedLimit: jest.fn(async () => ({ allowed: true })),
 }));
 
+jest.mock('../../utils/billing/uploadGrants', () => ({
+	recordUploadGrant: jest.fn(async () => undefined),
+}));
+
 jest.mock('../../utils/s3-storage', () => ({
 	...(jest.requireActual('../../utils/s3-storage') as object),
 	createPresignedUrl: jest.fn(async () => ({ uploadUrl: 'u', key: 'k' })),
@@ -22,6 +26,7 @@ jest.mock('../../utils/s3-storage', () => ({
 
 const authenticatedUser = jest.requireMock('../../utils/authenticatedUser') as any;
 const s3Storage = jest.requireMock('../../utils/s3-storage') as any;
+const uploadGrants = jest.requireMock('../../utils/billing/uploadGrants') as any;
 
 const { lambdaHandler } = require('../../controllers/s3Storage/presignUpload');
 
@@ -64,5 +69,10 @@ describe('presignUpload', () => {
 
 		expect(response.statusCode).toBe(201);
 		expect(s3Storage.createPresignedUrl).toHaveBeenCalledWith('logo.png', 'image/png', expect.objectContaining({ sizeBytes: 1000 }));
+		expect(uploadGrants.recordUploadGrant).toHaveBeenCalledWith(expect.objectContaining({
+			key: 'k',
+			sizeBytes: 1000,
+			contentType: 'image/png',
+		}));
 	});
 });

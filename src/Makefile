@@ -112,6 +112,7 @@ build-BillingGetInvoiceFunction: ENTRY := controllers/billing/getBillingInvoice.
 build-BillingDownloadInvoiceFunction: ENTRY := controllers/billing/downloadBillingInvoice.ts
 build-ChargebeeWebhookFunction: ENTRY := controllers/billing/chargebeeWebhook.ts
 build-BillingRetryUsageEventSyncScheduledFunction: ENTRY := controllers/billing/retryUsageEventSyncScheduled.ts
+build-BillingReconcileUploadsScheduledFunction: ENTRY := controllers/billing/reconcileUploadsScheduled.ts
 build-PlatformAdminGetBillingAccountFunction: ENTRY := controllers/platformAdmin/getBillingAccount.ts
 build-PlatformAdminUpdateBillingAccountFunction: ENTRY := controllers/platformAdmin/updateBillingAccount.ts
 build-PlatformAdminCreateBillingAccountFunction: ENTRY := controllers/platformAdmin/createBillingAccount.ts

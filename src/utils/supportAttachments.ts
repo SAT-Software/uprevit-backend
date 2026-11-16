@@ -64,7 +64,7 @@ const startsWith = (bytes: Uint8Array, signature: number[], offset = 0): boolean
 
 const ascii = (text: string): number[] => Array.from(text, (char) => char.charCodeAt(0));
 
-const MAGIC_BYTES: Record<SupportAttachmentContentType, (bytes: Uint8Array) => boolean> = {
+export const MAGIC_BYTES: Record<SupportAttachmentContentType, (bytes: Uint8Array) => boolean> = {
 	'image/png': (bytes) => startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
 	'image/jpeg': (bytes) => startsWith(bytes, [0xff, 0xd8, 0xff]),
 	'image/gif': (bytes) => startsWith(bytes, ascii('GIF87a')) || startsWith(bytes, ascii('GIF89a')),

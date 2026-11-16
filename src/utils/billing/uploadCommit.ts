@@ -2,11 +2,14 @@ import { ObjectId } from 'mongodb';
 import { USAGE_EVENTS_COLLECTION } from '../../models/billing';
 import type { UsageEvent } from '../../models/billing';
 import { getDb } from '../db';
-import { headUploadObject, isTenantUploadKeyAllowed } from '../s3-storage';
+import { deleteObjectByKey, headUploadObject, isTenantUploadKeyAllowed, readUploadObjectPrefix } from '../s3-storage';
+import { MAGIC_BYTES } from '../supportAttachments';
+import { logError } from '../logger';
 import { getBillingAccountByWorkspaceId } from './billingAccounts';
 import { resolveUsagePeriod } from './billingPeriod';
 import { checkUploadWouldExceedLimit } from './enforcement';
 import { recordUsageEvent } from './usageRecording';
+import { clearUploadGrant, getUploadGrants } from './uploadGrants';
 import {
 	buildChargebeeDeduplicationId,
 	trySyncUsageEventToChargebee,
@@ -41,7 +44,10 @@ export const recordCommittedUploadBytes = async ({
 	if (!normalizedKey.startsWith('uploads/') || !normalizedBytes) return;
 
 	const account = await getBillingAccountByWorkspaceId(workspaceId);
-	if (!account) return;
+	if (!account) {
+		await clearUploadGrant(normalizedKey);
+		return;
+	}
 
 	const now = occurredAt ?? new Date();
 	const { periodStart, periodEnd } = resolveUsagePeriod(account, now);
@@ -66,6 +72,7 @@ export const recordCommittedUploadBytes = async ({
 			attempts: 0,
 		},
 	});
+	await clearUploadGrant(normalizedKey);
 
 	if (insertedEvent?._id) {
 		await trySyncUsageEventToChargebee({
@@ -146,25 +153,28 @@ const collectNewWorkspaceUploadKeys = async (workspaceId: ObjectId, data: unknow
 	return keys.filter((_, index) => !recorded[index]);
 };
 
-export const sumNewUploadCommitBytes = async (
-	workspaceId: ObjectId,
-	data: unknown,
-): Promise<number> => {
+const sumUploadBytes = async (keys: string[]): Promise<number> => {
 	let totalBytes = 0;
-	for (const key of await collectNewWorkspaceUploadKeys(workspaceId, data)) {
+	for (const key of keys) {
 		totalBytes += (await readUploadSizeBytes(key)) ?? 0;
 	}
 	return totalBytes;
 };
 
+export const sumNewUploadCommitBytes = async (
+	workspaceId: ObjectId,
+	data: unknown,
+): Promise<number> => sumUploadBytes(await collectNewWorkspaceUploadKeys(workspaceId, data));
+
 export const assertNewUploadCommitsAllowed = async (
 	workspaceId: ObjectId,
 	data: unknown,
 ): Promise<{ allowed: true } | { allowed: false; reason: string }> => {
-	const newBytes = await sumNewUploadCommitBytes(workspaceId, data);
+	const keys = await collectNewWorkspaceUploadKeys(workspaceId, data);
+	const newBytes = await sumUploadBytes(keys);
 	if (newBytes <= 0) return { allowed: true };
 
-	const limitCheck = await checkUploadWouldExceedLimit(workspaceId, newBytes);
+	const limitCheck = await checkUploadWouldExceedLimit(workspaceId, newBytes, keys);
 	if (!limitCheck.allowed) {
 		return { allowed: false, reason: limitCheck.reason ?? 'Upload limit reached' };
 	}
@@ -180,4 +190,54 @@ export const recordUploadCommitsFromPayload = async (
 		const sizeBytes = await readUploadSizeBytes(uploadKey);
 		if (sizeBytes) await recordCommittedUploadBytes({ workspaceId, uploadKey, sizeBytes });
 	}
+};
+
+const RECONCILE_GRACE_MS = 5 * 60 * 1000;
+const RECONCILE_BATCH_SIZE = 200;
+
+const hasDeclaredImageSignature = async (key: string, contentType: string): Promise<boolean> => {
+	const matches = MAGIC_BYTES[contentType as keyof typeof MAGIC_BYTES];
+	if (!matches) return true;
+	const bytes = await readUploadObjectPrefix(key);
+	return Boolean(bytes && matches(bytes));
+};
+
+/**
+ * Meters every upload whose presigned URL has expired exactly once, using the stored object size,
+ * so bytes count toward usage even when no record ever references the key. Images whose bytes do
+ * not match their declared type are deleted instead.
+ * @param {Date} now Current time
+ * @return {Promise<{processed: number, metered: number, removed: number}>} Run counts
+ */
+export const reconcileExpiredUploadGrants = async (now = new Date()) => {
+	const grants = await getUploadGrants();
+	const expired = await grants
+		.find({ expiresAt: { $lt: new Date(now.getTime() - RECONCILE_GRACE_MS) } })
+		.limit(RECONCILE_BATCH_SIZE)
+		.toArray();
+	const counts = { processed: 0, metered: 0, removed: 0 };
+
+	for (const grant of expired) {
+		try {
+			const head = await headUploadObject(grant.key);
+			if (head && !(await hasDeclaredImageSignature(grant.key, grant.contentType))) {
+				await deleteObjectByKey(grant.key);
+				counts.removed += 1;
+			} else if (head?.sizeBytes) {
+				await recordCommittedUploadBytes({
+					workspaceId: grant.workspaceId,
+					uploadKey: grant.key,
+					sizeBytes: head.sizeBytes,
+					metadata: { source: 'upload_reconcile' },
+				});
+				counts.metered += 1;
+			}
+			await grants.deleteOne({ _id: grant._id });
+			counts.processed += 1;
+		} catch (error) {
+			logError('Failed to reconcile upload grant', error, { key: grant.key });
+		}
+	}
+
+	return counts;
 };

@@ -58,7 +58,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			if (!uploaded?.sizeBytes) return ResponseWrapper.badRequest('The file was not uploaded. Upload it again.');
 			sizeBytes = uploaded.sizeBytes;
 
-			const limitCheck = await checkUploadWouldExceedLimit(context.workspaceId, sizeBytes);
+			const limitCheck = await checkUploadWouldExceedLimit(context.workspaceId, sizeBytes, [key]);
 			if (!limitCheck.allowed) {
 				return ResponseWrapper.forbidden(limitCheck.reason ?? 'Upload limit reached');
 			}

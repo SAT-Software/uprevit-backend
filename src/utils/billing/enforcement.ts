@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb';
 import type { Workspace } from '../../models/workspace';
 import { getDb } from '../db';
+import { sumPendingUploadGrantBytes } from './uploadGrants';
 import { getBillingAccountByWorkspaceId, normalizeLimits } from './billingAccounts';
 import { resolveEffectiveLimits } from './effectiveLimits';
 import { bytesToGb, gbToBytes, resolveUsagePeriod } from './billingPeriod';
@@ -73,6 +74,7 @@ export const checkMetricLimit = async (
 	workspaceId: ObjectId,
 	metric: EnforceableUsageMetric,
 	additionalQuantity = 0,
+	committingUploadKeys: string[] = [],
 ): Promise<MetricLimitCheck> => {
 	const account = await getBillingAccountByWorkspaceId(workspaceId);
 	if (!account) {
@@ -99,7 +101,7 @@ export const checkMetricLimit = async (
 		used = usage.exports + pendingExports;
 		limit = limits.exports;
 	} else {
-		used = usage.uploadBytes;
+		used = usage.uploadBytes + await sumPendingUploadGrantBytes(workspaceId, committingUploadKeys);
 		limit = gbToBytes(limits.uploadGb);
 	}
 
@@ -206,6 +208,7 @@ export const verifySeatLimitAfterActivation = async (
 export const checkUploadWouldExceedLimit = async (
 	workspaceId: ObjectId,
 	sizeBytes: number,
-): Promise<MetricLimitCheck> => checkMetricLimit(workspaceId, 'upload_bytes', sizeBytes);
+	committingUploadKeys: string[] = [],
+): Promise<MetricLimitCheck> => checkMetricLimit(workspaceId, 'upload_bytes', sizeBytes, committingUploadKeys);
 
 export const formatUploadLimit = (bytes: number): string => `${bytesToGb(bytes).toFixed(2)} GB`;

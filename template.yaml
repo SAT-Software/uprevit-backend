@@ -2174,6 +2174,32 @@ Resources:
     Metadata:
       BuildMethod: makefile
 
+  BillingReconcileUploadsScheduledFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/billing/reconcileUploadsScheduled.lambdaHandler
+      Timeout: 300
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:DeleteObject
+              Resource: !Sub "arn:aws:s3:::${UploadsBucket}/uploads/*"
+      Events:
+        BillingReconcileUploadsSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(15 minutes)
+            Enabled: true
+    Metadata:
+      BuildMethod: makefile
+
   PlatformAdminGetBillingAccountFunction:
     Type: AWS::Serverless::Function
     Properties:
