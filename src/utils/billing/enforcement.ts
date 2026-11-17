@@ -5,6 +5,7 @@ import { getBillingAccountByWorkspaceId, normalizeLimits } from './billingAccoun
 import { resolveEffectiveLimits } from './effectiveLimits';
 import { bytesToGb, gbToBytes, resolveUsagePeriod } from './billingPeriod';
 import { countActiveExportJobs } from '../exportJobs';
+import { logError } from '../logger';
 import { aggregateUsageForPeriod, countActiveSeatsByClass, type SeatClass } from './usageRecording';
 
 export const MAX_INVITES_PER_DAY = 100;
@@ -16,27 +17,36 @@ const inviteCounters = async () =>
 
 const inviteCounterId = (workspaceId: ObjectId, at = new Date()) => `${workspaceId}:${at.toISOString().slice(0, 10)}`;
 
-const reserveDailyInvites = async (workspaceId: ObjectId, quantity: number, retried = false): Promise<boolean> => {
+const reserveDailyInvites = async (
+	workspaceId: ObjectId,
+	quantity: number,
+	reservedAt: Date,
+	retried = false,
+): Promise<boolean> => {
 	if (quantity > MAX_INVITES_PER_DAY) return false;
 	try {
 		await (await inviteCounters()).updateOne(
-			{ _id: inviteCounterId(workspaceId), count: { $lte: MAX_INVITES_PER_DAY - quantity } },
+			{ _id: inviteCounterId(workspaceId, reservedAt), count: { $lte: MAX_INVITES_PER_DAY - quantity } },
 			{ $inc: { count: quantity } },
 			{ upsert: true },
 		);
 		return true;
 	} catch (error) {
 		if ((error as { code?: number }).code !== 11000) throw error;
-		return retried ? false : reserveDailyInvites(workspaceId, quantity, true);
+		return retried ? false : reserveDailyInvites(workspaceId, quantity, reservedAt, true);
 	}
 };
 
 export const releaseDailyInvites = async (workspaceId: ObjectId, quantity: number, reservedAt: Date): Promise<void> => {
 	if (quantity <= 0) return;
-	await (await inviteCounters()).updateOne(
-		{ _id: inviteCounterId(workspaceId, reservedAt), count: { $gte: quantity } },
-		{ $inc: { count: -quantity } },
-	);
+	try {
+		await (await inviteCounters()).updateOne(
+			{ _id: inviteCounterId(workspaceId, reservedAt), count: { $gte: quantity } },
+			{ $inc: { count: -quantity } },
+		);
+	} catch (error) {
+		logError('Failed to release daily invite slots', error, { workspaceId: workspaceId.toString(), quantity });
+	}
 };
 
 type EnforceableUsageMetric = 'completed_export' | 'upload_bytes';
@@ -78,6 +88,7 @@ export const assertUsageActionAllowed = async (
 	workspaceId: ObjectId,
 	action: 'invite' | 'export' | 'upload',
 	additionalQuantity?: number,
+	reservedAt = new Date(),
 ): Promise<{ allowed: true } | { allowed: false; reason: string }> => {
 	const workspace = await getWorkspaceById(workspaceId);
 	if (!workspace) return { allowed: false, reason: 'Workspace not found' };
@@ -89,7 +100,7 @@ export const assertUsageActionAllowed = async (
 	}
 
 	if (action === 'invite') {
-		if (!(await reserveDailyInvites(workspaceId, additionalQuantity ?? 1))) {
+		if (!(await reserveDailyInvites(workspaceId, additionalQuantity ?? 1, reservedAt))) {
 			return { allowed: false, reason: 'Daily invite limit reached for this workspace' };
 		}
 	}

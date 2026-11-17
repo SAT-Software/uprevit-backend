@@ -112,7 +112,7 @@ describe('member creation and invites', () => {
 		));
 
 		expect(response.statusCode).toBe(403);
-		expect(assertUsageActionAllowed).toHaveBeenCalledWith(workspaceId, 'invite', 2);
+		expect(assertUsageActionAllowed).toHaveBeenCalledWith(workspaceId, 'invite', 2, expect.any(Date));
 		expect(cognitoSend).not.toHaveBeenCalled();
 	});
 
@@ -158,6 +158,6 @@ describe('member creation and invites', () => {
 
 		expect(JSON.parse(response.body).data[0]).toMatchObject({ status: 'Failed', reason: 'This email is already being invited.' });
 		expect(cognitoSend.mock.calls.map(([command]) => command.name)).not.toContain('AdminDeleteUser');
-		expect(releaseDailyInvites).toHaveBeenCalledWith(workspaceId, 1, expect.any(Date));
+		expect(releaseDailyInvites).toHaveBeenCalledWith(workspaceId, 1, assertUsageActionAllowed.mock.calls[0][3]);
 	});
 });

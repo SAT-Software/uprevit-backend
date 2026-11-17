@@ -92,7 +92,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 		const accesses = parsedAccesses as MemberAccess[];
 
 		const reservedAt = new Date();
-		const inviteCheck = await assertUsageActionAllowed(context.workspaceId, 'invite', users.length);
+		const inviteCheck = await assertUsageActionAllowed(context.workspaceId, 'invite', users.length, reservedAt);
 		if (!inviteCheck.allowed) return ResponseWrapper.forbidden(inviteCheck.reason);
 
 		const db = await getDb();

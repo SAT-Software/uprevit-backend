@@ -67,7 +67,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		}
 
 		const reservedAt = new Date();
-		const inviteCheck = await assertUsageActionAllowed(workspaceObjectId, 'invite');
+		const inviteCheck = await assertUsageActionAllowed(workspaceObjectId, 'invite', 1, reservedAt);
 		if (!inviteCheck.allowed) return ResponseWrapper.forbidden(inviteCheck.reason);
 
 		const { cognitoSub } = await createInvitedCognitoUser({
