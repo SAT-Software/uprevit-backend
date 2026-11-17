@@ -43,6 +43,32 @@ export const cognitoUserExists = async (email: string): Promise<boolean> => {
 };
 
 /**
+ * Returns the Cognito sub of an invite this workspace started but never finished (Cognito user
+ * tagged with the workspace, no user record for the email), so a retried invite can resume instead of failing.
+ * @param {Db} db Database
+ * @param {string} email Normalized email address
+ * @param {ObjectId} workspaceId Inviting workspace
+ */
+export const findUnfinishedWorkspaceInviteSub = async (
+	db: Db,
+	email: string,
+	workspaceId: ObjectId,
+): Promise<string | null> => {
+	if (await db.collection<User>('users').findOne({ email })) return null;
+	try {
+		const { UserAttributes = [] } = await cognito.send(new AdminGetUserCommand({
+			UserPoolId: process.env.USER_POOL_ID!,
+			Username: email,
+		}));
+		const attribute = (name: string) => UserAttributes.find((item) => item.Name === name)?.Value;
+		return attribute('custom:workspaceId') === workspaceId.toString() ? attribute('sub') ?? null : null;
+	} catch (error) {
+		if (error instanceof UserNotFoundException) return null;
+		throw error;
+	}
+};
+
+/**
  * Rejects emails already tied to any workspace or a pending provision (Cognito-only admin).
  * @param {Db} db Database
  * @param {string} email Email address

@@ -8,6 +8,11 @@ import { normalizePersistedAssetReference } from '../../utils/s3-storage';
 import { recordCommittedUploadIfNew } from '../../utils/billing/uploadCommit';
 import { isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
 import { withTelemetry } from '../../utils/telemetry';
+import {
+	assertEmailAvailableForWorkspaceMemberInvite,
+	InviteEmailConflictError,
+	normalizeInviteEmail,
+} from '../../utils/platformInviteUtils';
 
 /**
  * Create a user
@@ -32,7 +37,9 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 
 		const input: User = JSON.parse(event.body);
 
-		if (!input.name || !input.email || !input.userType) {
+		const normalizedEmail = typeof input.email === 'string' ? normalizeInviteEmail(input.email) : '';
+
+		if (!input.name || !normalizedEmail || !input.userType) {
 			return ResponseWrapper.badRequest('Missing required fields: name, email, and userType are required');
 		}
 
@@ -43,18 +50,26 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const db = await getDb();
 		const normalizedAvatar = normalizePersistedAssetReference(input.profileAvatar, '');
 
-		const user = await db.collection<User>('users').insertOne({
-			name: input.name,
-			profileAvatar: normalizedAvatar,
-			designation: input.designation,
-			email: input.email,
-			phone: input.phone,
-			userType: input.userType,
-			location: input.location ?? '',
-			cognitoSub: '',
-			workspaceId: context.workspaceId,
-			status: 'invited',
-		});
+		let user;
+		try {
+			await assertEmailAvailableForWorkspaceMemberInvite(db, normalizedEmail, context.workspaceId);
+			user = await db.collection<User>('users').insertOne({
+				name: input.name,
+				profileAvatar: normalizedAvatar,
+				designation: input.designation,
+				email: normalizedEmail,
+				phone: input.phone,
+				userType: input.userType,
+				location: input.location ?? '',
+				cognitoSub: '',
+				workspaceId: context.workspaceId,
+				status: 'invited',
+			});
+		} catch (error) {
+			if (error instanceof InviteEmailConflictError) return ResponseWrapper.conflict(error.message);
+			if ((error as { code?: number }).code === 11000) return ResponseWrapper.conflict('A user with this email already exists. Re-invite removed members from workspace settings.');
+			throw error;
+		}
 
 		await recordAuditEvent({
 			workspaceId: context.workspaceId.toString(),
@@ -65,7 +80,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			visibility: 'admin',
 			where: { module: 'users' },
 			auth: auth.payload,
-			meta: { memberName: input.name, memberEmail: input.email },
+			meta: { memberName: input.name, memberEmail: normalizedEmail },
 		});
 
 		await recordCommittedUploadIfNew({

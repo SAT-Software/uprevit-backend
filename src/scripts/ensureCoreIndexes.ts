@@ -13,7 +13,17 @@ const toIndexDescription = (index: CoreIndex): IndexDescription =>
 	typeof index.key === 'object' ? index as IndexDescription : { key: index as Record<string, 1 | -1> };
 
 const CORE_INDEXES: Record<string, CoreIndex[]> = {
-	users: [{ cognitoSub: 1 }, { workspaceId: 1 }],
+	users: [
+		{ cognitoSub: 1 },
+		{ workspaceId: 1 },
+		{
+			key: { email: 1 },
+			name: 'email_unique_ci',
+			unique: true,
+			collation: { locale: 'en', strength: 2 },
+			partialFilterExpression: { email: { $type: 'string' } },
+		},
+	],
 	products: [{ workspace_id: 1, is_latest: 1 }, { product_lineage_id: 1, version: -1 }, { project_id: 1 }],
 	departments: [{ workspace_id: 1, isArchived: 1 }],
 	projects: [{ workspace_id: 1, isArchived: 1 }],

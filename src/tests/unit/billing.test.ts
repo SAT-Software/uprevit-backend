@@ -19,6 +19,7 @@ const groupUsage = (events: { metric: string; quantity: number }[]) => Object.en
 
 const defaultCollectionFallback = () => ({
 	countDocuments: jest.fn(async () => 0),
+	updateOne: jest.fn(async () => ({})),
 	aggregate: jest.fn(() => ({ toArray: jest.fn(async () => [{ _id: 'user', count: 0 }]) })),
 	createIndex: jest.fn(async () => undefined),
 	findOne: jest.fn(async () => null),
@@ -29,6 +30,7 @@ const {
 	assertSeatActivationAllowed,
 	assertUsageActionAllowed,
 	checkMetricLimit,
+	releaseDailyInvites,
 	isWorkspaceAccessFrozen,
 	isWorkspaceUsageFrozen,
 	verifySeatLimitAfterActivation,
@@ -421,6 +423,77 @@ describe('metric enforcement', () => {
 
 		expect(atLimit.allowed).toBe(true);
 		expect(underLimit.allowed).toBe(true);
+	});
+
+	it('reserves invites atomically against the daily workspace cap', async () => {
+		const updateOne = jest.fn(async () => ({}))
+			.mockResolvedValueOnce({})
+			.mockRejectedValueOnce({ code: 11000 })
+			.mockRejectedValueOnce({ code: 11000 })
+			.mockRejectedValueOnce({ code: 11000 })
+			.mockResolvedValueOnce({});
+		dbModule.getDb.mockResolvedValue({
+			collection: jest.fn((name: string) => (name === 'workspaces'
+				? { findOne: jest.fn(async () => ({ _id: workspaceId })) }
+				: { ...defaultCollectionFallback(), updateOne })),
+		});
+
+		await expect(assertUsageActionAllowed(workspaceId, 'invite', 2)).resolves.toEqual({ allowed: true });
+		await expect(assertUsageActionAllowed(workspaceId, 'invite', 2)).resolves.toEqual({
+			allowed: false,
+			reason: 'Daily invite limit reached for this workspace',
+		});
+		await expect(assertUsageActionAllowed(workspaceId, 'invite', 101)).resolves.toMatchObject({ allowed: false });
+		await expect(assertUsageActionAllowed(workspaceId, 'invite', 1)).resolves.toEqual({ allowed: true });
+		expect(updateOne).toHaveBeenCalledWith(
+			expect.objectContaining({ count: { $lte: 98 } }),
+			{ $inc: { count: 2 } },
+			{ upsert: true },
+		);
+	});
+
+	it('releases unused invite slots on the day they were reserved', async () => {
+		const updateOne = jest.fn(async () => ({}));
+		dbModule.getDb.mockResolvedValue({ collection: jest.fn(() => ({ updateOne })) });
+		const reservedAt = new Date('2026-11-16T23:59:59.000Z');
+
+		await releaseDailyInvites(workspaceId, 0, reservedAt);
+		await releaseDailyInvites(workspaceId, 3, reservedAt);
+
+		expect(updateOne).toHaveBeenCalledTimes(1);
+		expect(updateOne).toHaveBeenCalledWith(
+			{ _id: `${workspaceId}:2026-11-16`, count: { $gte: 3 } },
+			{ $inc: { count: -3 } },
+		);
+	});
+
+	it('reserves and releases invites on the same counter day', async () => {
+		const updateOne = jest.fn(async () => ({}));
+		dbModule.getDb.mockResolvedValue({
+			collection: jest.fn((name: string) => (name === 'workspaces'
+				? { findOne: jest.fn(async () => ({ _id: workspaceId })) }
+				: { updateOne })),
+		});
+		const reservedAt = new Date('2026-11-16T23:59:59.000Z');
+
+		await assertUsageActionAllowed(workspaceId, 'invite', 2, reservedAt);
+
+		expect(updateOne).toHaveBeenCalledWith(
+			expect.objectContaining({ _id: `${workspaceId}:2026-11-16` }),
+			{ $inc: { count: 2 } },
+			{ upsert: true },
+		);
+		await releaseDailyInvites(workspaceId, 2, reservedAt);
+		expect(updateOne).toHaveBeenLastCalledWith(
+			{ _id: `${workspaceId}:2026-11-16`, count: { $gte: 2 } },
+			{ $inc: { count: -2 } },
+		);
+	});
+
+	it('does not throw when releasing invite slots fails', async () => {
+		dbModule.getDb.mockResolvedValue({ collection: jest.fn(() => ({ updateOne: jest.fn(async () => { throw new Error('down'); }) })) });
+
+		await expect(releaseDailyInvites(workspaceId, 1, new Date())).resolves.toBeUndefined();
 	});
 
 	it('blocks activation at the active-seat limit in block mode', async () => {
