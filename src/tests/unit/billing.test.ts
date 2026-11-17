@@ -427,7 +427,10 @@ describe('metric enforcement', () => {
 	it('reserves invites atomically against the daily workspace cap', async () => {
 		const updateOne = jest.fn(async () => ({}))
 			.mockResolvedValueOnce({})
-			.mockRejectedValueOnce({ code: 11000 });
+			.mockRejectedValueOnce({ code: 11000 })
+			.mockRejectedValueOnce({ code: 11000 })
+			.mockRejectedValueOnce({ code: 11000 })
+			.mockResolvedValueOnce({});
 		dbModule.getDb.mockResolvedValue({
 			collection: jest.fn((name: string) => (name === 'workspaces'
 				? { findOne: jest.fn(async () => ({ _id: workspaceId })) }
@@ -440,6 +443,7 @@ describe('metric enforcement', () => {
 			reason: 'Daily invite limit reached for this workspace',
 		});
 		await expect(assertUsageActionAllowed(workspaceId, 'invite', 101)).resolves.toMatchObject({ allowed: false });
+		await expect(assertUsageActionAllowed(workspaceId, 'invite', 1)).resolves.toEqual({ allowed: true });
 		expect(updateOne).toHaveBeenCalledWith(
 			expect.objectContaining({ count: { $lte: 98 } }),
 			{ $inc: { count: 2 } },

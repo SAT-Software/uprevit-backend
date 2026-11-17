@@ -11,20 +11,32 @@ export const MAX_INVITES_PER_DAY = 100;
 
 export const INVITE_COUNTERS_COLLECTION = 'workspaceInviteCounters';
 
-const reserveDailyInvites = async (workspaceId: ObjectId, quantity: number): Promise<boolean> => {
+const inviteCounters = async () =>
+	(await getDb()).collection<{ _id: string; count: number }>(INVITE_COUNTERS_COLLECTION);
+
+const inviteCounterId = (workspaceId: ObjectId) => `${workspaceId}:${new Date().toISOString().slice(0, 10)}`;
+
+const reserveDailyInvites = async (workspaceId: ObjectId, quantity: number, retried = false): Promise<boolean> => {
 	if (quantity > MAX_INVITES_PER_DAY) return false;
-	const counters = (await getDb()).collection<{ _id: string; count: number }>(INVITE_COUNTERS_COLLECTION);
 	try {
-		await counters.updateOne(
-			{ _id: `${workspaceId}:${new Date().toISOString().slice(0, 10)}`, count: { $lte: MAX_INVITES_PER_DAY - quantity } },
+		await (await inviteCounters()).updateOne(
+			{ _id: inviteCounterId(workspaceId), count: { $lte: MAX_INVITES_PER_DAY - quantity } },
 			{ $inc: { count: quantity } },
 			{ upsert: true },
 		);
 		return true;
 	} catch (error) {
-		if ((error as { code?: number }).code === 11000) return false;
-		throw error;
+		if ((error as { code?: number }).code !== 11000) throw error;
+		return retried ? false : reserveDailyInvites(workspaceId, quantity, true);
 	}
+};
+
+export const releaseDailyInvites = async (workspaceId: ObjectId, quantity: number): Promise<void> => {
+	if (quantity <= 0) return;
+	await (await inviteCounters()).updateOne(
+		{ _id: inviteCounterId(workspaceId), count: { $gte: quantity } },
+		{ $inc: { count: -quantity } },
+	);
 };
 
 type EnforceableUsageMetric = 'completed_export' | 'upload_bytes';

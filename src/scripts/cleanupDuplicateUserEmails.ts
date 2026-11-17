@@ -3,7 +3,7 @@ import { MongoClient, ObjectId, ServerApiVersion } from 'mongodb';
 /**
  * Normalizes user emails (trim + lowercase) and removes phantom user records that claim an email
  * already owned by another account, so the case-insensitive unique email index can be created.
- * A phantom is an invited record with no Cognito identity that no project, department or product
+ * A phantom is an invited record with no Cognito identity that no project, department, product or workflow
  * references. Groups with more than one remaining account are reported for manual review and left
  * untouched. Safe to run twice.
  *
@@ -36,6 +36,10 @@ const main = async () => {
 			?? await db.collection('departments').findOne({ $or: [{ users: id }, { admin_id: id }] }, { projection: { _id: 1 } })
 			?? await db.collection('products').findOne(
 				{ $or: [{ owner_user_id: id }, { contributor_user_ids: id }] },
+				{ projection: { _id: 1 } },
+			)
+			?? await db.collection('workflows').findOne(
+				{ $or: [{ 'assignments.userId': id }, { 'initiator.userId': id }] },
 				{ projection: { _id: 1 } },
 			),
 		);

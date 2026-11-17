@@ -24,7 +24,10 @@ jest.mock('../../utils/tenantContext', () => ({
 }));
 jest.mock('../../utils/auditLogV2', () => ({ recordAuditEvent: jest.fn() }));
 jest.mock('../../utils/billing/uploadCommit', () => ({ recordCommittedUploadIfNew: jest.fn() }));
-jest.mock('../../utils/billing/enforcement', () => ({ assertUsageActionAllowed: jest.fn(async () => ({ allowed: true })) }));
+jest.mock('../../utils/billing/enforcement', () => ({
+	assertUsageActionAllowed: jest.fn(async () => ({ allowed: true })),
+	releaseDailyInvites: jest.fn(async () => undefined),
+}));
 jest.mock('../../utils/userRemoval', () => ({
 	findInactiveWorkspaceUserByEmail: jest.fn(async () => null),
 	reactivateWorkspaceUser: jest.fn(),
@@ -36,7 +39,7 @@ jest.mock('../../utils/memberAccess', () => ({
 
 const { getDb } = jest.requireMock('../../utils/db') as any;
 const { requireTenantContext } = jest.requireMock('../../utils/tenantContext') as any;
-const { assertUsageActionAllowed } = jest.requireMock('../../utils/billing/enforcement') as any;
+const { assertUsageActionAllowed, releaseDailyInvites } = jest.requireMock('../../utils/billing/enforcement') as any;
 const { lambdaHandler: createUser } = require('../../controllers/users/createUser');
 const { handler: inviteUsers } = require('../../controllers/onboarding/InviteNewUserByAdmin');
 const { validateUserArray } = require('../../utils/validationUtils');
@@ -155,5 +158,6 @@ describe('member creation and invites', () => {
 
 		expect(JSON.parse(response.body).data[0]).toMatchObject({ status: 'Failed', reason: 'This email is already being invited.' });
 		expect(cognitoSend.mock.calls.map(([command]) => command.name)).not.toContain('AdminDeleteUser');
+		expect(releaseDailyInvites).toHaveBeenCalledWith(workspaceId, 1);
 	});
 });

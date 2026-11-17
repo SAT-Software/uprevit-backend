@@ -12,7 +12,7 @@ import {
 	AdminUpdateUserAttributesCommand,
 	CognitoIdentityProviderClient,
 } from '@aws-sdk/client-cognito-identity-provider';
-import { assertUsageActionAllowed } from '../../utils/billing/enforcement';
+import { assertUsageActionAllowed, releaseDailyInvites } from '../../utils/billing/enforcement';
 import {
 	assertEmailAvailableForWorkspaceAdminInvite,
 	createInvitedCognitoUser,
@@ -57,9 +57,6 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const workspace = await db.collection<Workspace>('workspaces').findOne({ _id: workspaceObjectId });
 		if (!workspace) return ResponseWrapper.notFound('Workspace not found');
 
-		const inviteCheck = await assertUsageActionAllowed(workspaceObjectId, 'invite');
-		if (!inviteCheck.allowed) return ResponseWrapper.forbidden(inviteCheck.reason);
-
 		try {
 			await assertEmailAvailableForWorkspaceAdminInvite(db, normalizedEmail, workspaceObjectId);
 		} catch (error) {
@@ -69,10 +66,16 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			throw error;
 		}
 
+		const inviteCheck = await assertUsageActionAllowed(workspaceObjectId, 'invite');
+		if (!inviteCheck.allowed) return ResponseWrapper.forbidden(inviteCheck.reason);
+
 		const { cognitoSub } = await createInvitedCognitoUser({
 			email: normalizedEmail,
 			name: input.name.trim(),
 			groupNames: ['admin'],
+		}).catch(async (error) => {
+			await releaseDailyInvites(workspaceObjectId, 1);
+			throw error;
 		});
 
 		const newUserDoc: User = {
@@ -93,6 +96,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			);
 		} catch (dbError) {
 			await deleteCognitoInviteUser(normalizedEmail);
+			await releaseDailyInvites(workspaceObjectId, 1);
 			throw dbError;
 		}
 

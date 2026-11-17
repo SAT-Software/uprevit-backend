@@ -8,7 +8,7 @@ import { logError } from '../../utils/logger';
 import { validateUserArray } from "../../utils/validationUtils";
 import { Workspace } from "../../models/workspace";
 import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext } from "../../utils/tenantContext";
-import { assertUsageActionAllowed } from "../../utils/billing/enforcement";
+import { assertUsageActionAllowed, releaseDailyInvites } from "../../utils/billing/enforcement";
 import {
 	assertEmailAvailableForWorkspaceMemberInvite,
 	findUnfinishedWorkspaceInviteSub,
@@ -204,6 +204,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 			}
 		}
 
+		await releaseDailyInvites(workspaceObjectId, results.filter((result) => result.status === 'Failed').length);
 		return ResponseWrapper.success({ message: 'Users invited successfully', data:results });
 	} catch (error) {
 		logError('Invite new user by admin handler failed', error);
