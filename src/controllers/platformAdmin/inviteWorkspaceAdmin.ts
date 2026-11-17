@@ -66,6 +66,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			throw error;
 		}
 
+		const reservedAt = new Date();
 		const inviteCheck = await assertUsageActionAllowed(workspaceObjectId, 'invite');
 		if (!inviteCheck.allowed) return ResponseWrapper.forbidden(inviteCheck.reason);
 
@@ -74,7 +75,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			name: input.name.trim(),
 			groupNames: ['admin'],
 		}).catch(async (error) => {
-			await releaseDailyInvites(workspaceObjectId, 1);
+			await releaseDailyInvites(workspaceObjectId, 1, reservedAt);
 			throw error;
 		});
 
@@ -95,8 +96,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 				{ $push: { userIds: userResult.insertedId } },
 			);
 		} catch (dbError) {
+			await releaseDailyInvites(workspaceObjectId, 1, reservedAt);
 			await deleteCognitoInviteUser(normalizedEmail);
-			await releaseDailyInvites(workspaceObjectId, 1);
 			throw dbError;
 		}
 

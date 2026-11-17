@@ -30,6 +30,7 @@ const {
 	assertSeatActivationAllowed,
 	assertUsageActionAllowed,
 	checkMetricLimit,
+	releaseDailyInvites,
 	isWorkspaceAccessFrozen,
 	isWorkspaceUsageFrozen,
 	verifySeatLimitAfterActivation,
@@ -448,6 +449,21 @@ describe('metric enforcement', () => {
 			expect.objectContaining({ count: { $lte: 98 } }),
 			{ $inc: { count: 2 } },
 			{ upsert: true },
+		);
+	});
+
+	it('releases unused invite slots on the day they were reserved', async () => {
+		const updateOne = jest.fn(async () => ({}));
+		dbModule.getDb.mockResolvedValue({ collection: jest.fn(() => ({ updateOne })) });
+		const reservedAt = new Date('2026-11-16T23:59:59.000Z');
+
+		await releaseDailyInvites(workspaceId, 0, reservedAt);
+		await releaseDailyInvites(workspaceId, 3, reservedAt);
+
+		expect(updateOne).toHaveBeenCalledTimes(1);
+		expect(updateOne).toHaveBeenCalledWith(
+			{ _id: `${workspaceId}:2026-11-16`, count: { $gte: 3 } },
+			{ $inc: { count: -3 } },
 		);
 	});
 

@@ -158,6 +158,6 @@ describe('member creation and invites', () => {
 
 		expect(JSON.parse(response.body).data[0]).toMatchObject({ status: 'Failed', reason: 'This email is already being invited.' });
 		expect(cognitoSend.mock.calls.map(([command]) => command.name)).not.toContain('AdminDeleteUser');
-		expect(releaseDailyInvites).toHaveBeenCalledWith(workspaceId, 1);
+		expect(releaseDailyInvites).toHaveBeenCalledWith(workspaceId, 1, expect.any(Date));
 	});
 });

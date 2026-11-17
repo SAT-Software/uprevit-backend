@@ -91,6 +91,7 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 		if (accessError) return ResponseWrapper.badRequest(accessError);
 		const accesses = parsedAccesses as MemberAccess[];
 
+		const reservedAt = new Date();
 		const inviteCheck = await assertUsageActionAllowed(context.workspaceId, 'invite', users.length);
 		if (!inviteCheck.allowed) return ResponseWrapper.forbidden(inviteCheck.reason);
 
@@ -111,100 +112,104 @@ export const handler = withTelemetry(async (event: APIGatewayProxyEvent): Promis
 				meta: { memberName, memberEmail },
 			});
 
-		for (const [index, user] of users.entries()) {
-			const { email, name } = user;
-			const access = accesses[index];
-			const normalizedEmail = normalizeInviteEmail(email);
-			let createdCognitoUser = false;
-			let insertedUserId: ObjectId | undefined;
-			try {
-				const unfinishedInviteSub = await findUnfinishedWorkspaceInviteSub(db, normalizedEmail, workspaceObjectId);
-				if (!unfinishedInviteSub) {
-					await assertEmailAvailableForWorkspaceMemberInvite(db, normalizedEmail, workspaceObjectId);
-				}
+		try {
+			for (const [index, user] of users.entries()) {
+				const { email, name } = user;
+				const access = accesses[index];
+				const normalizedEmail = normalizeInviteEmail(email);
+				let createdCognitoUser = false;
+				let insertedUserId: ObjectId | undefined;
+				try {
+					const unfinishedInviteSub = await findUnfinishedWorkspaceInviteSub(db, normalizedEmail, workspaceObjectId);
+					if (!unfinishedInviteSub) {
+						await assertEmailAvailableForWorkspaceMemberInvite(db, normalizedEmail, workspaceObjectId);
+					}
 
-				const inactiveUser = await findInactiveWorkspaceUserByEmail(db, normalizedEmail, workspaceObjectId);
-				if (inactiveUser) {
-					await reactivateWorkspaceUser({
+					const inactiveUser = await findInactiveWorkspaceUserByEmail(db, normalizedEmail, workspaceObjectId);
+					if (inactiveUser) {
+						await reactivateWorkspaceUser({
+							email: normalizedEmail,
+							name,
+							workspaceId: workspaceObjectId,
+							actorUserId: context.userId,
+							access: inactiveUser.userType === 'admin' ? { ...access, userType: 'admin' } : access,
+						});
+						await recordInvite(inactiveUser._id!.toString(), 'member.reactivated', name, normalizedEmail);
+						results.push({ email: normalizedEmail, status: 'Reactivated' });
+						continue;
+					}
+
+					let cognitoSub = unfinishedInviteSub;
+					if (!cognitoSub) {
+						const createUserResponse = await cognito.send(new AdminCreateUserCommand({
+							UserPoolId: process.env.USER_POOL_ID,
+							Username: normalizedEmail,
+							UserAttributes: [
+								{ Name: "name", Value: name },
+								{ Name: "custom:workspaceId", Value: workspaceObjectId.toString() },
+							],
+							DesiredDeliveryMediums: [ "EMAIL"],
+						}));
+						createdCognitoUser = true;
+						cognitoSub = createUserResponse.User?.Attributes?.find(attr => attr.Name === "sub")?.Value ?? null;
+						if (!cognitoSub) throw new Error("New Cognito user sub not found.");
+					}
+
+
+					const newUserDoc: User = {
 						email: normalizedEmail,
-						name,
+						name: name,
+						cognitoSub: cognitoSub,
 						workspaceId: workspaceObjectId,
-						actorUserId: context.userId,
-						access: inactiveUser.userType === 'admin' ? { ...access, userType: 'admin' } : access,
-					});
-					await recordInvite(inactiveUser._id!.toString(), 'member.reactivated', name, normalizedEmail);
-					results.push({ email: normalizedEmail, status: 'Reactivated' });
-					continue;
-				}
+						userType: access.userType,
+						isManager: access.isManager,
+						status: "invited",
+					};
+					const userResult = await db.collection("users").insertOne(newUserDoc);
+					insertedUserId = userResult.insertedId;
+					const dbUserId = userResult.insertedId.toString();
 
-				let cognitoSub = unfinishedInviteSub;
-				if (!cognitoSub) {
-					const createUserResponse = await cognito.send(new AdminCreateUserCommand({
+					await db.collection<Workspace>("workspaces").updateOne(
+						{ _id: workspaceObjectId },
+						{ $push: { userIds: new ObjectId(dbUserId) } }
+					);
+			      
+					await cognito.send(new AdminUpdateUserAttributesCommand({
 						UserPoolId: process.env.USER_POOL_ID,
 						Username: normalizedEmail,
 						UserAttributes: [
-							{ Name: "name", Value: name },
+							{ Name: "custom:userId", Value: dbUserId },
 							{ Name: "custom:workspaceId", Value: workspaceObjectId.toString() },
+							{ Name: "custom:status", Value: "invited" }
 						],
-						DesiredDeliveryMediums: [ "EMAIL"],
 					}));
-					createdCognitoUser = true;
-					cognitoSub = createUserResponse.User?.Attributes?.find(attr => attr.Name === "sub")?.Value ?? null;
-					if (!cognitoSub) throw new Error("New Cognito user sub not found.");
+
+					await syncMemberCognitoGroups(normalizedEmail, access);
+
+					await recordInvite(dbUserId, 'member.invited', name, normalizedEmail);
+					results.push({ email: normalizedEmail, status: "Success" });
+				} catch (error: unknown) {
+					if (error instanceof InviteEmailConflictError) {
+						results.push({ email: normalizedEmail, status: "Failed", reason: error.message });
+						continue;
+					}
+
+					if ((error as { code?: number }).code === 11000) {
+						results.push({ email: normalizedEmail, status: "Failed", reason: 'This email is already being invited.' });
+						continue;
+					}
+
+					const message = error instanceof Error ? error.message : 'Invitation failed';
+					logError('Failed to invite user', error);
+					await undoPartialInvite(db, workspaceObjectId, normalizedEmail, createdCognitoUser, insertedUserId);
+					results.push({ email: normalizedEmail, status: "Failed", reason: message });
 				}
-
-
-				const newUserDoc: User = {
-					email: normalizedEmail,
-					name: name,
-					cognitoSub: cognitoSub,
-					workspaceId: workspaceObjectId,
-					userType: access.userType,
-					isManager: access.isManager,
-					status: "invited",
-				};
-				const userResult = await db.collection("users").insertOne(newUserDoc);
-				insertedUserId = userResult.insertedId;
-				const dbUserId = userResult.insertedId.toString();
-
-				await db.collection<Workspace>("workspaces").updateOne(
-					{ _id: workspaceObjectId },
-					{ $push: { userIds: new ObjectId(dbUserId) } }
-				);
-		      
-				await cognito.send(new AdminUpdateUserAttributesCommand({
-					UserPoolId: process.env.USER_POOL_ID,
-					Username: normalizedEmail,
-					UserAttributes: [
-						{ Name: "custom:userId", Value: dbUserId },
-						{ Name: "custom:workspaceId", Value: workspaceObjectId.toString() },
-						{ Name: "custom:status", Value: "invited" }
-					],
-				}));
-
-				await syncMemberCognitoGroups(normalizedEmail, access);
-
-				await recordInvite(dbUserId, 'member.invited', name, normalizedEmail);
-				results.push({ email: normalizedEmail, status: "Success" });
-			} catch (error: unknown) {
-				if (error instanceof InviteEmailConflictError) {
-					results.push({ email: normalizedEmail, status: "Failed", reason: error.message });
-					continue;
-				}
-
-				if ((error as { code?: number }).code === 11000) {
-					results.push({ email: normalizedEmail, status: "Failed", reason: 'This email is already being invited.' });
-					continue;
-				}
-
-				const message = error instanceof Error ? error.message : 'Invitation failed';
-				logError('Failed to invite user', error);
-				await undoPartialInvite(db, workspaceObjectId, normalizedEmail, createdCognitoUser, insertedUserId);
-				results.push({ email: normalizedEmail, status: "Failed", reason: message });
 			}
+		} finally {
+			const sent = results.filter((result) => result.status !== 'Failed').length;
+			await releaseDailyInvites(workspaceObjectId, users.length - sent, reservedAt);
 		}
 
-		await releaseDailyInvites(workspaceObjectId, results.filter((result) => result.status === 'Failed').length);
 		return ResponseWrapper.success({ message: 'Users invited successfully', data:results });
 	} catch (error) {
 		logError('Invite new user by admin handler failed', error);

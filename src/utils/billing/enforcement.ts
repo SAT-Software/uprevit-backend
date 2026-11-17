@@ -14,7 +14,7 @@ export const INVITE_COUNTERS_COLLECTION = 'workspaceInviteCounters';
 const inviteCounters = async () =>
 	(await getDb()).collection<{ _id: string; count: number }>(INVITE_COUNTERS_COLLECTION);
 
-const inviteCounterId = (workspaceId: ObjectId) => `${workspaceId}:${new Date().toISOString().slice(0, 10)}`;
+const inviteCounterId = (workspaceId: ObjectId, at = new Date()) => `${workspaceId}:${at.toISOString().slice(0, 10)}`;
 
 const reserveDailyInvites = async (workspaceId: ObjectId, quantity: number, retried = false): Promise<boolean> => {
 	if (quantity > MAX_INVITES_PER_DAY) return false;
@@ -31,10 +31,10 @@ const reserveDailyInvites = async (workspaceId: ObjectId, quantity: number, retr
 	}
 };
 
-export const releaseDailyInvites = async (workspaceId: ObjectId, quantity: number): Promise<void> => {
+export const releaseDailyInvites = async (workspaceId: ObjectId, quantity: number, reservedAt: Date): Promise<void> => {
 	if (quantity <= 0) return;
 	await (await inviteCounters()).updateOne(
-		{ _id: inviteCounterId(workspaceId), count: { $gte: quantity } },
+		{ _id: inviteCounterId(workspaceId, reservedAt), count: { $gte: quantity } },
 		{ $inc: { count: -quantity } },
 	);
 };
