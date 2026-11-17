@@ -157,18 +157,6 @@ Globals:
         EXPORTS_BUCKET: !Ref ExportsBucket
         STANDARD_SYMBOLS_BUCKET: !Ref StandardSymbolsBucket
         DOCUMENTATION_FILES_BUCKET: !Ref DocumentationFilesBucket
-        CHARGEBEE_SITE: !Ref ChargebeeSite
-        CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
-        CHARGEBEE_WEBHOOK_USERNAME: !Ref ChargebeeWebhookUsername
-        CHARGEBEE_WEBHOOK_PASSWORD: !Ref ChargebeeWebhookPassword
-        CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
-        CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
-        CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
-        CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
-        CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
-        CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
-        CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
-        CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
         SES_FROM_ADDRESS: !Ref SesFromAddress
         APP_BASE_URL: !Ref AppBaseUrl
         MONITORING_STACK: !If [HasMonitoringAlerts, !Ref AWS::StackName, ""]
@@ -215,6 +203,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/users/createUser.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -255,6 +247,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/users/updateUser.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -303,6 +299,18 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/users/updateUserAccess.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Policies:
         - Statement:
             - Effect: Allow
@@ -347,6 +355,18 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/onboarding/adminOnboardingCreateWorkspace.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Policies:
         - Statement:
             - Effect: Allow
@@ -375,6 +395,18 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/onboarding/InviteNewUserByAdmin.handler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Policies:
         - Statement:
             - Effect: Allow
@@ -400,6 +432,18 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/onboarding/onboardAndUpdateInvitedUser.handler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Policies:
         - Statement:
             - Effect: Allow
@@ -449,6 +493,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/workspaces/updateWorkspace.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -472,6 +520,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/departments/createDepartment.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -532,6 +584,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/departments/updateDepartment.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -570,6 +626,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/projects/createProject.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -590,6 +650,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/projects/updateProject.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -928,6 +992,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/workflows/decideWorkflowAssignment.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -1026,6 +1094,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/workflows/addWorkflowComment.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -1106,6 +1178,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/products/updateProductData.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -1667,6 +1743,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/sourceFiles/createSourceFileAndFolder.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Policies:
         - Statement:
             - Effect: Allow
@@ -2002,6 +2082,18 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/platformAdmin/getWorkspaceDetail.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Events:
         PlatformAdminGetWorkspaceDetail:
           Type: Api
@@ -2077,6 +2169,18 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/billing/getSummary.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Events:
         BillingGetSummary:
           Type: Api
@@ -2105,6 +2209,18 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/billing/getBillingChargebee.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Events:
         BillingGetChargebee:
           Type: Api
@@ -2119,6 +2235,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/billing/getBillingInvoice.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Events:
         BillingGetInvoice:
           Type: Api
@@ -2133,6 +2253,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/billing/downloadBillingInvoice.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Events:
         BillingDownloadInvoice:
           Type: Api
@@ -2147,6 +2271,20 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/billing/chargebeeWebhook.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_WEBHOOK_USERNAME: !Ref ChargebeeWebhookUsername
+          CHARGEBEE_WEBHOOK_PASSWORD: !Ref ChargebeeWebhookPassword
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Events:
         ChargebeeWebhook:
           Type: Api
@@ -2165,6 +2303,16 @@ Resources:
       Environment:
         Variables:
           BETTER_STACK_HEARTBEAT_URL: !Ref BetterStackHeartbeatUrl
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Events:
         BillingRetryUsageEventSyncSchedule:
           Type: Schedule
@@ -2179,6 +2327,18 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/platformAdmin/getBillingAccount.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Events:
         PlatformAdminGetBillingAccount:
           Type: Api
@@ -2207,6 +2367,18 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/platformAdmin/createBillingAccount.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Events:
         PlatformAdminCreateBillingAccount:
           Type: Api
@@ -2221,6 +2393,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/platformAdmin/createUsageAdjustment.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Events:
         PlatformAdminCreateUsageAdjustment:
           Type: Api
@@ -2263,6 +2439,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/platformAdmin/retryUsageEventSync.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Events:
         PlatformAdminRetryUsageEventSync:
           Type: Api
@@ -2282,6 +2462,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/platformAdmin/createChargebeeCustomer.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Events:
         PlatformAdminCreateChargebeeCustomer:
           Type: Api
@@ -2296,6 +2480,18 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/platformAdmin/linkChargebeeSubscription.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Events:
         PlatformAdminLinkChargebeeSubscription:
           Type: Api
@@ -2310,6 +2506,18 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/platformAdmin/getBillingChargebee.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Events:
         PlatformAdminGetBillingChargebee:
           Type: Api
@@ -2324,6 +2532,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/platformAdmin/getBillingInvoice.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Events:
         PlatformAdminGetBillingInvoice:
           Type: Api
@@ -2338,6 +2550,18 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/platformAdmin/recordInvoicePayment.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSeatAddonItemPriceId
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSeatAddonItemPriceIdMonthly
+          CHARGEBEE_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSeatAddonItemPriceIdYearly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeApproverSeatAddonItemPriceIdMonthly
+          CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeApproverSeatAddonItemPriceIdYearly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID: !Ref ChargebeeSsoAddonItemPriceId
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_MONTHLY: !Ref ChargebeeSsoAddonItemPriceIdMonthly
+          CHARGEBEE_SSO_ADDON_ITEM_PRICE_ID_YEARLY: !Ref ChargebeeSsoAddonItemPriceIdYearly
       Events:
         PlatformAdminRecordInvoicePayment:
           Type: Api
@@ -2352,6 +2576,10 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/platformAdmin/downloadBillingInvoice.lambdaHandler
+      Environment:
+        Variables:
+          CHARGEBEE_SITE: !Ref ChargebeeSite
+          CHARGEBEE_API_KEY: !Ref ChargebeeApiKey
       Events:
         PlatformAdminDownloadBillingInvoice:
           Type: Api

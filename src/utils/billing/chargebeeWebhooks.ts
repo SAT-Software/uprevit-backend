@@ -225,9 +225,15 @@ export const buildChargebeeMirrorUpdate = (
 	};
 };
 
+const CHARGEBEE_ID_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
+
+export const asChargebeeId = (value: unknown): string | null =>
+	typeof value === 'string' && CHARGEBEE_ID_PATTERN.test(value) ? value : null;
+
 export const findBillingAccountByChargebeeCustomerId = async (
 	customerId: string,
 ): Promise<(BillingAccount & { _id: ObjectId }) | null> => {
+	if (!asChargebeeId(customerId)) return null;
 	const db = await getDb();
 	const account = await db.collection<BillingAccount>(BILLING_ACCOUNTS_COLLECTION).findOne({
 		'chargebee.customerId': customerId,
@@ -238,6 +244,7 @@ export const findBillingAccountByChargebeeCustomerId = async (
 export const findBillingAccountByChargebeeSubscriptionId = async (
 	subscriptionId: string,
 ): Promise<(BillingAccount & { _id: ObjectId }) | null> => {
+	if (!asChargebeeId(subscriptionId)) return null;
 	const db = await getDb();
 	const account = await db.collection<BillingAccount>(BILLING_ACCOUNTS_COLLECTION).findOne({
 		'chargebee.subscriptionId': subscriptionId,

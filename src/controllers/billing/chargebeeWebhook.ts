@@ -11,6 +11,7 @@ import {
 import type { ChargebeeSubscription } from '../../utils/billing/chargebeeClient';
 import {
 	applyChargebeeSubscriptionMirror,
+	asChargebeeId,
 	claimChargebeeWebhook,
 	completeChargebeeWebhookClaim,
 	findBillingAccountByChargebeeCustomerId,
@@ -57,6 +58,11 @@ const subscriptionFromContent = (content: Record<string, unknown>): ChargebeeSub
 	return subscription as ChargebeeSubscription;
 };
 
+const INVOICE_SYNC_EVENT_TYPES = ['invoice_generated', 'invoice_updated', 'payment_succeeded'];
+
+const hasInvalidOptionalId = (value: unknown): boolean =>
+	value !== undefined && value !== null && !asChargebeeId(value);
+
 const SUBSCRIPTION_MIRROR_EVENT_TYPES = [
 	'subscription_created',
 	'subscription_changed',
@@ -92,8 +98,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		}
 
 		let payload: {
-			id?: string;
-			event_type?: string;
+			id?: unknown;
+			event_type?: unknown;
 			content?: Record<string, unknown>;
 		};
 
@@ -103,9 +109,27 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			return ResponseWrapper.badRequest('Invalid JSON in request body');
 		}
 
-		eventId = payload.id?.trim();
-		const eventType = payload.event_type?.trim();
+		eventId = typeof payload.id === 'string' ? payload.id.trim() : undefined;
+		const eventType = typeof payload.event_type === 'string' ? payload.event_type.trim() : undefined;
 		if (!eventId || !eventType) {
+			return ResponseWrapper.badRequest('Invalid webhook payload');
+		}
+
+		const content = payload.content && typeof payload.content === 'object' ? payload.content : {};
+		const isMirrorEvent = SUBSCRIPTION_MIRROR_EVENT_TYPES.includes(
+			eventType as typeof SUBSCRIPTION_MIRROR_EVENT_TYPES[number],
+		);
+		const subscription = isMirrorEvent ? subscriptionFromContent(content) : null;
+		const subscriptionId = subscription ? asChargebeeId(subscription.id) : null;
+		const invoice = INVOICE_SYNC_EVENT_TYPES.includes(eventType)
+			? content.invoice as { subscription_id?: unknown } | undefined
+			: undefined;
+		const invoiceSubscriptionId = invoice?.subscription_id ? asChargebeeId(invoice.subscription_id) : null;
+
+		if (
+			(subscription && (!subscriptionId || hasInvalidOptionalId(subscription.customer_id)))
+			|| (invoice?.subscription_id && !invoiceSubscriptionId)
+		) {
 			return ResponseWrapper.badRequest('Invalid webhook payload');
 		}
 
@@ -117,14 +141,10 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			return ResponseWrapper.conflict('Webhook is being processed; retry later');
 		}
 
-		const content = payload.content ?? {};
-		const subscription = subscriptionFromContent(content);
-
-		if (subscription && SUBSCRIPTION_MIRROR_EVENT_TYPES.includes(eventType as typeof SUBSCRIPTION_MIRROR_EVENT_TYPES[number])) {
-			const account = await findBillingAccountByChargebeeSubscriptionId(subscription.id)
-				?? (subscription.customer_id
-					? await findBillingAccountByChargebeeCustomerId(subscription.customer_id)
-					: null);
+		if (subscription && subscriptionId) {
+			const customerId = asChargebeeId(subscription.customer_id);
+			const account = await findBillingAccountByChargebeeSubscriptionId(subscriptionId)
+				?? (customerId ? await findBillingAccountByChargebeeCustomerId(customerId) : null);
 
 			if (!account) {
 				return retryWebhookLater(eventId);
@@ -134,23 +154,10 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			await applyChargebeeSubscriptionMirror({ account, subscription: resolvedSubscription });
 		}
 
-		if (eventType === 'invoice_generated' || eventType === 'invoice_updated') {
-			const invoice = content.invoice as { subscription_id?: string } | undefined;
-			if (invoice?.subscription_id) {
-				const synced = await syncPastDueFromChargebee(invoice.subscription_id);
-				if (!synced) {
-					return retryWebhookLater(eventId);
-				}
-			}
-		}
-
-		if (eventType === 'payment_succeeded') {
-			const invoice = content.invoice as { subscription_id?: string } | undefined;
-			if (invoice?.subscription_id) {
-				const synced = await syncPastDueFromChargebee(invoice.subscription_id);
-				if (!synced) {
-					return retryWebhookLater(eventId);
-				}
+		if (invoiceSubscriptionId) {
+			const synced = await syncPastDueFromChargebee(invoiceSubscriptionId);
+			if (!synced) {
+				return retryWebhookLater(eventId);
 			}
 		}
 
