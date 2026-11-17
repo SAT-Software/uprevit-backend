@@ -49,7 +49,8 @@ export const recordCommittedUploadBytes = async ({
 		return;
 	}
 
-	const now = occurredAt ?? new Date();
+	const currentPeriodStart = resolveUsagePeriod(account).periodStart;
+	const now = occurredAt && occurredAt >= currentPeriodStart ? occurredAt : new Date();
 	const { periodStart, periodEnd } = resolveUsagePeriod(account, now);
 
 	const idempotencyKey = `upload:${normalizedKey}`;

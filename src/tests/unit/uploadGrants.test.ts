@@ -113,4 +113,15 @@ describe('upload grants', () => {
 		await expect(reconcileExpiredUploadGrants()).resolves.toEqual({ processed: 1, metered: 0, removed: 1 });
 		expect(s3Storage.deleteObjectByKey).toHaveBeenCalledWith('uploads/x/b.png');
 	});
+
+	it('meters uploads from a closed period in the current one', async () => {
+		mockExpiredGrants([{ _id: new ObjectId(), key: 'uploads/x/c.pdf', workspaceId, sizeBytes: 10, contentType: 'application/pdf' }]);
+		const lastModified = new Date(Date.now() - 3 * 86400000);
+		s3Storage.headUploadObject.mockResolvedValue({ contentType: 'application/pdf', sizeBytes: 10, lastModified });
+
+		await reconcileExpiredUploadGrants();
+
+		const [event] = recordUsageEvent.mock.calls[0] as [{ occurredAt: Date }];
+		expect(event.occurredAt.getTime()).toBeGreaterThan(lastModified.getTime());
+	});
 });
