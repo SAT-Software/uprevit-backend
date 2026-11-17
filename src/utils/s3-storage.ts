@@ -48,6 +48,8 @@ export const client = new S3Client({ region });
 
 export type UploadScope = "workspace-assets" | "product-assets" | "source-files" | "workflow-attachments";
 
+export const UPLOAD_URL_EXPIRES_IN_SECONDS = 3600;
+
 export const UPLOAD_MAX_BYTES: Record<UploadScope, number> = {
 	"workspace-assets": 10 * 1024 * 1024,
 	"product-assets": 25 * 1024 * 1024,
@@ -124,7 +126,10 @@ export const createPresignedUrl = async (
 		...(options.uploadScope === "workflow-attachments" ? { IfNoneMatch: "*" } : {}),
 	});
 
-	const uploadUrl = await getSignedUrl(client, command, { expiresIn: 3600 });
+	const uploadUrl = await getSignedUrl(client, command, {
+		expiresIn: UPLOAD_URL_EXPIRES_IN_SECONDS,
+		signableHeaders: new Set(["content-type"]),
+	});
 
 	return {uploadUrl, key};
 };
@@ -203,12 +208,17 @@ export const createPresignedGetUrl = async (
 export const headUploadObject = async (key: string) => {
 	try {
 		const head = await client.send(new HeadObjectCommand({ Bucket: uploadsBucket, Key: key }));
-		return { contentType: head.ContentType ?? "", sizeBytes: head.ContentLength ?? 0 };
+		return { contentType: head.ContentType ?? "", sizeBytes: head.ContentLength ?? 0, lastModified: head.LastModified };
 	} catch (error) {
 		const status = error instanceof S3ServiceException ? error.$metadata.httpStatusCode : undefined;
 		if (status === 403 || status === 404) return null;
 		throw error;
 	}
+};
+
+export const readUploadObjectPrefix = async (key: string, length = 16): Promise<Uint8Array | null> => {
+	const object = await client.send(new GetObjectCommand({ Bucket: uploadsBucket, Key: key, Range: `bytes=0-${length - 1}` }));
+	return (await object.Body?.transformToByteArray()) ?? null;
 };
 
 export const deleteObjectByKey = async (key: string) => {

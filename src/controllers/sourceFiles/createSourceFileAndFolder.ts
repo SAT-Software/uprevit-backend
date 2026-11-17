@@ -10,7 +10,7 @@ import { recordAuditEvent } from "../../utils/auditLogV2";
 import type { AuditLogV2Change } from "../../models/auditLogV2";
 import { resolveWorkspaceProductName } from "../../utils/sourceFilesAudit";
 import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
-import { recordCommittedUploadBytes } from "../../utils/billing/uploadCommit";
+import { hasRecordedUpload, recordCommittedUploadBytes } from "../../utils/billing/uploadCommit";
 import { withTelemetry } from '../../utils/telemetry';
 import { headUploadObject, sourceFileKeyPrefix } from "../../utils/s3-storage";
 
@@ -58,9 +58,11 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			if (!uploaded?.sizeBytes) return ResponseWrapper.badRequest('The file was not uploaded. Upload it again.');
 			sizeBytes = uploaded.sizeBytes;
 
-			const limitCheck = await checkUploadWouldExceedLimit(context.workspaceId, sizeBytes);
-			if (!limitCheck.allowed) {
-				return ResponseWrapper.forbidden(limitCheck.reason ?? 'Upload limit reached');
+			if (!(await hasRecordedUpload(key))) {
+				const limitCheck = await checkUploadWouldExceedLimit(context.workspaceId, sizeBytes, [key]);
+				if (!limitCheck.allowed) {
+					return ResponseWrapper.forbidden(limitCheck.reason ?? 'Upload limit reached');
+				}
 			}
 		}
 

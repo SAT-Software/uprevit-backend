@@ -5,6 +5,13 @@ jest.mock('../../utils/db', () => ({
 	getDb: jest.fn(),
 }));
 
+jest.mock('../../utils/billing/uploadGrants', () => ({
+	clearUploadGrant: jest.fn(async () => undefined),
+	markUploadGrantMetered: jest.fn(async () => undefined),
+	sumPendingUploadGrantBytes: jest.fn(async () => 0),
+	getUploadGrants: jest.fn(),
+}));
+
 jest.mock('../../utils/s3-storage', () => ({
 	...(jest.requireActual('../../utils/s3-storage') as object),
 	headUploadObject: jest.fn(),

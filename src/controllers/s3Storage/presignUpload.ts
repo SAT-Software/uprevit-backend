@@ -6,7 +6,8 @@ import { getDb } from "../../utils/db";
 import { logError } from "../../utils/logger";
 import { ResponseWrapper } from "../../utils/responseWrapper";
 import { validateMissingFields } from "../../utils/validationUtils";
-import { createPresignedUrl, UPLOAD_MAX_BYTES, type UploadScope } from "../../utils/s3-storage";
+import { createPresignedUrl, UPLOAD_MAX_BYTES, UPLOAD_URL_EXPIRES_IN_SECONDS, type UploadScope } from "../../utils/s3-storage";
+import { clearUploadGrant, recordUploadGrant } from "../../utils/billing/uploadGrants";
 import type { Product } from "../../models/product";
 import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
 import { denyProductContentEdit } from "../../utils/productAccess";
@@ -148,7 +149,20 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			sizeBytes,
 		});
 
-		return ResponseWrapper.created({ message: "Presigned URL generated successfully.", uploadUrl, key, expiresIn: 3600 });
+		await recordUploadGrant({
+			key,
+			workspaceId: userContext.workspaceId,
+			sizeBytes,
+			contentType,
+			expiresAt: new Date(Date.now() + UPLOAD_URL_EXPIRES_IN_SECONDS * 1000),
+		});
+		const reservedCheck = await checkUploadWouldExceedLimit(userContext.workspaceId, 0);
+		if (!reservedCheck.allowed) {
+			await clearUploadGrant(key);
+			return ResponseWrapper.forbidden(reservedCheck.reason ?? 'Upload limit reached');
+		}
+
+		return ResponseWrapper.created({ message: "Presigned URL generated successfully.", uploadUrl, key, expiresIn: UPLOAD_URL_EXPIRES_IN_SECONDS });
 	} catch (error) {
 		logError('Failed to generate presigned upload URL', error);
 		return ResponseWrapper.internalServerError('Failed to generate presigned URL.');
