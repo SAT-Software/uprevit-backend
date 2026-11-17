@@ -3,6 +3,7 @@ import { validateMissingFields, validateObjectIds, validateTab } from '../../../
 import { ResponseWrapper } from '../../../utils/responseWrapper';
 import { labelComponent } from '../../../types/products/label-components';
 import { ObjectId } from 'mongodb';
+import { toPersistedUploadKey, withPersistedUploadKeys } from '../../../utils/s3-storage';
 
 type LabelComponentReturn = {
 	updateQuery: Record<string, unknown>;
@@ -42,7 +43,7 @@ export function addLabelComponent(
 		}
 
 		const componentsWithIds = newLabelComponentsData.map(component => ({
-			...component,
+			...withPersistedUploadKeys(component, ['image', 'key']),
 			_id: new ObjectId(),
 		}));
 
@@ -98,7 +99,7 @@ export function updateLabelComponent(
 
 		const updateQuery = {
 			$set: {
-				'label_components.data.$[elem].image': updatedLabelComponent.image,
+				'label_components.data.$[elem].image': toPersistedUploadKey(updatedLabelComponent.image),
 				'label_components.data.$[elem].dimensions': updatedLabelComponent.dimensions,
 				'label_components.data.$[elem].label_type': updatedLabelComponent.label_type,
 				'label_components.data.$[elem].component_number': updatedLabelComponent.component_number,
@@ -110,7 +111,7 @@ export function updateLabelComponent(
 					'label_components.data.$[elem].print_direction': updatedLabelComponent.print_direction,
 				}),
 				...(updatedLabelComponent.key !== undefined && {
-					'label_components.data.$[elem].key': updatedLabelComponent.key,
+					'label_components.data.$[elem].key': toPersistedUploadKey(updatedLabelComponent.key),
 				}),
 			},
 			arrayFilters: [{ 'elem._id': new ObjectId(updatedLabelComponent.id) }],

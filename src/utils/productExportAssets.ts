@@ -1,6 +1,7 @@
 import { Product } from "../models/product";
 import { logError } from "./logger";
-import { createPresignedGetUrlMap, createStandardSymbolPresignedGetUrlMap } from "./s3-storage";
+import { readResponseCapped } from "./readResponseCapped";
+import { createPresignedGetUrlMap, createStandardSymbolPresignedGetUrlMap, UPLOAD_MAX_BYTES } from "./s3-storage";
 
 export type WorkbookTabTarget = "product_specifications" | "operational_parameters";
 
@@ -51,19 +52,41 @@ export const resolveImageUrl = (
 	keyValue: unknown,
 	signedUrlMap: Map<string, string>,
 ): string | undefined => {
-	const directUrl = toOptionalString(imageValue);
-	const explicitKey = toOptionalString(keyValue);
-	const keyFromImage = toS3Key(directUrl);
-	const s3Key = explicitKey || keyFromImage;
+	const s3Key = toOptionalString(keyValue) || toS3Key(imageValue);
+	return s3Key ? signedUrlMap.get(s3Key) : undefined;
+};
 
-	if (s3Key) {
-		const signedUrl = signedUrlMap.get(s3Key);
-		if (signedUrl) return signedUrl;
-		if (directUrl && !directUrl.startsWith("uploads/")) return directUrl;
-		return undefined;
+const MAX_EXPORT_IMAGE_BYTES = UPLOAD_MAX_BYTES["product-assets"];
+const EXPORT_IMAGE_FETCH_TIMEOUT_MS = 15_000;
+
+const isAllowedExportImageUrl = (url: string): boolean => {
+	try {
+		const parsed = new URL(url);
+		return parsed.protocol === "https:" && parsed.hostname.endsWith(".amazonaws.com");
+	} catch {
+		return false;
 	}
+};
 
-	return directUrl;
+/**
+ * Downloads a signed S3 image for export embedding with a host allowlist, deadline, and size cap.
+ * @param {string} url Signed S3 GET URL
+ * @return {Promise<{bytes: Uint8Array, contentType: string | null} | null>} Image bytes, or null when unavailable
+ */
+export const fetchExportImage = async (
+	url: string,
+): Promise<{ bytes: Uint8Array; contentType: string | null } | null> => {
+	if (!isAllowedExportImageUrl(url)) return null;
+
+	const response = await fetch(url, {
+		headers: { Connection: "close" },
+		redirect: "error",
+		signal: AbortSignal.timeout(EXPORT_IMAGE_FETCH_TIMEOUT_MS),
+	});
+	if (!response.ok) return null;
+
+	const bytes = await readResponseCapped(response, MAX_EXPORT_IMAGE_BYTES);
+	return bytes ? { bytes, contentType: response.headers.get("content-type") } : null;
 };
 
 export const getPreferredLabelTagImageUrl = (
