@@ -172,8 +172,8 @@ Globals:
     MethodSettings:
       - ResourcePath: "/*"
         HttpMethod: "*"
-        ThrottlingRateLimit: 200
-        ThrottlingBurstLimit: 400
+        ThrottlingRateLimit: 50
+        ThrottlingBurstLimit: 100
 
 Conditions:
   HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]

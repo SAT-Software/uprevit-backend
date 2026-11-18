@@ -89,6 +89,16 @@ describe('reportsQuery', () => {
 			expect.objectContaining({ pagination: { page: 1, limit: 100 } }),
 			workspaceId,
 		);
+
+		await lambdaHandler({
+			body: `{"workspaceId":"${workspaceId.toString()}","pagination":{"page":1e999}}`,
+			headers: { Authorization: 'Bearer token' },
+		} as any);
+
+		expect(buildAggregationPipeline).toHaveBeenLastCalledWith(
+			expect.objectContaining({ pagination: { page: 10000, limit: 10 } }),
+			workspaceId,
+		);
 	});
 
 	it('rejects queries for a different workspace', async () => {

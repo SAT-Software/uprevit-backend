@@ -47,7 +47,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		);
 		if (workspaceMismatch) return workspaceMismatch;
 
-		const page = Math.max(Math.trunc(Number(input.pagination?.page)) || 1, 1);
+		const page = Math.min(Math.max(Math.trunc(Number(input.pagination?.page)) || 1, 1), 10000);
 		const limit = Math.min(Math.max(Math.trunc(Number(input.pagination?.limit)) || 10, 1), 100);
 
 		if (input.conditionLogic && !['AND', 'OR'].includes(input.conditionLogic)) {

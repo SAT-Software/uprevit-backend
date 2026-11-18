@@ -41,6 +41,7 @@ const { getDb } = jest.requireMock('../../utils/db') as any;
 const { requireTenantContext } = jest.requireMock('../../utils/tenantContext') as any;
 const { assertUsageActionAllowed, releaseDailyInvites } = jest.requireMock('../../utils/billing/enforcement') as any;
 const { lambdaHandler: createUser } = require('../../controllers/users/createUser');
+const { lambdaHandler: updateUser } = require('../../controllers/users/updateUser');
 const { handler: inviteUsers } = require('../../controllers/onboarding/InviteNewUserByAdmin');
 const { validateUserArray } = require('../../utils/validationUtils');
 
@@ -92,6 +93,15 @@ describe('member creation and invites', () => {
 
 		expect(response.statusCode).toBe(201);
 		expect(users.insertOne).toHaveBeenCalledWith(expect.objectContaining({ email: 'new@example.com' }));
+	});
+
+	it('updateUser rejects a query operator as the email', async () => {
+		const users = mockUsers({ _id: new ObjectId(), email: 'member@example.com', workspaceId, cognitoSub: 'admin-sub' });
+
+		const response = await updateUser(buildEvent({ name: 'Member', email: { $ne: null } }));
+
+		expect(response.statusCode).toBe(400);
+		expect(users.findOne).not.toHaveBeenCalled();
 	});
 
 	it.each([
