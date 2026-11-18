@@ -11,7 +11,7 @@ import { clearUploadGrant, recordUploadGrant } from "../../utils/billing/uploadG
 import type { Product } from "../../models/product";
 import { assertUsageActionAllowed, checkUploadWouldExceedLimit } from "../../utils/billing/enforcement";
 import { denyProductContentEdit } from "../../utils/productAccess";
-import { canEditWorkspaceData, parseCognitoGroups, READ_ONLY_MESSAGE } from "../../utils/tenantContext";
+import { canEditWorkspaceData, parseMemberGroups, READ_ONLY_MESSAGE } from "../../utils/tenantContext";
 import { ACTIVE_WORKFLOW_STATUSES } from "../../models/workflow";
 import { canComment, getProductTeamIds } from "../../utils/workflowDiscussion";
 import { findWorkflow } from "../../utils/workflows";
@@ -122,7 +122,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			}, { projection: { owner_user_id: 1, contributor_user_ids: 1, status: 1, is_archived: 1, is_latest: 1 } });
 
 			if (!product) return ResponseWrapper.forbidden('You are not authorized to upload files for this product.');
-			const actor = { userId: userContext.userId, userType: userContext.userType, cognitoGroups: parseCognitoGroups(auth.payload['cognito:groups']) };
+			const actor = { userId: userContext.userId, userType: userContext.userType, cognitoGroups: parseMemberGroups(auth.payload['cognito:groups'], userContext.userType) };
 			const editDenied = denyProductContentEdit(actor, product);
 			if (editDenied) return editDenied;
 		}
@@ -133,7 +133,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			const workflow = await findWorkflow(db, userContext.workspaceId, typeof input.workflowId === "string" ? input.workflowId : undefined);
 			if (!workflow) return ResponseWrapper.notFound('Workflow not found.');
 			if (!ACTIVE_WORKFLOW_STATUSES.includes(workflow.status)) return ResponseWrapper.conflict('This workflow has already ended.');
-			const actor = { userId: userContext.userId, cognitoGroups: parseCognitoGroups(auth.payload['cognito:groups']) };
+			const actor = { userId: userContext.userId, cognitoGroups: parseMemberGroups(auth.payload['cognito:groups'], userContext.userType) };
 			if (!canComment(actor, workflow, await getProductTeamIds(db, workflow))) {
 				return ResponseWrapper.forbidden('Only people involved in this workflow can attach images.');
 			}

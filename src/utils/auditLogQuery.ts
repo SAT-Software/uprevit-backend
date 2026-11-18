@@ -15,14 +15,6 @@ export const AUDIT_SCOPES_WITHOUT_SCOPE_ID: AuditScopeType[] = ['archive', 'work
 export const MAX_AUDIT_SEARCH_LENGTH = 200;
 const MAX_ACTOR_ID_LENGTH = 128;
 
-export const parseAuditGroups = (groups: unknown): string[] => {
-	if (Array.isArray(groups)) return groups.filter((group): group is string => typeof group === 'string');
-	if (typeof groups === 'string') return groups.split(',').map((group) => group.trim()).filter(Boolean);
-	return [];
-};
-
-export const isAuditAdmin = (groups: unknown) => parseAuditGroups(groups).includes('admin');
-
 const escapeRegex = (pattern: string): string => pattern.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
 const parseActions = (rawActions: string | undefined): AuditAction[] | null => {

@@ -76,6 +76,21 @@ describe('reportsQuery', () => {
 		);
 	});
 
+	it('caps the page size the pipeline uses', async () => {
+		await lambdaHandler({
+			body: JSON.stringify({
+				workspaceId: workspaceId.toString(),
+				pagination: { page: -3, limit: 1000000 },
+			}),
+			headers: { Authorization: 'Bearer token' },
+		} as any);
+
+		expect(buildAggregationPipeline).toHaveBeenCalledWith(
+			expect.objectContaining({ pagination: { page: 1, limit: 100 } }),
+			workspaceId,
+		);
+	});
+
 	it('rejects queries for a different workspace', async () => {
 		assertWorkspaceMatch.mockReturnValue({
 			statusCode: 403,

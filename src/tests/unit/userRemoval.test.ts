@@ -328,6 +328,7 @@ describe('deleteUser handler', () => {
 			_id: actorUserId,
 			workspaceId,
 			status: 'active',
+			userType: 'admin',
 			cognitoSub: 'admin-sub',
 		});
 

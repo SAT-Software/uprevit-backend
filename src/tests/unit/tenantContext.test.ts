@@ -75,6 +75,7 @@ describe('tenantContext', () => {
 			authenticatedUser.getAuthenticatedUserContext.mockResolvedValue({
 				userId,
 				workspaceId,
+				userType: 'admin',
 			});
 
 			const result = await requireTenantContext(event);
@@ -86,8 +87,23 @@ describe('tenantContext', () => {
 					userId,
 					cognitoSub: 'cognito-sub',
 					cognitoGroups: ['admin', 'user'],
+					userType: 'admin',
 				});
 			}
+		});
+
+		it('drops the admin group when the member is no longer an Admin', async () => {
+			authUtils.authenticateRequest.mockResolvedValue({
+				isValid: true,
+				payload: { sub: 'cognito-sub', 'cognito:groups': ['admin', 'manager'] },
+				token: 'token',
+			});
+			authenticatedUser.getAuthenticatedUserContext.mockResolvedValue({ userId, workspaceId, userType: 'user' });
+
+			const result = await requireTenantContext(event);
+
+			expect(result.ok && result.context.cognitoGroups).toEqual(['manager']);
+			expect(result.ok && isWorkspaceAdmin(result.context.cognitoGroups)).toBe(false);
 		});
 	});
 
