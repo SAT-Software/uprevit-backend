@@ -39,6 +39,9 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		});
 
 		if (missingFields) return missingFields;
+		if (typeof input.email !== 'string') {
+			return ResponseWrapper.badRequest('Email must be text');
+		}
 
 		const db = await getDb();
 

@@ -47,8 +47,8 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		);
 		if (workspaceMismatch) return workspaceMismatch;
 
-		const page = input.pagination?.page || 1;
-		const limit = Math.min(input.pagination?.limit || 10, 100);
+		const page = Math.min(Math.max(Math.trunc(Number(input.pagination?.page)) || 1, 1), 10000);
+		const limit = Math.min(Math.max(Math.trunc(Number(input.pagination?.limit)) || 10, 1), 100);
 
 		if (input.conditionLogic && !['AND', 'OR'].includes(input.conditionLogic)) {
 			return ResponseWrapper.badRequest('conditionLogic must be either "AND" or "OR"');
@@ -59,7 +59,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			if (conditionError) return conditionError;
 		}
 
-		const pipeline = buildAggregationPipeline(input, context.workspaceId);
+		const pipeline = buildAggregationPipeline({ ...input, pagination: { page, limit } }, context.workspaceId);
 
 		const db = await getDb();
 		const result = await db.collection<Product>('products').aggregate(pipeline).toArray();

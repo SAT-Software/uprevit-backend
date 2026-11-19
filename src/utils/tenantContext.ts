@@ -32,6 +32,9 @@ export const parseCognitoGroups = (groups: unknown): string[] => {
 	return [];
 };
 
+export const parseMemberGroups = (groups: unknown, userType: User['userType']): string[] =>
+	parseCognitoGroups(groups).filter((group) => group !== 'admin' || userType === 'admin');
+
 /**
  * Authenticates the request and resolves the caller's workspace from MongoDB.
  * @param {APIGatewayProxyEvent} event - API Gateway event
@@ -87,7 +90,7 @@ export const requireTenantContext = async (
 			workspaceId: userContext.workspaceId,
 			userId: userContext.userId,
 			cognitoSub,
-			cognitoGroups: parseCognitoGroups(auth.payload['cognito:groups']),
+			cognitoGroups: parseMemberGroups(auth.payload['cognito:groups'], userContext.userType),
 			userType: userContext.userType,
 			isManager: userContext.isManager,
 		},

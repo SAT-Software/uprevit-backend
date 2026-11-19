@@ -169,6 +169,11 @@ Globals:
   Api:
     TracingEnabled: true
     MinimumCompressionSize: 1024
+    MethodSettings:
+      - ResourcePath: "/*"
+        HttpMethod: "*"
+        ThrottlingRateLimit: 50
+        ThrottlingBurstLimit: 100
 
 Conditions:
   HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]

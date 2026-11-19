@@ -1,12 +1,12 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { ObjectId } from 'mongodb';
 import { AUDIT_LOG_V2_COLLECTION, type AuditLogV2 } from '../../models/auditLogV2';
-import { buildAuditLogQuery, isAuditAdmin } from '../../utils/auditLogQuery';
+import { buildAuditLogQuery } from '../../utils/auditLogQuery';
 import { getDb } from '../../utils/db';
 import { enrichUsersWithProfileAvatarUrls } from '../../utils/s3-storage';
 import { logError, logInfo } from '../../utils/logger';
 import { ResponseWrapper } from '../../utils/responseWrapper';
-import { assertWorkspaceMatch, requireTenantContext } from '../../utils/tenantContext';
+import { assertWorkspaceMatch, isWorkspaceAdmin, requireTenantContext } from '../../utils/tenantContext';
 import { withTelemetry } from '../../utils/telemetry';
 
 /**
@@ -20,7 +20,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const tenantResult = await requireTenantContext(event);
 		if (!tenantResult.ok) return tenantResult.response;
 
-		const { context, auth } = tenantResult;
+		const { context } = tenantResult;
 
 		const requestedWorkspaceId = event.queryStringParameters?.workspaceId;
 		const scopeType = event.queryStringParameters?.scopeType;
@@ -55,7 +55,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const built = buildAuditLogQuery({
 			workspaceId: context.workspaceId,
 			params: event.queryStringParameters ?? {},
-			isAdmin: isAuditAdmin(auth.payload['cognito:groups']),
+			isAdmin: isWorkspaceAdmin(context.cognitoGroups),
 		});
 		if (!built.ok) return built.response;
 		const { query } = built;
