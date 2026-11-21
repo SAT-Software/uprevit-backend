@@ -20,6 +20,7 @@ build-UpdateWorkspaceFunction: ENTRY := controllers/workspaces/updateWorkspace.t
 build-CreateDepartmentFunction: ENTRY := controllers/departments/createDepartment.ts
 build-GetDepartmentFunction: ENTRY := controllers/departments/getDepartment.ts
 build-GetAllDepartmentsFunction: ENTRY := controllers/departments/getAllDepartments.ts
+build-GlobalSearchFunction: ENTRY := controllers/search/globalSearch.ts
 build-UpdateDepartmentFunction: ENTRY := controllers/departments/updateDepartment.ts
 build-ArchiveDepartmentFunction: ENTRY := controllers/departments/archiveDepartment.ts
 build-CreateProjectFunction: ENTRY := controllers/projects/createProject.ts

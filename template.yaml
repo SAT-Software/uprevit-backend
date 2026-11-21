@@ -588,6 +588,20 @@ Resources:
     Metadata:
       BuildMethod: makefile
 
+  GlobalSearchFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: src/
+      Handler: controllers/search/globalSearch.lambdaHandler
+      Events:
+        GlobalSearch:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /global-search
+            Method: get
+    Metadata:
+      BuildMethod: makefile
+
   UpdateDepartmentFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
