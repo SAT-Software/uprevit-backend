@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `GET /global-search?q=` that returns up to five active products, projects, departments, and workflows from the caller's workspace, backed by Atlas Search indexes created with `npm --prefix src run ensure:search-indexes`.
 - Added a separate Approver seat limit (`usageLimits.approverSeats`), mirrored from the Chargebee Approver seat add-on set by `CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_MONTHLY` and `CHARGEBEE_APPROVER_SEAT_ADDON_ITEM_PRICE_ID_YEARLY`.
 - Added platform-admin `POST /platform-admin/workspaces/{workspaceId}/invoices/{invoiceId}/record-payment` to record an offline bank transfer for the amount due on a Chargebee invoice, audited as `billing.invoice.record_payment`.
 

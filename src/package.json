@@ -16,6 +16,7 @@
 		"migrate:workflow-release": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateWorkflowRelease.ts",
 		"migrate:legacy-product-images": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateLegacyProductImages.ts",
 		"ensure:core-indexes": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/ensureCoreIndexes.ts",
+		"ensure:search-indexes": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/ensureSearchIndexes.ts",
 		"check:source-file-keys": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/checkSourceFileKeys.ts",
 		"migrate:bookmarks-latest-version": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateBookmarksToLatestVersion.ts",
 		"normalize:component-types": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/normalizeComponentTypes.ts",
