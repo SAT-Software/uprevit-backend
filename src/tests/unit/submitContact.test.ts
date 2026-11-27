@@ -187,6 +187,10 @@ describe('submitContact', () => {
 			topic: expect.any(String),
 			message: expect.any(String),
 		});
+
+		const protoTopic = await lambdaHandler(makeEvent({ body: { ...basePayload, topic: 'constructor' } }));
+		expect(protoTopic.statusCode).toBe(400);
+		expect(JSON.parse(protoTopic.body).errors).toMatchObject({ topic: expect.any(String) });
 		expect(emailModule.sendEmail).not.toHaveBeenCalled();
 	});
 

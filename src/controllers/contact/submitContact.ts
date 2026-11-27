@@ -184,7 +184,7 @@ const validateContact = (
 
 	const rawTopic = readString('topic');
 	const topic = rawTopic?.trim() ?? '';
-	if (rawTopic === null || !(topic in TOPIC_LABELS)) {
+	if (rawTopic === null || !Object.hasOwn(TOPIC_LABELS, topic)) {
 		errors.topic = 'Select a valid topic.';
 	}
 
