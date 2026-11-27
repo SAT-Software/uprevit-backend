@@ -87,6 +87,9 @@ jobs:
       POSTHOG_SUPPORT_SECRET_PARAM: ${{ vars.POSTHOG_SUPPORT_SECRET_PARAM }}
       POSTHOG_PROJECT_TOKEN: ${{ vars.POSTHOG_PROJECT_TOKEN }}
       SUPPORT_ATTACHMENTS_ALLOWED_ORIGINS: ${{ vars.SUPPORT_ATTACHMENTS_ALLOWED_ORIGINS }}
+      CONTACT_TO_EMAIL: ${{ vars.CONTACT_TO_EMAIL }}
+      CONTACT_ALLOWED_ORIGINS: ${{ vars.CONTACT_ALLOWED_ORIGINS }}
+      TURNSTILE_SECRET_PARAM: ${{ vars.TURNSTILE_SECRET_PARAM }}
       MONITORING_ALERT_EMAIL: ${{ vars.MONITORING_ALERT_EMAIL }}
     
     permissions:
@@ -187,6 +190,9 @@ jobs:
               "SupportReviewerEmailsParam": os.environ.get("SUPPORT_REVIEWER_EMAILS_PARAM", ""),
               "PosthogSupportSecretParam": os.environ.get("POSTHOG_SUPPORT_SECRET_PARAM", ""),
               "SupportAttachmentsAllowedOrigins": os.environ.get("SUPPORT_ATTACHMENTS_ALLOWED_ORIGINS", ""),
+              "ContactToEmail": os.environ.get("CONTACT_TO_EMAIL", ""),
+              "ContactAllowedOrigins": os.environ.get("CONTACT_ALLOWED_ORIGINS", ""),
+              "TurnstileSecretParam": os.environ.get("TURNSTILE_SECRET_PARAM", ""),
           }
           always_set = {
               "MonitoringAlertEmail": os.environ.get("MONITORING_ALERT_EMAIL", ""),
