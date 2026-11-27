@@ -1,35 +1,13 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { AdminGetUserCommand, CognitoIdentityProviderClient, UserNotFoundException } from '@aws-sdk/client-cognito-identity-provider';
-import { GetParameterCommand, ParameterNotFound, SSMClient } from '@aws-sdk/client-ssm';
 import crypto from 'node:crypto';
 import { authenticateRequest } from './authUtils';
 import { ResponseWrapper } from './responseWrapper';
+import { readSecureParameter } from './ssm';
 
-const SSM_CACHE_TTL_MS = 5 * 60 * 1000;
 const REVIEWER_FORBIDDEN_MESSAGE = 'You are not allowed to view support attachments';
 
-const ssm = new SSMClient({});
 const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION || 'us-east-1' });
-const ssmCache = new Map<string, { value: string; expiresAt: number }>();
-
-const readSecureParameter = async (name: string | undefined): Promise<string> => {
-	const parameterName = name?.trim();
-	if (!parameterName) return '';
-
-	const cached = ssmCache.get(parameterName);
-	if (cached && cached.expiresAt > Date.now()) return cached.value;
-
-	let value = '';
-	try {
-		const response = await ssm.send(new GetParameterCommand({ Name: parameterName, WithDecryption: true }));
-		value = response.Parameter?.Value?.trim() ?? '';
-	} catch (error) {
-		if (!(error instanceof ParameterNotFound)) throw error;
-	}
-
-	ssmCache.set(parameterName, { value, expiresAt: Date.now() + SSM_CACHE_TTL_MS });
-	return value;
-};
 
 export const normalizeSupportEmail = (email: string): string => email.trim().toLowerCase();
 

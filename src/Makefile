@@ -6,6 +6,7 @@ build-%:
 	$(ESBUILD) $(ENTRY) $(ESBUILD_FLAGS) --outdir="$(ARTIFACTS_DIR)"
 
 build-HealthFunction: ENTRY := controllers/health/getHealth.ts
+build-ContactSubmitFunction: ENTRY := controllers/contact/submitContact.ts
 build-CreateUserFunction: ENTRY := controllers/users/createUser.ts
 build-GetUserFunction: ENTRY := controllers/users/getUser.ts
 build-UpdateUserFunction: ENTRY := controllers/users/updateUser.ts

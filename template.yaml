@@ -136,6 +136,18 @@ Parameters:
     Type: String
     Description: "Comma-separated frontend origins (no spaces) allowed to upload support screenshots, e.g. https://app.uprevit.com; empty blocks browser uploads"
     Default: ""
+  ContactToEmail:
+    Type: String
+    Description: "Destination email address for marketing contact form submissions"
+    Default: "contact@uprevit.com"
+  ContactAllowedOrigins:
+    Type: String
+    Description: "Comma-separated frontend origins allowed to submit the contact form, e.g. https://uprevit.com,https://www.uprevit.com"
+    Default: ""
+  TurnstileSecretParam:
+    Type: String
+    Description: "SSM Parameter Store path (SecureString) for the Cloudflare Turnstile secret key, e.g. /uprevit/prod/contact/turnstile-secret"
+    Default: ""
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
@@ -174,6 +186,10 @@ Globals:
         HttpMethod: "*"
         ThrottlingRateLimit: 50
         ThrottlingBurstLimit: 100
+      - ResourcePath: "/contact"
+        HttpMethod: "POST"
+        ThrottlingRateLimit: 2
+        ThrottlingBurstLimit: 5
 
 Conditions:
   HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]
@@ -181,6 +197,7 @@ Conditions:
   HasSupportReviewerEmailsParam: !Not [!Equals [!Ref SupportReviewerEmailsParam, ""]]
   HasPosthogSupportSecretParam: !Not [!Equals [!Ref PosthogSupportSecretParam, ""]]
   HasSupportAttachmentsAllowedOrigins: !Not [!Equals [!Ref SupportAttachmentsAllowedOrigins, ""]]
+  HasTurnstileSecretParam: !Not [!Equals [!Ref TurnstileSecretParam, ""]]
   HasMonitoringAlerts: !Not [!Equals [!Ref MonitoringAlertEmail, ""]]
 
 Resources:
@@ -197,6 +214,41 @@ Resources:
           Properties:
             Path: /health
             Method: get
+    Metadata:
+      BuildMethod: makefile
+
+  ContactSubmitFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/contact/submitContact.lambdaHandler
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          CONTACT_TO_EMAIL: !Ref ContactToEmail
+          CONTACT_ALLOWED_ORIGINS: !Ref ContactAllowedOrigins
+          TURNSTILE_SECRET_PARAM: !Ref TurnstileSecretParam
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+        - !If
+          - HasTurnstileSecretParam
+          - Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${TurnstileSecretParam}"
+          - !Ref AWS::NoValue
+      Events:
+        SubmitContact:
+          Type: Api
+          Properties:
+            Path: /contact
+            Method: post
     Metadata:
       BuildMethod: makefile
 
