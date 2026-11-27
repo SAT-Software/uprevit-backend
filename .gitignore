@@ -212,3 +212,6 @@ env.json
 .vscode
 src/tests/unit/test-handler.test.ts
 CONTEXT.md
+
+# local planning notes
+/workflow-plan
