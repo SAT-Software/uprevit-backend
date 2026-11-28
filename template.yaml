@@ -148,6 +148,34 @@ Parameters:
     Type: String
     Description: "SSM Parameter Store path (SecureString) for the Cloudflare Turnstile secret key, e.g. /uprevit/prod/contact/turnstile-secret"
     Default: ""
+  NewsletterFromAddress:
+    Type: String
+    Description: "SES sender for blog newsletter emails, e.g. Uprevit Blog <blog@updates.uprevit.com>"
+    Default: "Uprevit Blog <blog@updates.uprevit.com>"
+  NewsletterReplyToAddress:
+    Type: String
+    Description: "Reply-To email address for blog newsletter emails"
+    Default: "contact@uprevit.com"
+  NewsletterSiteBaseUrl:
+    Type: String
+    Description: "Public marketing site base URL used for blog newsletter confirm/unsubscribe links, e.g. https://www.uprevit.com"
+    Default: ""
+  NewsletterAllowedOrigins:
+    Type: String
+    Description: "Comma-separated frontend origins allowed to call newsletter endpoints; falls back to ContactAllowedOrigins when empty"
+    Default: ""
+  NewsletterTurnstileSecretParam:
+    Type: String
+    Description: "SSM Parameter Store path (SecureString) for the blog newsletter Cloudflare Turnstile secret key"
+    Default: ""
+  NewsletterTokenSecretParam:
+    Type: String
+    Description: "SSM Parameter Store path (SecureString) for the HMAC signing secret for blog newsletter confirm/unsubscribe tokens"
+    Default: ""
+  NewsletterPhysicalAddress:
+    Type: String
+    Description: "Physical mailing address displayed in blog newsletter email footers"
+    Default: "Magarpatta Road, Hadapsar, Pune - 411028"
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
@@ -190,6 +218,18 @@ Globals:
         HttpMethod: "POST"
         ThrottlingRateLimit: 2
         ThrottlingBurstLimit: 5
+      - ResourcePath: "/newsletter/subscribe"
+        HttpMethod: "POST"
+        ThrottlingRateLimit: 2
+        ThrottlingBurstLimit: 5
+      - ResourcePath: "/newsletter/confirm"
+        HttpMethod: "POST"
+        ThrottlingRateLimit: 5
+        ThrottlingBurstLimit: 10
+      - ResourcePath: "/newsletter/unsubscribe"
+        HttpMethod: "POST"
+        ThrottlingRateLimit: 5
+        ThrottlingBurstLimit: 10
 
 Conditions:
   HasExportJobQueueUrl: !Not [!Equals [!Ref ExportJobQueueUrl, ""]]
@@ -198,6 +238,8 @@ Conditions:
   HasPosthogSupportSecretParam: !Not [!Equals [!Ref PosthogSupportSecretParam, ""]]
   HasSupportAttachmentsAllowedOrigins: !Not [!Equals [!Ref SupportAttachmentsAllowedOrigins, ""]]
   HasTurnstileSecretParam: !Not [!Equals [!Ref TurnstileSecretParam, ""]]
+  HasNewsletterTurnstileSecretParam: !Not [!Equals [!Ref NewsletterTurnstileSecretParam, ""]]
+  HasNewsletterTokenSecretParam: !Not [!Equals [!Ref NewsletterTokenSecretParam, ""]]
   HasMonitoringAlerts: !Not [!Equals [!Ref MonitoringAlertEmail, ""]]
 
 Resources:
@@ -249,6 +291,344 @@ Resources:
           Properties:
             Path: /contact
             Method: post
+    Metadata:
+      BuildMethod: makefile
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # BLOG NEWSLETTER
+  # ──────────────────────────────────────────────────────────────────────────
+  NewsletterSubscribersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-newsletter-subscribers"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: email
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: updatedAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: email
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: StatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: updatedAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  NewsletterBroadcastsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-newsletter-broadcasts"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: slug
+          AttributeType: S
+      KeySchema:
+        - AttributeName: slug
+          KeyType: HASH
+
+  NewsletterRateLimitsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-newsletter-rate-limits"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  NewsletterBroadcastDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-newsletter-broadcast-dlq"
+      MessageRetentionPeriod: 1209600
+
+  NewsletterBroadcastQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "${AWS::StackName}-newsletter-broadcast-queue"
+      VisibilityTimeout: 240
+      ReceiveMessageWaitTimeSeconds: 20
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt NewsletterBroadcastDLQ.Arn
+        maxReceiveCount: 4
+
+  NewsletterFeedbackTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-newsletter-ses-feedback"
+
+  NewsletterConfigurationSet:
+    Type: AWS::SES::ConfigurationSet
+    Properties:
+      Name: !Sub "${AWS::StackName}-newsletter"
+
+  NewsletterFeedbackTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref NewsletterFeedbackTopic
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowSesPublishNewsletterFeedback
+            Effect: Allow
+            Principal:
+              Service: ses.amazonaws.com
+            Action: sns:Publish
+            Resource: !Ref NewsletterFeedbackTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/${AWS::StackName}-newsletter"
+
+  NewsletterFeedbackEventDestination:
+    Type: AWS::SES::ConfigurationSetEventDestination
+    DependsOn: NewsletterFeedbackTopicPolicy
+    Properties:
+      ConfigurationSetName: !Ref NewsletterConfigurationSet
+      EventDestination:
+        Name: BounceAndComplaintToSns
+        Enabled: true
+        MatchingEventTypes:
+          - bounce
+          - complaint
+        SnsDestination:
+          TopicARN: !Ref NewsletterFeedbackTopic
+
+  NewsletterSubscribeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/newsletter/subscribeNewsletter.lambdaHandler
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          CONTACT_ALLOWED_ORIGINS: !Ref ContactAllowedOrigins
+          NEWSLETTER_ALLOWED_ORIGINS: !Ref NewsletterAllowedOrigins
+          NEWSLETTER_FROM_ADDRESS: !Ref NewsletterFromAddress
+          NEWSLETTER_REPLY_TO_ADDRESS: !Ref NewsletterReplyToAddress
+          NEWSLETTER_SITE_BASE_URL: !Ref NewsletterSiteBaseUrl
+          NEWSLETTER_TURNSTILE_SECRET_PARAM: !Ref NewsletterTurnstileSecretParam
+          NEWSLETTER_TOKEN_SECRET_PARAM: !Ref NewsletterTokenSecretParam
+          NEWSLETTER_PHYSICAL_ADDRESS: !Ref NewsletterPhysicalAddress
+          NEWSLETTER_SUBSCRIBERS_TABLE: !Ref NewsletterSubscribersTable
+          NEWSLETTER_RATE_LIMITS_TABLE: !Ref NewsletterRateLimitsTable
+          NEWSLETTER_CONFIGURATION_SET: !Ref NewsletterConfigurationSet
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+              Resource: !GetAtt NewsletterSubscribersTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt NewsletterRateLimitsTable.Arn
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource:
+                - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+                - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/${AWS::StackName}-newsletter"
+        - !If
+          - HasNewsletterTurnstileSecretParam
+          - Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${NewsletterTurnstileSecretParam}"
+          - !Ref AWS::NoValue
+        - !If
+          - HasNewsletterTokenSecretParam
+          - Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${NewsletterTokenSecretParam}"
+          - !Ref AWS::NoValue
+      Events:
+        SubscribeNewsletter:
+          Type: Api
+          Properties:
+            Path: /newsletter/subscribe
+            Method: post
+    Metadata:
+      BuildMethod: makefile
+
+  NewsletterConfirmFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/newsletter/confirmNewsletter.lambdaHandler
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          CONTACT_ALLOWED_ORIGINS: !Ref ContactAllowedOrigins
+          NEWSLETTER_ALLOWED_ORIGINS: !Ref NewsletterAllowedOrigins
+          NEWSLETTER_TOKEN_SECRET_PARAM: !Ref NewsletterTokenSecretParam
+          NEWSLETTER_SUBSCRIBERS_TABLE: !Ref NewsletterSubscribersTable
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+              Resource: !GetAtt NewsletterSubscribersTable.Arn
+        - !If
+          - HasNewsletterTokenSecretParam
+          - Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${NewsletterTokenSecretParam}"
+          - !Ref AWS::NoValue
+      Events:
+        ConfirmNewsletter:
+          Type: Api
+          Properties:
+            Path: /newsletter/confirm
+            Method: post
+    Metadata:
+      BuildMethod: makefile
+
+  NewsletterUnsubscribeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/newsletter/unsubscribeNewsletter.lambdaHandler
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          CONTACT_ALLOWED_ORIGINS: !Ref ContactAllowedOrigins
+          NEWSLETTER_ALLOWED_ORIGINS: !Ref NewsletterAllowedOrigins
+          NEWSLETTER_TOKEN_SECRET_PARAM: !Ref NewsletterTokenSecretParam
+          NEWSLETTER_SUBSCRIBERS_TABLE: !Ref NewsletterSubscribersTable
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt NewsletterSubscribersTable.Arn
+        - !If
+          - HasNewsletterTokenSecretParam
+          - Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${NewsletterTokenSecretParam}"
+          - !Ref AWS::NoValue
+      Events:
+        UnsubscribeNewsletter:
+          Type: Api
+          Properties:
+            Path: /newsletter/unsubscribe
+            Method: post
+    Metadata:
+      BuildMethod: makefile
+
+  NewsletterBroadcastWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/newsletter/processBroadcast.lambdaHandler
+      Timeout: 120
+      MemorySize: 256
+      Environment:
+        Variables:
+          NEWSLETTER_FROM_ADDRESS: !Ref NewsletterFromAddress
+          NEWSLETTER_REPLY_TO_ADDRESS: !Ref NewsletterReplyToAddress
+          NEWSLETTER_SITE_BASE_URL: !Ref NewsletterSiteBaseUrl
+          NEWSLETTER_API_BASE_URL: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+          NEWSLETTER_TOKEN_SECRET_PARAM: !Ref NewsletterTokenSecretParam
+          NEWSLETTER_PHYSICAL_ADDRESS: !Ref NewsletterPhysicalAddress
+          NEWSLETTER_SUBSCRIBERS_TABLE: !Ref NewsletterSubscribersTable
+          NEWSLETTER_BROADCASTS_TABLE: !Ref NewsletterBroadcastsTable
+          NEWSLETTER_CONFIGURATION_SET: !Ref NewsletterConfigurationSet
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:ReceiveMessage
+                - sqs:DeleteMessage
+                - sqs:GetQueueAttributes
+                - sqs:ChangeMessageVisibility
+              Resource: !GetAtt NewsletterBroadcastQueue.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource: !GetAtt NewsletterSubscribersTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+              Resource: !GetAtt NewsletterBroadcastsTable.Arn
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+              Resource:
+                - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+                - !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:configuration-set/${AWS::StackName}-newsletter"
+        - !If
+          - HasNewsletterTokenSecretParam
+          - Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${NewsletterTokenSecretParam}"
+          - !Ref AWS::NoValue
+      Events:
+        NewsletterBroadcastQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt NewsletterBroadcastQueue.Arn
+            BatchSize: 5
+            ScalingConfig:
+              MaximumConcurrency: 2
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+    Metadata:
+      BuildMethod: makefile
+
+  NewsletterFeedbackFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: controllers/newsletter/handleSesFeedback.lambdaHandler
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          NEWSLETTER_SUBSCRIBERS_TABLE: !Ref NewsletterSubscribersTable
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt NewsletterSubscribersTable.Arn
+      Events:
+        NewsletterFeedbackEvent:
+          Type: SNS
+          Properties:
+            Topic: !Ref NewsletterFeedbackTopic
     Metadata:
       BuildMethod: makefile
 
@@ -2985,7 +3365,57 @@ Resources:
       AlarmActions: [!Ref MonitoringAlertsTopic]
       OKActions: [!Ref MonitoringAlertsTopic]
 
+  NewsletterBroadcastDlqAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasMonitoringAlerts
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-newsletter-broadcast-dlq"
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt NewsletterBroadcastDLQ.QueueName
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MonitoringAlertsTopic]
+      OKActions: [!Ref MonitoringAlertsTopic]
+
+  NewsletterComplaintAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasMonitoringAlerts
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-newsletter-complaints"
+      Namespace: Uprevit
+      MetricName: NewsletterComplaint
+      Dimensions:
+        - Name: Stack
+          Value: !Ref AWS::StackName
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MonitoringAlertsTopic]
+      OKActions: [!Ref MonitoringAlertsTopic]
+
 Outputs:
   ApiBaseUrl:
     Description: API Gateway base URL for the deployed backend stage
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+  NewsletterSubscribersTableName:
+    Description: DynamoDB table storing blog newsletter subscribers
+    Value: !Ref NewsletterSubscribersTable
+  NewsletterBroadcastsTableName:
+    Description: DynamoDB table storing blog newsletter broadcast locks and counters
+    Value: !Ref NewsletterBroadcastsTable
+  NewsletterBroadcastQueueUrl:
+    Description: SQS queue URL for blog newsletter broadcast fan-out
+    Value: !Ref NewsletterBroadcastQueue
+  NewsletterConfigurationSetName:
+    Description: SES configuration set name for blog newsletter bounce and complaint tracking
+    Value: !Ref NewsletterConfigurationSet

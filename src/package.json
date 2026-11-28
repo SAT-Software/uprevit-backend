@@ -20,15 +20,19 @@
 		"check:source-file-keys": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/checkSourceFileKeys.ts",
 		"migrate:bookmarks-latest-version": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/migrateBookmarksToLatestVersion.ts",
 		"normalize:component-types": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/normalizeComponentTypes.ts",
-		"cleanup:duplicate-user-emails": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/cleanupDuplicateUserEmails.ts"
+		"cleanup:duplicate-user-emails": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/cleanupDuplicateUserEmails.ts",
+		"newsletter:send-blog": "ts-node --compiler-options '{\"module\":\"commonjs\"}' scripts/sendBlogBroadcast.ts"
 	},
 	"dependencies": {
 		"@aws-sdk/client-cognito-identity-provider": "^3.679.0",
+		"@aws-sdk/client-dynamodb": "^3.1179.0",
 		"@aws-sdk/client-s3": "^3.990.0",
 		"@aws-sdk/client-ses": "^3.1144.0",
+		"@aws-sdk/client-sesv2": "^3.1179.0",
 		"@aws-sdk/client-sqs": "^3.1000.0",
 		"@aws-sdk/client-ssm": "^3.1071.0",
 		"@aws-sdk/cloudfront-signer": "^3.1056.0",
+		"@aws-sdk/lib-dynamodb": "^3.1179.0",
 		"@aws-sdk/s3-presigned-post": "^3.990.0",
 		"@aws-sdk/s3-request-presigner": "^3.990.0",
 		"@pdf-lib/fontkit": "^1.1.1",

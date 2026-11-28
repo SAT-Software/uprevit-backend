@@ -90,6 +90,13 @@ jobs:
       CONTACT_TO_EMAIL: ${{ vars.CONTACT_TO_EMAIL }}
       CONTACT_ALLOWED_ORIGINS: ${{ vars.CONTACT_ALLOWED_ORIGINS }}
       TURNSTILE_SECRET_PARAM: ${{ vars.TURNSTILE_SECRET_PARAM }}
+      NEWSLETTER_FROM_ADDRESS: ${{ vars.NEWSLETTER_FROM_ADDRESS }}
+      NEWSLETTER_REPLY_TO_ADDRESS: ${{ vars.NEWSLETTER_REPLY_TO_ADDRESS }}
+      NEWSLETTER_SITE_BASE_URL: ${{ vars.NEWSLETTER_SITE_BASE_URL }}
+      NEWSLETTER_ALLOWED_ORIGINS: ${{ vars.NEWSLETTER_ALLOWED_ORIGINS }}
+      NEWSLETTER_TURNSTILE_SECRET_PARAM: ${{ vars.NEWSLETTER_TURNSTILE_SECRET_PARAM }}
+      NEWSLETTER_TOKEN_SECRET_PARAM: ${{ vars.NEWSLETTER_TOKEN_SECRET_PARAM }}
+      NEWSLETTER_PHYSICAL_ADDRESS: ${{ vars.NEWSLETTER_PHYSICAL_ADDRESS }}
       MONITORING_ALERT_EMAIL: ${{ vars.MONITORING_ALERT_EMAIL }}
     
     permissions:
@@ -193,6 +200,13 @@ jobs:
               "ContactToEmail": os.environ.get("CONTACT_TO_EMAIL", ""),
               "ContactAllowedOrigins": os.environ.get("CONTACT_ALLOWED_ORIGINS", ""),
               "TurnstileSecretParam": os.environ.get("TURNSTILE_SECRET_PARAM", ""),
+              "NewsletterFromAddress": os.environ.get("NEWSLETTER_FROM_ADDRESS", ""),
+              "NewsletterReplyToAddress": os.environ.get("NEWSLETTER_REPLY_TO_ADDRESS", ""),
+              "NewsletterSiteBaseUrl": os.environ.get("NEWSLETTER_SITE_BASE_URL", ""),
+              "NewsletterAllowedOrigins": os.environ.get("NEWSLETTER_ALLOWED_ORIGINS", ""),
+              "NewsletterTurnstileSecretParam": os.environ.get("NEWSLETTER_TURNSTILE_SECRET_PARAM", ""),
+              "NewsletterTokenSecretParam": os.environ.get("NEWSLETTER_TOKEN_SECRET_PARAM", ""),
+              "NewsletterPhysicalAddress": os.environ.get("NEWSLETTER_PHYSICAL_ADDRESS", ""),
           }
           always_set = {
               "MonitoringAlertEmail": os.environ.get("MONITORING_ALERT_EMAIL", ""),
