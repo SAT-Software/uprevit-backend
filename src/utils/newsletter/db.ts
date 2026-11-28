@@ -32,6 +32,8 @@ export interface NewsletterBroadcast {
 	recipientCount: number;
 	sentCount: number;
 	failedCount: number;
+	leaseOwner?: string;
+	leaseExpiresAt?: string;
 }
 
 export interface NewsletterBroadcastDelivery {
@@ -228,13 +230,20 @@ export const bumpRateLimit = async (pk: string, delta: 1 | -1, expiresAtSec: num
 	return Number(result.Attributes?.count ?? 0);
 };
 
+const BROADCAST_LEASE_MS = 5 * 60 * 1000;
+
 export const beginBroadcast = async (params: {
 	slug: string;
 	title: string;
 	subject: string;
 	recipientCount: number;
-	nowIso: string;
-}): Promise<'started' | 'resumed' | 'already_queued'> => {
+	leaseOwner: string;
+	nowMs?: number;
+}): Promise<'started' | 'resumed' | 'in_progress' | 'already_queued'> => {
+	const nowMs = params.nowMs ?? Date.now();
+	const nowIso = new Date(nowMs).toISOString();
+	const leaseExpiresAt = new Date(nowMs + BROADCAST_LEASE_MS).toISOString();
+
 	try {
 		await docClient.send(
 			new PutCommand({
@@ -244,15 +253,38 @@ export const beginBroadcast = async (params: {
 					title: params.title,
 					subject: params.subject,
 					status: 'enqueueing',
-					queuedAt: params.nowIso,
+					queuedAt: nowIso,
 					recipientCount: params.recipientCount,
 					sentCount: 0,
 					failedCount: 0,
+					leaseOwner: params.leaseOwner,
+					leaseExpiresAt,
 				} satisfies NewsletterBroadcast,
 				ConditionExpression: 'attribute_not_exists(slug)',
 			}),
 		);
 		return 'started';
+	} catch (error) {
+		if (!(error instanceof ConditionalCheckFailedException)) throw error;
+	}
+
+	try {
+		await docClient.send(
+			new UpdateCommand({
+				TableName: getBroadcastsTableName(),
+				Key: { slug: params.slug },
+				ConditionExpression: '#status = :enqueueing AND (attribute_not_exists(leaseExpiresAt) OR leaseExpiresAt <= :now)',
+				UpdateExpression: 'SET leaseOwner = :owner, leaseExpiresAt = :exp, updatedAt = :now',
+				ExpressionAttributeNames: { '#status': 'status' },
+				ExpressionAttributeValues: {
+					':enqueueing': 'enqueueing',
+					':owner': params.leaseOwner,
+					':exp': leaseExpiresAt,
+					':now': nowIso,
+				},
+			}),
+		);
+		return 'resumed';
 	} catch (error) {
 		if (!(error instanceof ConditionalCheckFailedException)) throw error;
 	}
@@ -264,20 +296,42 @@ export const beginBroadcast = async (params: {
 		}),
 	);
 	const broadcast = existing.Item as NewsletterBroadcast | undefined;
-	if (broadcast?.status === 'enqueueing') {
-		return 'resumed';
-	}
-	return 'already_queued';
+	return broadcast?.status === 'enqueueing' ? 'in_progress' : 'already_queued';
 };
 
-export const markBroadcastQueued = async (slug: string, nowIso: string): Promise<void> => {
+export const releaseBroadcastLease = async (slug: string, leaseOwner: string, nowIso: string): Promise<void> => {
+	try {
+		await docClient.send(
+			new UpdateCommand({
+				TableName: getBroadcastsTableName(),
+				Key: { slug },
+				ConditionExpression: '#status = :enqueueing AND leaseOwner = :owner',
+				UpdateExpression: 'SET updatedAt = :now REMOVE leaseOwner, leaseExpiresAt',
+				ExpressionAttributeNames: { '#status': 'status' },
+				ExpressionAttributeValues: {
+					':enqueueing': 'enqueueing',
+					':owner': leaseOwner,
+					':now': nowIso,
+				},
+			}),
+		);
+	} catch (error) {
+		if (error instanceof ConditionalCheckFailedException) return;
+		throw error;
+	}
+};
+
+export const markBroadcastQueued = async (slug: string, leaseOwner: string, nowIso: string): Promise<void> => {
 	await docClient.send(
 		new UpdateCommand({
 			TableName: getBroadcastsTableName(),
 			Key: { slug },
-			UpdateExpression: 'SET #status = :queued, updatedAt = :now',
+			ConditionExpression: '#status = :enqueueing AND leaseOwner = :owner',
+			UpdateExpression: 'SET #status = :queued, updatedAt = :now REMOVE leaseOwner, leaseExpiresAt',
 			ExpressionAttributeNames: { '#status': 'status' },
 			ExpressionAttributeValues: {
+				':enqueueing': 'enqueueing',
+				':owner': leaseOwner,
 				':queued': 'queued',
 				':now': nowIso,
 			},
