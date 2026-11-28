@@ -213,7 +213,5 @@ export const getNewsletterFromAddress = (): string =>
 export const getNewsletterReplyToAddress = (): string =>
 	process.env.NEWSLETTER_REPLY_TO_ADDRESS?.trim() || 'contact@uprevit.com';
 
-export const getNewsletterPhysicalAddress = (): string | undefined => {
-	const value = process.env.NEWSLETTER_PHYSICAL_ADDRESS?.trim();
-	return value || undefined;
-};
+export const getNewsletterPhysicalAddress = (): string =>
+	process.env.NEWSLETTER_PHYSICAL_ADDRESS?.trim() || 'Magarpatta Road, Hadapsar, Pune - 411028';

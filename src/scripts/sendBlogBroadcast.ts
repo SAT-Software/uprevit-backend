@@ -183,7 +183,7 @@ const loadStackConfig = (stack: string, region: string): StackConfig => {
 		replyToAddress: params.get('NewsletterReplyToAddress') || 'contact@uprevit.com',
 		siteBaseUrl: (params.get('NewsletterSiteBaseUrl') || defaultSite).replace(/\/+$/, ''),
 		tokenSecretParam: params.get('NewsletterTokenSecretParam') || '',
-		physicalAddress: params.get('NewsletterPhysicalAddress') || undefined,
+		physicalAddress: params.get('NewsletterPhysicalAddress') || 'Magarpatta Road, Hadapsar, Pune - 411028',
 	};
 };
 

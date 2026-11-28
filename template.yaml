@@ -174,8 +174,8 @@ Parameters:
     Default: ""
   NewsletterPhysicalAddress:
     Type: String
-    Description: "Optional physical mailing address displayed in blog newsletter email footers"
-    Default: ""
+    Description: "Physical mailing address displayed in blog newsletter email footers"
+    Default: "Magarpatta Road, Hadapsar, Pune - 411028"
 
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
