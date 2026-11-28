@@ -193,7 +193,7 @@ export const renderConfirmSubscriptionEmail = (params: {
 	const bodyHtml = `
 		<div style="margin:0 0 16px;">${renderNeutralBadge('One quick step')}</div>
 		<h1 class="email-h1 text-ink" style="margin:0 0 12px;font-size:22px;line-height:30px;font-weight:600;letter-spacing:-0.025em;color:#171717;">Confirm your blog subscription</h1>
-		<p class="email-lead text-body" style="margin:0 0 24px;font-size:15px;line-height:24px;color:#52525b;">Click below to verify your email address. We&rsquo;ll send one short note whenever a new Uprevit blog post goes live&mdash;practical guides on medical device labeling, FDA QMSR, and EU MDR. No sales emails, and you can leave any time.</p>
+		<p class="email-lead text-body" style="margin:0 0 24px;font-size:15px;line-height:24px;color:#52525b;">Click below to verify your email address. We&rsquo;ll send one short note whenever a new post goes live&mdash;practical guides on medical device labeling, FDA QMSR, EU MDR, and more, along with occasional Uprevit product updates. No sales emails, and you can leave any time.</p>
 		${renderPrimaryButton(params.confirmUrl, 'Confirm subscription')}
 		<p class="hairline text-muted" style="margin:24px 0 0;padding-top:20px;border-top:1px solid #ececee;font-size:13px;line-height:20px;color:#71717a;">This confirmation link expires in 72 hours. If you didn&rsquo;t ask to subscribe, you can safely ignore this email.</p>
 		<p class="text-faint" style="margin:10px 0 0;font-size:12px;line-height:18px;color:#a1a1aa;word-break:break-all;">Or copy this link: <a href="${escapeHtml(params.confirmUrl)}" style="color:#71717a;text-decoration:underline;">${escapeHtml(params.confirmUrl)}</a></p>
@@ -214,7 +214,7 @@ export const renderConfirmSubscriptionEmail = (params: {
 	const text = [
 		'Confirm your subscription to the Uprevit Blog',
 		'',
-		'Click the link below to verify your email address and receive one short email whenever a new Uprevit blog post goes live. No sales emails, and you can leave any time.',
+		'Click the link below to verify your email address. We will send one short email whenever a new post goes live — practical guides on medical device labeling, FDA QMSR, EU MDR, and more, along with occasional Uprevit product updates. No sales emails, and you can leave any time.',
 		'',
 		params.confirmUrl,
 		'',
@@ -254,13 +254,10 @@ export const renderBlogPostEmail = (params: {
 	}
 
 	const bodyHtml = `
-		<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;">
+		<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;">
 			<tr>
 				<td valign="middle">${renderNeutralBadge(post.category)}</td>
-				<td valign="middle" style="padding:0 10px;">
-					<span class="v-divider" style="display:block;width:1px;height:14px;background-color:#e5e5e5;"></span>
-				</td>
-				<td class="text-muted" valign="middle" style="font-size:13px;line-height:18px;color:#71717a;">${escapeHtml(displayDate)} &middot; ${escapeHtml(post.readTime)}</td>
+				<td class="text-muted" align="right" valign="middle" style="font-size:13px;line-height:18px;color:#71717a;white-space:nowrap;">${escapeHtml(displayDate)}</td>
 			</tr>
 		</table>
 		<h1 class="email-h1 text-ink" style="margin:0 0 14px;font-size:24px;line-height:32px;font-weight:600;letter-spacing:-0.03em;color:#171717;">
@@ -272,6 +269,9 @@ export const renderBlogPostEmail = (params: {
 		<table role="presentation" class="hairline" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;padding-top:18px;border-top:1px solid #ececee;">
 			<tr>
 				<td class="text-muted" style="font-size:13px;line-height:18px;color:#71717a;">By <span class="text-ink" style="color:#171717;font-weight:500;">${escapeHtml(post.author)}</span></td>
+			</tr>
+			<tr>
+				<td class="text-faint" style="padding-top:2px;font-size:12px;line-height:18px;color:#a1a1aa;">${escapeHtml(post.readTime)}</td>
 			</tr>
 		</table>
 	`;
@@ -288,7 +288,6 @@ export const renderBlogPostEmail = (params: {
 
 	const html = renderShell({
 		preheader: post.description,
-		headerRight: displayDate,
 		siteBaseUrl: params.siteBaseUrl,
 		bodyHtml,
 		footerHtml,
