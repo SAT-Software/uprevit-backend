@@ -12,6 +12,8 @@ jest.mock('../../utils/newsletter/db', () => ({
 	confirmSubscriber: jest.fn(),
 	unsubscribeSubscriber: jest.fn(),
 	suppressSubscriber: jest.fn(),
+	getBroadcastDelivery: jest.fn(),
+	markBroadcastDeliverySent: jest.fn(),
 	incrementBroadcastCounter: jest.fn(),
 }));
 
@@ -169,10 +171,12 @@ describe('newsletter controllers', () => {
 			return next;
 		});
 		dbModule.getSubscriber.mockResolvedValue(null);
-		dbModule.upsertPendingSubscriber.mockResolvedValue(undefined);
-		dbModule.confirmSubscriber.mockResolvedValue(undefined);
+		dbModule.upsertPendingSubscriber.mockResolvedValue(true);
+		dbModule.confirmSubscriber.mockResolvedValue(true);
 		dbModule.unsubscribeSubscriber.mockResolvedValue(undefined);
 		dbModule.suppressSubscriber.mockResolvedValue(undefined);
+		dbModule.getBroadcastDelivery.mockResolvedValue(null);
+		dbModule.markBroadcastDeliverySent.mockResolvedValue(true);
 		dbModule.incrementBroadcastCounter.mockResolvedValue(undefined);
 		emailsModule.sendNewsletterEmail.mockResolvedValue(undefined);
 
@@ -274,7 +278,22 @@ describe('newsletter controllers', () => {
 		const res = await confirmHandler(makeApiEvent({ body: { token } }));
 		expect(res.statusCode).toBe(200);
 		expect(JSON.parse(res.body).status).toBe('confirmed');
-		expect(dbModule.confirmSubscriber).toHaveBeenCalledWith('reader@company.com', expect.any(String));
+		expect(dbModule.confirmSubscriber).toHaveBeenCalledWith('reader@company.com', tokenHash, expect.any(String));
+
+		dbModule.getSubscriber
+			.mockResolvedValueOnce({
+				email: 'reader@company.com',
+				status: 'pending',
+				confirmTokenHash: tokenHash,
+				confirmTokenExpiresAt: expiresAt,
+			})
+			.mockResolvedValueOnce({
+				email: 'reader@company.com',
+				status: 'unsubscribed',
+			});
+		dbModule.confirmSubscriber.mockResolvedValueOnce(false);
+		const racedUnsub = await confirmHandler(makeApiEvent({ body: { token } }));
+		expect(racedUnsub.statusCode).toBe(400);
 
 		dbModule.getSubscriber.mockResolvedValueOnce({
 			email: 'reader@company.com',
@@ -304,7 +323,12 @@ describe('newsletter controllers', () => {
 		expect(dbModule.unsubscribeSubscriber).toHaveBeenCalledTimes(2);
 	});
 
-	it('processes SQS broadcast records, skips inactive subscribers, and reports partial failures', async () => {
+	it('processes SQS broadcast records, skips already-sent and inactive subscribers, and reports partial failures', async () => {
+		dbModule.getBroadcastDelivery
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce({ slug: 'delivery#what-is-uprevit#already@company.com', status: 'sent' })
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(null);
 		dbModule.getSubscriber
 			.mockResolvedValueOnce({ email: 'active@company.com', status: 'subscribed' })
 			.mockResolvedValueOnce({ email: 'left@company.com', status: 'unsubscribed' })
@@ -327,6 +351,7 @@ describe('newsletter controllers', () => {
 		const sqsEvent = {
 			Records: [
 				{ messageId: 'm1', body: JSON.stringify({ slug: post.slug, email: 'active@company.com', post }) },
+				{ messageId: 'm-dup', body: JSON.stringify({ slug: post.slug, email: 'already@company.com', post }) },
 				{ messageId: 'm2', body: JSON.stringify({ slug: post.slug, email: 'left@company.com', post }) },
 				{ messageId: 'm3', body: JSON.stringify({ slug: post.slug, email: 'retry@company.com', post }) },
 			],
@@ -334,6 +359,7 @@ describe('newsletter controllers', () => {
 
 		const result = await broadcastHandler(sqsEvent);
 		expect(emailsModule.sendNewsletterEmail).toHaveBeenCalledTimes(2);
+		expect(dbModule.markBroadcastDeliverySent).toHaveBeenCalledWith('what-is-uprevit', 'active@company.com', expect.any(String));
 		expect(emailsModule.sendNewsletterEmail).toHaveBeenNthCalledWith(
 			1,
 			expect.objectContaining({
@@ -344,7 +370,30 @@ describe('newsletter controllers', () => {
 		expect(result).toEqual({ batchItemFailures: [{ itemIdentifier: 'm3' }] });
 	});
 
-	it('suppresses permanent bounces and complaints from SES SNS feedback while ignoring transient bounces', async () => {
+	it('defers remaining broadcast records when Lambda remaining time is low', async () => {
+		const post = {
+			slug: 'what-is-uprevit',
+			title: 'What is Uprevit?',
+			description: 'Overview post',
+			date: '2026-11-12',
+			author: 'Uprevit Team',
+			category: 'Product',
+			readTime: '4 min read',
+			url: 'https://www.uprevit.com/resources/blogs/what-is-uprevit',
+		};
+		const sqsEvent = {
+			Records: [
+				{ messageId: 'm1', body: JSON.stringify({ slug: post.slug, email: 'a@company.com', post }) },
+				{ messageId: 'm2', body: JSON.stringify({ slug: post.slug, email: 'b@company.com', post }) },
+			],
+		} as unknown as SQSEvent;
+
+		const result = await broadcastHandler(sqsEvent, { getRemainingTimeInMillis: () => 10_000 });
+		expect(emailsModule.sendNewsletterEmail).not.toHaveBeenCalled();
+		expect(result).toEqual({ batchItemFailures: [{ itemIdentifier: 'm1' }, { itemIdentifier: 'm2' }] });
+	});
+
+	it('suppresses permanent bounces and complaints from SES SNS feedback and throws on persistence failure', async () => {
 		const snsEvent = {
 			Records: [
 				{
@@ -397,5 +446,8 @@ describe('newsletter controllers', () => {
 			2,
 			expect.objectContaining({ email: 'complainer@example.com', status: 'complained' }),
 		);
+
+		dbModule.suppressSubscriber.mockRejectedValueOnce(new Error('DynamoDB throttled'));
+		await expect(feedbackHandler(snsEvent)).rejects.toThrow('Failed to persist 1 SES feedback suppression update(s).');
 	});
 });

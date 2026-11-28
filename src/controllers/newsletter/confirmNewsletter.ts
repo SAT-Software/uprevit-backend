@@ -51,6 +51,7 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			return ResponseWrapper.badRequest('This email address cannot be subscribed automatically. Please contact support.');
 		}
 
+		const tokenHash = sha256Hex(token);
 		const expectedHash = subscriber.confirmTokenHash;
 		const expiresAtMs = subscriber.confirmTokenExpiresAt ? Date.parse(subscriber.confirmTokenExpiresAt) : NaN;
 		if (
@@ -58,12 +59,22 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 			!expectedHash ||
 			!Number.isFinite(expiresAtMs) ||
 			Date.now() > expiresAtMs ||
-			!safeEqualString(sha256Hex(token), expectedHash)
+			!safeEqualString(tokenHash, expectedHash)
 		) {
 			return ResponseWrapper.badRequest('This confirmation link is invalid or has expired. Please subscribe again.');
 		}
 
-		await confirmSubscriber(verified.email, new Date().toISOString());
+		const confirmed = await confirmSubscriber(verified.email, tokenHash, new Date().toISOString());
+		if (!confirmed) {
+			const latest = await getSubscriber(verified.email);
+			if (latest?.status === 'subscribed') {
+				return ResponseWrapper.success({
+					status: 'already_subscribed',
+					message: 'Your subscription is already confirmed.',
+				});
+			}
+			return ResponseWrapper.badRequest('This confirmation link is invalid or has expired. Please subscribe again.');
+		}
 
 		return ResponseWrapper.success({
 			status: 'confirmed',

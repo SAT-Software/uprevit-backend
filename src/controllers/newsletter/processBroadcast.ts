@@ -1,6 +1,11 @@
-import type { SQSBatchItemFailure, SQSBatchResponse, SQSEvent } from 'aws-lambda';
+import type { Context, SQSBatchItemFailure, SQSBatchResponse, SQSEvent } from 'aws-lambda';
 import { logError, logInfo, logWarn } from '../../utils/logger';
-import { getSubscriber, incrementBroadcastCounter } from '../../utils/newsletter/db';
+import {
+	getBroadcastDelivery,
+	getSubscriber,
+	incrementBroadcastCounter,
+	markBroadcastDeliverySent,
+} from '../../utils/newsletter/db';
 import { type BlogPostEmailPayload, renderBlogPostEmail, sendNewsletterEmail } from '../../utils/newsletter/emails';
 import {
 	getNewsletterFromAddress,
@@ -11,6 +16,8 @@ import {
 import { createUnsubscribeToken, getNewsletterTokenSecret } from '../../utils/newsletter/tokens';
 import { withTelemetry } from '../../utils/telemetry';
 
+const MIN_REMAINING_TIME_MS = 15_000;
+
 export interface BroadcastQueueMessage {
 	slug: string;
 	email: string;
@@ -19,7 +26,7 @@ export interface BroadcastQueueMessage {
 	post: BlogPostEmailPayload;
 }
 
-export const lambdaHandler = withTelemetry(async (event: SQSEvent): Promise<SQSBatchResponse> => {
+export const lambdaHandler = withTelemetry(async (event: SQSEvent, context?: Context): Promise<SQSBatchResponse> => {
 	const batchItemFailures: SQSBatchItemFailure[] = [];
 	const secret = await getNewsletterTokenSecret();
 	if (!secret) {
@@ -36,7 +43,19 @@ export const lambdaHandler = withTelemetry(async (event: SQSEvent): Promise<SQSB
 	const defaultSiteBaseUrl = getNewsletterSiteBaseUrl();
 	const defaultApiBaseUrl = process.env.NEWSLETTER_API_BASE_URL?.trim().replace(/\/+$/, '') ?? '';
 
-	for (const record of event.Records) {
+	for (let i = 0; i < event.Records.length; i += 1) {
+		const record = event.Records[i];
+
+		if (context && typeof context.getRemainingTimeInMillis === 'function' && context.getRemainingTimeInMillis() < MIN_REMAINING_TIME_MS) {
+			logWarn('Deferring remaining broadcast SQS records before Lambda timeout', {
+				deferredCount: event.Records.length - i,
+			});
+			for (let j = i; j < event.Records.length; j += 1) {
+				batchItemFailures.push({ itemIdentifier: event.Records[j].messageId });
+			}
+			break;
+		}
+
 		let message: BroadcastQueueMessage;
 		try {
 			message = JSON.parse(record.body) as BroadcastQueueMessage;
@@ -52,6 +71,12 @@ export const lambdaHandler = withTelemetry(async (event: SQSEvent): Promise<SQSB
 		}
 
 		try {
+			const existingDelivery = await getBroadcastDelivery(message.slug, email);
+			if (existingDelivery?.status === 'sent') {
+				logInfo('Skipping already-delivered broadcast recipient on SQS retry', { slug: message.slug });
+				continue;
+			}
+
 			const subscriber = await getSubscriber(email);
 			if (!subscriber || subscriber.status !== 'subscribed') {
 				logInfo('Skipping broadcast recipient because subscriber is no longer active', {
@@ -84,7 +109,10 @@ export const lambdaHandler = withTelemetry(async (event: SQSEvent): Promise<SQSB
 				oneClickUnsubscribeUrl,
 			});
 
-			await incrementBroadcastCounter(message.slug, 'sentCount').catch(() => undefined);
+			const recorded = await markBroadcastDeliverySent(message.slug, email, new Date().toISOString());
+			if (recorded) {
+				await incrementBroadcastCounter(message.slug, 'sentCount').catch(() => undefined);
+			}
 		} catch (error) {
 			logError('Failed to send newsletter broadcast email', error, { slug: message.slug, messageId: record.messageId });
 			await incrementBroadcastCounter(message.slug, 'failedCount').catch(() => undefined);

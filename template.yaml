@@ -359,7 +359,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "${AWS::StackName}-newsletter-broadcast-queue"
-      VisibilityTimeout: 180
+      VisibilityTimeout: 240
       ReceiveMessageWaitTimeSeconds: 20
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt NewsletterBroadcastDLQ.Arn
@@ -549,7 +549,7 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: controllers/newsletter/processBroadcast.lambdaHandler
-      Timeout: 60
+      Timeout: 120
       MemorySize: 256
       Environment:
         Variables:
@@ -577,6 +577,8 @@ Resources:
               Resource: !GetAtt NewsletterSubscribersTable.Arn
             - Effect: Allow
               Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
                 - dynamodb:UpdateItem
               Resource: !GetAtt NewsletterBroadcastsTable.Arn
             - Effect: Allow
@@ -598,7 +600,7 @@ Resources:
           Type: SQS
           Properties:
             Queue: !GetAtt NewsletterBroadcastQueue.Arn
-            BatchSize: 10
+            BatchSize: 5
             ScalingConfig:
               MaximumConcurrency: 2
             FunctionResponseTypes:

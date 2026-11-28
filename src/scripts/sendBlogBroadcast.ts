@@ -3,7 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { SQSClient, SendMessageBatchCommand } from '@aws-sdk/client-sqs';
 import type { BroadcastQueueMessage } from '../controllers/newsletter/processBroadcast';
-import { listActiveSubscribers, lockBroadcast } from '../utils/newsletter/db';
+import {
+	beginBroadcast,
+	getBroadcastDelivery,
+	listActiveSubscribers,
+	markBroadcastDeliveryQueued,
+	markBroadcastQueued,
+} from '../utils/newsletter/db';
 import { type BlogPostEmailPayload, renderBlogPostEmail, renderConfirmSubscriptionEmail, sendNewsletterEmail } from '../utils/newsletter/emails';
 import { createConfirmToken, createUnsubscribeToken, getNewsletterTokenSecret } from '../utils/newsletter/tokens';
 
@@ -292,26 +298,38 @@ const main = async (): Promise<void> => {
 		return;
 	}
 
-	const locked = await lockBroadcast({
+	const broadcastState = await beginBroadcast({
 		slug: post.slug,
 		title: post.title,
 		subject: post.title,
 		recipientCount: subscribers.length,
 		nowIso: new Date().toISOString(),
 	});
-	if (!locked) {
-		throw new Error(`Broadcast for slug "${post.slug}" was already queued/sent.`);
+	if (broadcastState === 'already_queued') {
+		throw new Error(`Broadcast for slug "${post.slug}" was already fully queued.`);
+	}
+
+	const pendingSubscribers = [];
+	for (const sub of subscribers) {
+		const existing = await getBroadcastDelivery(post.slug, sub.email);
+		if (!existing) {
+			pendingSubscribers.push(sub);
+		}
 	}
 
 	const sqs = new SQSClient({ region: args.region });
 	let queued = 0;
+	const failedEntries: Array<{ email: string; code?: string; message?: string }> = [];
 
-	for (let i = 0; i < subscribers.length; i += 10) {
-		const chunk = subscribers.slice(i, i + 10);
+	for (let i = 0; i < pendingSubscribers.length; i += 10) {
+		const chunk = pendingSubscribers.slice(i, i + 10);
+		const entryById = new Map<string, string>();
 		const response = await sqs.send(
 			new SendMessageBatchCommand({
 				QueueUrl: config.queueUrl,
 				Entries: chunk.map((sub, idx) => {
+					const id = `${i + idx}`;
+					entryById.set(id, sub.email);
 					const payload: BroadcastQueueMessage = {
 						slug: post.slug,
 						email: sub.email,
@@ -320,25 +338,42 @@ const main = async (): Promise<void> => {
 						post,
 					};
 					return {
-						Id: `${i + idx}`,
+						Id: id,
 						MessageBody: JSON.stringify(payload),
 					};
 				}),
 			}),
 		);
-		queued += (response.Successful ?? []).length;
-		if (response.Failed && response.Failed.length > 0) {
-			console.error('Some SQS messages failed to enqueue:', response.Failed);
+
+		const nowIso = new Date().toISOString();
+		for (const item of response.Successful ?? []) {
+			const email = item.Id ? entryById.get(item.Id) : undefined;
+			if (!email) continue;
+			await markBroadcastDeliveryQueued(post.slug, email, nowIso);
+			queued += 1;
+		}
+		for (const failure of response.Failed ?? []) {
+			const email = failure.Id ? entryById.get(failure.Id) ?? failure.Id : 'unknown';
+			failedEntries.push({ email, code: failure.Code, message: failure.Message });
 		}
 	}
+
+	if (failedEntries.length > 0) {
+		throw new Error(
+			`Broadcast enqueue incomplete for "${post.slug}": queued ${queued}/${pendingSubscribers.length}, failed ${failedEntries.length}. Re-run with --send to resume remaining recipients.`,
+		);
+	}
+
+	await markBroadcastQueued(post.slug, new Date().toISOString());
 
 	console.log(
 		JSON.stringify(
 			{
-				mode: 'send',
+				mode: broadcastState === 'resumed' ? 'resume-send' : 'send',
 				stack: args.stack,
 				slug: post.slug,
 				totalActiveSubscribers: subscribers.length,
+				skippedAlreadyQueued: subscribers.length - pendingSubscribers.length,
 				queuedMessages: queued,
 			},
 			null,

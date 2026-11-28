@@ -143,13 +143,18 @@ export const lambdaHandler = withTelemetry(async (event: APIGatewayProxyEvent): 
 		const confirmUrl = `${siteBaseUrl}/newsletter/confirm?token=${encodeURIComponent(token)}`;
 
 		try {
-			await upsertPendingSubscriber({
+			const updated = await upsertPendingSubscriber({
 				email: emailResult.normalizedEmail,
 				confirmTokenHash: tokenHash,
 				confirmTokenExpiresAt: expiresAt,
 				nowIso,
 				source: typeof parsed.data.source === 'string' ? parsed.data.source.trim().slice(0, 60) || 'blog' : 'blog',
 			});
+
+			if (!updated) {
+				logInfo('Newsletter subscribe skipped due to concurrent subscriber status transition');
+				return ResponseWrapper.success({ message: GENERIC_SUCCESS_MESSAGE });
+			}
 
 			const rendered = renderConfirmSubscriptionEmail({
 				confirmUrl,

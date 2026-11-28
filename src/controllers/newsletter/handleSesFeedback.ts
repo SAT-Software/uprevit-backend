@@ -49,6 +49,7 @@ const emitMetric = (metricName: string, count: number): void => {
 
 export const lambdaHandler = withTelemetry(async (event: SNSEvent): Promise<void> => {
 	const nowIso = new Date().toISOString();
+	const failedUpdates: string[] = [];
 
 	for (const record of event.Records) {
 		let payload: SesFeedbackNotification;
@@ -79,6 +80,7 @@ export const lambdaHandler = withTelemetry(async (event: SNSEvent): Promise<void
 					suppressedCount += 1;
 				} catch (error) {
 					logError('Failed to suppress bounced newsletter subscriber', error, { bounceType });
+					failedUpdates.push(`bounce:${record.Sns.MessageId}`);
 				}
 			}
 			emitMetric('NewsletterBounce', suppressedCount);
@@ -94,9 +96,14 @@ export const lambdaHandler = withTelemetry(async (event: SNSEvent): Promise<void
 					suppressedCount += 1;
 				} catch (error) {
 					logError('Failed to suppress complained newsletter subscriber', error);
+					failedUpdates.push(`complaint:${record.Sns.MessageId}`);
 				}
 			}
 			emitMetric('NewsletterComplaint', suppressedCount);
 		}
+	}
+
+	if (failedUpdates.length > 0) {
+		throw new Error(`Failed to persist ${failedUpdates.length} SES feedback suppression update(s).`);
 	}
 });
