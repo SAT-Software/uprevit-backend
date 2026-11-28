@@ -1,0 +1,243 @@
+import { ConditionalCheckFailedException, DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import {
+	DynamoDBDocumentClient,
+	GetCommand,
+	PutCommand,
+	QueryCommand,
+	UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
+
+export type SubscriberStatus = 'pending' | 'subscribed' | 'unsubscribed' | 'bounced' | 'complained';
+
+export interface NewsletterSubscriber {
+	email: string;
+	status: SubscriberStatus;
+	createdAt: string;
+	updatedAt: string;
+	confirmedAt?: string;
+	unsubscribedAt?: string;
+	suppressedAt?: string;
+	suppressionReason?: string;
+	confirmTokenHash?: string;
+	confirmTokenExpiresAt?: string;
+	source?: string;
+}
+
+export interface NewsletterBroadcast {
+	slug: string;
+	title: string;
+	subject: string;
+	status: 'queued' | 'sent';
+	queuedAt: string;
+	recipientCount: number;
+	sentCount: number;
+	failedCount: number;
+}
+
+const dynamoClient = new DynamoDBClient({
+	region: process.env.AWS_REGION || 'us-east-1',
+	maxAttempts: 3,
+});
+
+const docClient = DynamoDBDocumentClient.from(dynamoClient, {
+	marshallOptions: { removeUndefinedValues: true },
+});
+
+const requireTable = (envName: string): string => {
+	const table = process.env[envName]?.trim();
+	if (!table) {
+		throw new Error(`Missing required environment variable: ${envName}`);
+	}
+	return table;
+};
+
+export const getSubscribersTableName = () => requireTable('NEWSLETTER_SUBSCRIBERS_TABLE');
+export const getBroadcastsTableName = () => requireTable('NEWSLETTER_BROADCASTS_TABLE');
+export const getRateLimitsTableName = () => requireTable('NEWSLETTER_RATE_LIMITS_TABLE');
+
+export const getSubscriber = async (email: string): Promise<NewsletterSubscriber | null> => {
+	const result = await docClient.send(
+		new GetCommand({
+			TableName: getSubscribersTableName(),
+			Key: { email: email.trim().toLowerCase() },
+		}),
+	);
+	return (result.Item as NewsletterSubscriber | undefined) ?? null;
+};
+
+export const upsertPendingSubscriber = async (params: {
+	email: string;
+	confirmTokenHash: string;
+	confirmTokenExpiresAt: string;
+	nowIso: string;
+	source?: string;
+}): Promise<void> => {
+	await docClient.send(
+		new UpdateCommand({
+			TableName: getSubscribersTableName(),
+			Key: { email: params.email.trim().toLowerCase() },
+			UpdateExpression:
+				'SET #status = :status, createdAt = if_not_exists(createdAt, :now), updatedAt = :now, confirmTokenHash = :hash, confirmTokenExpiresAt = :exp, #source = :source REMOVE unsubscribedAt',
+			ExpressionAttributeNames: {
+				'#status': 'status',
+				'#source': 'source',
+			},
+			ExpressionAttributeValues: {
+				':status': 'pending',
+				':now': params.nowIso,
+				':hash': params.confirmTokenHash,
+				':exp': params.confirmTokenExpiresAt,
+				':source': params.source ?? 'blog',
+			},
+		}),
+	);
+};
+
+export const confirmSubscriber = async (email: string, nowIso: string): Promise<void> => {
+	await docClient.send(
+		new UpdateCommand({
+			TableName: getSubscribersTableName(),
+			Key: { email: email.trim().toLowerCase() },
+			UpdateExpression:
+				'SET #status = :status, confirmedAt = :now, updatedAt = :now REMOVE confirmTokenHash, confirmTokenExpiresAt, unsubscribedAt',
+			ExpressionAttributeNames: { '#status': 'status' },
+			ExpressionAttributeValues: {
+				':status': 'subscribed',
+				':now': nowIso,
+			},
+		}),
+	);
+};
+
+export const unsubscribeSubscriber = async (email: string, nowIso: string): Promise<void> => {
+	try {
+		await docClient.send(
+			new UpdateCommand({
+				TableName: getSubscribersTableName(),
+				Key: { email: email.trim().toLowerCase() },
+				ConditionExpression: 'attribute_not_exists(#status) OR (#status <> :bounced AND #status <> :complained)',
+				UpdateExpression:
+					'SET #status = :status, createdAt = if_not_exists(createdAt, :now), updatedAt = :now, unsubscribedAt = :now REMOVE confirmTokenHash, confirmTokenExpiresAt',
+				ExpressionAttributeNames: { '#status': 'status' },
+				ExpressionAttributeValues: {
+					':status': 'unsubscribed',
+					':bounced': 'bounced',
+					':complained': 'complained',
+					':now': nowIso,
+				},
+			}),
+		);
+	} catch (error) {
+		if (error instanceof ConditionalCheckFailedException) return;
+		throw error;
+	}
+};
+
+export const suppressSubscriber = async (params: {
+	email: string;
+	status: 'bounced' | 'complained';
+	reason: string;
+	nowIso: string;
+}): Promise<void> => {
+	await docClient.send(
+		new UpdateCommand({
+			TableName: getSubscribersTableName(),
+			Key: { email: params.email.trim().toLowerCase() },
+			UpdateExpression:
+				'SET #status = :status, createdAt = if_not_exists(createdAt, :now), updatedAt = :now, suppressedAt = :now, suppressionReason = :reason REMOVE confirmTokenHash, confirmTokenExpiresAt',
+			ExpressionAttributeNames: { '#status': 'status' },
+			ExpressionAttributeValues: {
+				':status': params.status,
+				':now': params.nowIso,
+				':reason': params.reason,
+			},
+		}),
+	);
+};
+
+export const listActiveSubscribers = async (): Promise<NewsletterSubscriber[]> => {
+	const subscribers: NewsletterSubscriber[] = [];
+	let exclusiveStartKey: Record<string, unknown> | undefined;
+
+	do {
+		const result = await docClient.send(
+			new QueryCommand({
+				TableName: getSubscribersTableName(),
+				IndexName: 'StatusIndex',
+				KeyConditionExpression: '#status = :subscribed',
+				ExpressionAttributeNames: { '#status': 'status' },
+				ExpressionAttributeValues: { ':subscribed': 'subscribed' },
+				ExclusiveStartKey: exclusiveStartKey,
+			}),
+		);
+		if (result.Items) {
+			subscribers.push(...(result.Items as NewsletterSubscriber[]));
+		}
+		exclusiveStartKey = result.LastEvaluatedKey as Record<string, unknown> | undefined;
+	} while (exclusiveStartKey);
+
+	return subscribers;
+};
+
+export const bumpRateLimit = async (pk: string, delta: 1 | -1, expiresAtSec: number): Promise<number> => {
+	const result = await docClient.send(
+		new UpdateCommand({
+			TableName: getRateLimitsTableName(),
+			Key: { pk },
+			UpdateExpression: 'ADD #count :delta SET expiresAt = if_not_exists(expiresAt, :exp)',
+			ExpressionAttributeNames: { '#count': 'count' },
+			ExpressionAttributeValues: {
+				':delta': delta,
+				':exp': expiresAtSec,
+			},
+			ReturnValues: 'ALL_NEW',
+		}),
+	);
+	return Number(result.Attributes?.count ?? 0);
+};
+
+export const lockBroadcast = async (params: {
+	slug: string;
+	title: string;
+	subject: string;
+	recipientCount: number;
+	nowIso: string;
+}): Promise<boolean> => {
+	try {
+		await docClient.send(
+			new PutCommand({
+				TableName: getBroadcastsTableName(),
+				Item: {
+					slug: params.slug,
+					title: params.title,
+					subject: params.subject,
+					status: 'queued',
+					queuedAt: params.nowIso,
+					recipientCount: params.recipientCount,
+					sentCount: 0,
+					failedCount: 0,
+				} satisfies NewsletterBroadcast,
+				ConditionExpression: 'attribute_not_exists(slug)',
+			}),
+		);
+		return true;
+	} catch (error) {
+		if (error instanceof ConditionalCheckFailedException) return false;
+		throw error;
+	}
+};
+
+export const incrementBroadcastCounter = async (slug: string, field: 'sentCount' | 'failedCount'): Promise<void> => {
+	await docClient.send(
+		new UpdateCommand({
+			TableName: getBroadcastsTableName(),
+			Key: { slug },
+			UpdateExpression: 'ADD #field :one SET updatedAt = :now',
+			ExpressionAttributeNames: { '#field': field },
+			ExpressionAttributeValues: {
+				':one': 1,
+				':now': new Date().toISOString(),
+			},
+		}),
+	);
+};

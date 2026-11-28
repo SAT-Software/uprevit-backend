@@ -7,6 +7,11 @@ build-%:
 
 build-HealthFunction: ENTRY := controllers/health/getHealth.ts
 build-ContactSubmitFunction: ENTRY := controllers/contact/submitContact.ts
+build-NewsletterSubscribeFunction: ENTRY := controllers/newsletter/subscribeNewsletter.ts
+build-NewsletterConfirmFunction: ENTRY := controllers/newsletter/confirmNewsletter.ts
+build-NewsletterUnsubscribeFunction: ENTRY := controllers/newsletter/unsubscribeNewsletter.ts
+build-NewsletterBroadcastWorkerFunction: ENTRY := controllers/newsletter/processBroadcast.ts
+build-NewsletterFeedbackFunction: ENTRY := controllers/newsletter/handleSesFeedback.ts
 build-CreateUserFunction: ENTRY := controllers/users/createUser.ts
 build-GetUserFunction: ENTRY := controllers/users/getUser.ts
 build-UpdateUserFunction: ENTRY := controllers/users/updateUser.ts
