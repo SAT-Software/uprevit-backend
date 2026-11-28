@@ -85,7 +85,7 @@ describe('newsletter tokens and email templates', () => {
 			ok: false,
 			reason: 'invalid',
 		});
-		expect(verifyNewsletterToken(token, 'confirm', TEST_SECRET, now + 25 * 60 * 60 * 1000)).toEqual({
+		expect(verifyNewsletterToken(token, 'confirm', TEST_SECRET, now + 73 * 60 * 60 * 1000)).toEqual({
 			ok: false,
 			reason: 'expired',
 		});
@@ -101,15 +101,20 @@ describe('newsletter tokens and email templates', () => {
 		});
 	});
 
-	it('renders clean HTML and plain-text emails with escaped content and optional address', () => {
+	it('renders clean HTML and plain-text emails with light/dark logos, neutral badges, and highlights', () => {
 		const confirm = renderConfirmSubscriptionEmail({
 			confirmUrl: 'https://www.uprevit.com/newsletter/confirm?token=abc',
 			siteBaseUrl: 'http://localhost:3001',
 			physicalAddress: 'Uprevit Inc., 123 Main St',
 		});
-		expect(confirm.html).toContain('https://www.uprevit.com/logo.png');
+		expect(confirm.html).toContain('email/uprevit-logo-light.png');
+		expect(confirm.html).toContain('email/uprevit-logo-dark.png');
+		expect(confirm.html).toContain('prefers-color-scheme: dark');
+		expect(confirm.html).toContain('One quick step');
+		expect(confirm.html).toContain('72 hours');
 		expect(confirm.html).toContain('Confirm subscription');
 		expect(confirm.html).toContain('Uprevit Inc., 123 Main St');
+		expect(confirm.text).toContain('72 hours');
 		expect(confirm.text).toContain('https://www.uprevit.com/newsletter/confirm?token=abc');
 
 		const blog = renderBlogPostEmail({
@@ -122,14 +127,17 @@ describe('newsletter tokens and email templates', () => {
 				category: 'Regulatory',
 				readTime: '5 min read',
 				url: 'https://www.uprevit.com/resources/blogs/fda-qmsr',
-				excerpt: 'A quick summary of the key changes.',
+				highlights: ['What QMSR actually changed', 'The labeling rule FDA kept'],
 			},
 			unsubscribeUrl: 'https://www.uprevit.com/newsletter/unsubscribe?token=xyz',
 			siteBaseUrl: 'https://www.uprevit.com',
 		});
 		expect(blog.html).toContain('FDA QMSR &lt;Updates&gt;');
+		expect(blog.html).toContain('In this post');
+		expect(blog.html).toContain('What QMSR actually changed');
 		expect(blog.html).toContain('Read the full post');
 		expect(blog.html).toContain('https://www.uprevit.com/newsletter/unsubscribe?token=xyz');
+		expect(blog.text).toContain('- What QMSR actually changed');
 		expect(blog.text).toContain('Unsubscribe: https://www.uprevit.com/newsletter/unsubscribe?token=xyz');
 	});
 });

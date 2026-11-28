@@ -129,12 +129,13 @@ const loadBlogPost = (slug: string, siteBaseUrl: string, customPath?: string): B
 	const words = body.trim().split(/\s+/).filter(Boolean).length;
 	const readTime = `${Math.max(1, Math.round(words / 200))} min read`;
 
-	const paragraphs = body
-		.split(/\r?\n\r?\n/)
-		.map((block) => block.trim())
-		.filter((block) => block && !block.startsWith('#') && !block.startsWith('-') && !block.startsWith('<') && !block.startsWith('import '));
-	const firstParagraph = paragraphs[0] ? stripMarkdown(paragraphs[0]) : undefined;
-	const excerpt = firstParagraph && firstParagraph.length <= 280 ? firstParagraph : firstParagraph ? `${firstParagraph.slice(0, 250).trim()}...` : undefined;
+	const highlights = body
+		.split(/\r?\n/)
+		.map((line) => line.match(/^##\s+(.+)$/)?.[1])
+		.filter((heading): heading is string => Boolean(heading))
+		.map((heading) => stripMarkdown(heading))
+		.filter(Boolean)
+		.slice(0, 5);
 
 	return {
 		slug,
@@ -145,7 +146,7 @@ const loadBlogPost = (slug: string, siteBaseUrl: string, customPath?: string): B
 		category,
 		readTime,
 		url: `${siteBaseUrl.replace(/\/+$/, '')}/resources/blogs/${slug}`,
-		excerpt,
+		highlights: highlights.length > 0 ? highlights : undefined,
 	};
 };
 

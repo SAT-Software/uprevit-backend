@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { readSecureParameter } from '../ssm';
 
-export const CONFIRM_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+export const CONFIRM_TOKEN_TTL_MS = 72 * 60 * 60 * 1000;
 
 export type NewsletterTokenAction = 'confirm' | 'unsubscribe';
 
